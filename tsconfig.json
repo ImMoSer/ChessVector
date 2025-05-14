@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler", // Оставляем "bundler" - он рекомендован для Vite
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true, // Оставляем - это хорошая практика
+    "moduleDetection": "force", // Оставляем
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    // "erasableSyntaxOnly": true, // <-- Убираем эту опцию
+    "noFallthroughCasesInSwitch": true
+    // "noUncheckedSideEffectImports": true // Можно временно закомментировать, если будут проблемы с CSS/другими импортами
+  },
+  "include": ["src"]
+}
