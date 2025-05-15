@@ -1,0 +1,231 @@
+/* src/assets/style.css */
+
+/* -------------------------------------------------------------------------- */
+/* Переменные цветов (из вашего старого проекта)                            */
+/* -------------------------------------------------------------------------- */
+:root {
+  /* Размеры навигации */
+  --header-height: 60px;
+  --sidebar-width-collapsed: 60px;
+  --sidebar-width-expanded: 250px;
+
+  /* Фоны */
+  --color-bg-primary: #161512;       /* Основной фон */
+  --color-bg-secondary: #262421;     /* Фон панелей, карточек */
+  --color-bg-tertiary: #33312e;      /* Возможно, для hover или активных элементов */
+
+  /* Текст */
+  --color-text-default: #eaeaea;     /* Основной светлый текст */
+  --color-text-muted: #a0a0a0;       /* Приглушенный текст */
+  --color-text-on-accent: #ffffff;   /* Текст на цветных кнопках */
+  --color-text-error: #ffcdd2;       /* Текст для ошибок (светло-красный) */
+  --color-text-link: var(--color-accent-info); /* Цвет ссылок по умолчанию */
+
+  /* Границы и разделители */
+  --color-border: #33312e;
+  --color-border-hover: #4d4a47;    /* Немного светлее для hover */
+
+  /* Акцентные цвета */
+  --color-accent-primary: #bf811d;   /* Золотой/Желтый */
+  --color-accent-secondary: #907bff; /* Фиолетовый */
+  --color-accent-success: #629924;   /* Зеленый */
+  --color-accent-warning: #e46a09;   /* Оранжевый */
+  --color-accent-error: #cc3432;     /* Красный */
+  --color-accent-info: #0072b1;      /* Синий */
+  --color-accent-special: #b72fc6;   /* Пурпурный */
+
+  /* Семантические переменные (для совместимости или общей семантики) */
+  --color-background: var(--color-bg-primary);
+  --color-background-soft: var(--color-bg-secondary);
+  --color-background-mute: var(--color-bg-tertiary);
+
+  --color-heading: var(--color-text-default);
+  --color-text: var(--color-text-default);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Базовые стили для body и HTML                            */
+/* -------------------------------------------------------------------------- */
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  height: 100%; /* Чтобы #app-layout мог занимать всю высоту */
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Стили для основного макета приложения                       */
+/* -------------------------------------------------------------------------- */
+#app-layout {
+  display: flex; /* Позволяет контенту расти рядом с боковой панелью */
+  min-height: 100vh;
+  position: relative; /* Для позиционирования навигации */
+}
+
+/* -------------------------------------------------------------------------- */
+/* Стили для навигации                               */
+/* -------------------------------------------------------------------------- */
+.app-nav {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-default);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000; /* Чтобы навигация была поверх контента */
+  transition: width 0.3s ease, height 0.3s ease, transform 0.3s ease, max-height 0.3s ease-out, opacity 0.3s ease-out;
+  overflow: hidden; /* По умолчанию скрываем то, что не помещается */
+}
+
+/* Стили для альбомной ориентации (боковая панель) */
+.app-nav.is-landscape-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: var(--sidebar-width-collapsed);
+  border-right: 1px solid var(--color-border);
+}
+
+.app-nav.is-landscape-sidebar.sidebar-expanded {
+  width: var(--sidebar-width-expanded);
+}
+
+/* Стили для портретной ориентации (хедер) */
+.app-nav.is-portrait-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--header-height);
+  flex-direction: row; /* Элементы хедера в ряд */
+  align-items: center; /* Выравниваем по центру вертикально */
+  border-bottom: 1px solid var(--color-border);
+  overflow: visible; /* Чтобы выпадающее меню было видно */
+}
+
+.nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px; /* Отступы для хедера навигации */
+  min-height: var(--header-height); /* Для консистентности высоты */
+  width: 100%;
+}
+
+.is-landscape-sidebar.sidebar-collapsed .nav-header {
+  justify-content: center; /* Только иконка-бургер по центру */
+}
+
+.app-title {
+  font-size: 1.2em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.is-landscape-sidebar.sidebar-collapsed .app-title {
+  display: none;
+}
+
+.nav-toggle-button {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1.5em; /* Размер иконки бургер/крестик */
+  padding: 5px;
+  line-height: 1;
+}
+.is-portrait-header .nav-toggle-button {
+   margin-left: auto; /* Прижимаем кнопку к правому краю в хедере */
+}
+
+
+.nav-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1; /* Занимает оставшееся место в боковой панели */
+}
+
+.is-landscape-sidebar .nav-links {
+  padding-top: 10px;
+}
+
+.is-portrait-header .nav-links {
+  position: absolute;
+  top: var(--header-height);
+  left: 0;
+  width: 100%;
+  background-color: var(--color-bg-secondary);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  max-height: 0; /* Скрыто по умолчанию */
+  opacity: 0;
+  overflow-y: auto;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.is-portrait-header.menu-open .nav-links {
+  max-height: calc(100vh - var(--header-height)); /* Максимальная высота выпадающего меню */
+  opacity: 1;
+  padding: 10px 0;
+}
+
+.nav-links li a {
+  display: block;
+  padding: 10px 20px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-links li a:hover,
+.nav-links li a.active {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-default);
+}
+
+.is-landscape-sidebar.sidebar-collapsed .nav-links li a {
+  text-align: center;
+  padding: 10px 0;
+}
+.is-landscape-sidebar.sidebar-collapsed .nav-links li a span { /* Если текст будет в span */
+  display: none;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Стили для основного контента                       */
+/* -------------------------------------------------------------------------- */
+#main-content {
+  flex-grow: 1;
+  padding: 20px; /* Общий отступ для контента */
+  transition: padding-left 0.3s ease, padding-top 0.3s ease;
+  width: 100%; /* По умолчанию занимает всю ширину */
+  overflow-x: hidden; /* Предотвращает горизонтальный скролл, если контент шире */
+}
+
+/* Отступы для контента, когда есть навигация */
+/* padding-top и padding-left уже устанавливаются инлайн-стилями из appView.ts */
+/* но можно добавить базовые значения здесь, если инлайн-стили не всегда применяются */
+
+/* Пример, как можно скрыть текст в свернутом сайдбаре, если он не в span */
+/*
+.is-landscape-sidebar.sidebar-collapsed .nav-links li a::after {
+  content: attr(data-icon); // Если бы у ссылок были data-атрибуты с иконками
+  font-size: 1.5em;
+}
+.is-landscape-sidebar.sidebar-collapsed .nav-links li a {
+  font-size: 0; // Скрываем текст
+}
+*/
+
