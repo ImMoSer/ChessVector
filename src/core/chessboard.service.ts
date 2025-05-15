@@ -1,10 +1,38 @@
 // src/core/chessboard.service.ts
+
+// Импортируем основную функцию/класс Chessground
 import { Chessground } from 'chessground';
-import type { Api, Key, Dests, Config } from 'chessground';
+
+// Импортируем типы из их предполагаемых подмодулей в библиотеке chessground
+import type { Api } from 'chessground/api';
+import type { Config } from 'chessground/config';
+// Типы State и Movable не экспортируются отдельно, они являются частью Api и Config
+import type {
+  Key,
+  Dests,
+  Color,
+  Role, // Импортируем Role, если он нужен для Piece-подобных структур
+  FEN,
+  Pieces,
+  // Events, // Если используется в Config
+  // Shape as CgShape, // Переименовываем, чтобы не конфликтовать с возможным вашим типом Shape
+  // MoveMetadata // Если используется
+} from 'chessground/types';
+
+// Импортируем ваш логгер
 import logger from '../utils/logger';
 
+// Определяем тип для отрисовки фигур (shapes)
+// (но лучше использовать DrawShape из 'chessground/types', если он подходит и импортирован как CgShape)
+interface CustomDrawShape {
+  orig: Key;
+  dest?: Key;
+  brush: string;
+}
+
+
 export class ChessboardService {
-  public ground: Api | null = null; // Сделаем явно public для временного решения
+  public ground: Api | null = null;
 
   public init(element: HTMLElement, config?: Config): Api | null {
     if (this.ground) {
@@ -14,9 +42,10 @@ export class ChessboardService {
 
     const defaultConfig: Config = {
       orientation: 'white',
+      // movable здесь будет соответствовать структуре, определенной в Config
     };
 
-    const finalConfig = { ...defaultConfig, ...config };
+    const finalConfig: Config = { ...defaultConfig, ...config };
 
     try {
       this.ground = Chessground(element, finalConfig);
@@ -28,11 +57,11 @@ export class ChessboardService {
     }
   }
 
-  public getFen(): string | undefined {
+  public getFen(): FEN | undefined {
     return this.ground?.getFen();
   }
 
-  public setFen(fen: string): void {
+  public setFen(fen: FEN): void {
     this.ground?.set({ fen });
   }
 
@@ -40,11 +69,18 @@ export class ChessboardService {
     logger.warn(`Programmatic move from ${orig} to ${dest} - implement logic if needed.`);
   }
 
-  public setOrientation(color: 'white' | 'black'): void {
+  public setOrientation(color: Color): void {
     this.ground?.set({ orientation: color });
   }
 
-  public drawShapes(shapes: Array<{ orig: Key, dest?: Key, brush: string }>): void {
+  public drawShapes(shapes: Array<CustomDrawShape>): void {
+    // Тип для элемента массива shapes должен соответствовать ожиданиям setShapes в Api.
+    // В 'chessground/src/api.ts' setShapes ожидает DrawShape[]
+    // DrawShape импортируется из './draw.js' в api.ts, но не реэкспортируется.
+    // Однако, в 'chessground/src/config.ts' Config.drawable.shapes использует DrawShape.
+    // И в 'chessground/src/draw.d.ts' есть экспорт: export type DrawShape = Circle | Arrow | PieceDestination;
+    // Попробуем импортировать DrawShape из 'chessground/draw' если 'chessground/types' не сработает.
+    // Пока оставим CustomDrawShape, но это место для потенциального улучшения, если найти экспорт DrawShape.
     this.ground?.setShapes(shapes.map(s => ({
         orig: s.orig,
         dest: s.dest,
@@ -65,10 +101,22 @@ export class ChessboardService {
   }
 
   public getDests(): Dests | undefined {
-    return this.ground?.state.movable.dests;
+    // Тип this.ground.state будет выведен из Api.state
+    const state = this.ground?.state;
+    // Тип state.movable будет выведен из определения State.movable
+    // (где State - это тип для Api.state)
+    return state?.movable?.dests;
   }
 
   public setDests(dests: Dests): void {
-    this.ground?.set({ movable: { dests } });
+    const currentMovable = this.ground?.state?.movable;
+    // Объект, передаваемый в movable, будет структурно проверен
+    // на соответствие типу Config.movable
+    this.ground?.set({
+      movable: {
+        ...(currentMovable || {}), // Распространяем текущие свойства movable, если они есть
+        dests: dests
+      }
+    });
   }
 }

@@ -7,19 +7,21 @@
     "skipLibCheck": true,
 
     /* Bundler mode */
-    "moduleResolution": "bundler", // Оставляем "bundler" - он рекомендован для Vite
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true, // Оставляем - это хорошая практика
-    "moduleDetection": "force", // Оставляем
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
     "noEmit": true,
+    "isolatedModules": true, // Рекомендуется для Vite
 
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    // "erasableSyntaxOnly": true, // <-- Убираем эту опцию
-    "noFallthroughCasesInSwitch": true
-    // "noUncheckedSideEffectImports": true // Можно временно закомментировать, если будут проблемы с CSS/другими импортами
+    "noFallthroughCasesInSwitch": true,
+
+    /* Добавляем типы Vite клиента */
+    "types": ["vite/client"] // <--- ВОТ ЭТО ИЗМЕНЕНИЕ
   },
   "include": ["src"]
 }

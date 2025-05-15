@@ -4,7 +4,7 @@ import { parseFen, makeFen } from 'chessops/fen';
 import { parseSquare, makeSquare, parseUci as chessopsParseUci, makeUci as chessopsMakeUci } from 'chessops/util';
 import { chessgroundDests } from 'chessops/compat';
 import type { Role as ChessopsRole, Square as ChessopsSquare, Color as ChessopsColor, Move as ChessopsMove } from 'chessops/types';
-import type { Dests, Key } from 'chessground'; 
+import type { Key, Dests } from 'chessground/types';
 import logger from '../utils/logger';
 
 export class ChessLogicService {

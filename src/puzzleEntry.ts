@@ -8,6 +8,12 @@ import { StockfishService } from './core/stockfish.service';
 import logger from './utils/logger';
 import { PuzzleController } from './features/puzzle/PuzzleController';
 import { renderPuzzleUI } from './features/puzzle/puzzleView';
+import './vendor/chessground/chessground.base.css'; // Путь относительный от puzzleEntry.ts
+import './vendor/chessground/chessground.brown.css';
+import './vendor/chessground/chessground.cburnett.css';
+
+import './assets/style.css';
+
 
 // Инициализация Snabbdom
 const patch = init([
