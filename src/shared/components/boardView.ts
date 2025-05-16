@@ -1,6 +1,5 @@
 // src/shared/components/boardView.ts
 
-// GameEndOutcome удален из импорта, так как не используется в этом файле
 import type { BoardHandler, GameStatus } from '../../core/boardHandler';
 import type { ChessboardService, CustomDrawShape } from '../../core/chessboard.service';
 import type { Config as ChessgroundConfig } from 'chessground/config';
@@ -8,10 +7,13 @@ import type { Key, Dests, Color as ChessgroundColor, MoveMetadata } from 'chessg
 import logger from '../../utils/logger';
 
 export class BoardView {
-    public container: HTMLElement;
+    public container: HTMLElement; 
     private boardHandler: BoardHandler;
     private chessboardService: ChessboardService;
     private onUserMoveCallback: (orig: Key, dest: Key, metadata?: MoveMetadata) => Promise<void>;
+
+    // Привязанный обработчик для кастомного события
+    private boundHandleAppPanelResize: () => void;
 
     constructor(
         container: HTMLElement,
@@ -24,20 +26,50 @@ export class BoardView {
         this.chessboardService = chessboardService;
         this.onUserMoveCallback = onUserMove;
 
+        this.boundHandleAppPanelResize = this._handleAppPanelResize.bind(this); // Привязываем обработчик
+        window.addEventListener('centerPanelResized', this.boundHandleAppPanelResize); // Слушаем кастомное событие
+
         this.initBoard();
     }
 
-    private initBoard(): void {
-        if (this.chessboardService.ground) {
-            logger.warn('[BoardView] ChessboardService already has an initialized ground instance. Destroying and re-initializing for this container.');
-            this.chessboardService.destroy();
-        }
+    /**
+     * Обработчик кастомного события 'centerPanelResized'.
+     */
+    private _handleAppPanelResize(): void {
+        logger.debug('[BoardView] Received centerPanelResized event. Notifying chessground.');
+        this.notifyResize();
+    }
 
+    public notifyResize(): void {
+        if (this.chessboardService.ground) {
+            this.chessboardService.ground.redrawAll();
+            logger.debug('[BoardView] Notified chessground of resize (redrawAll).');
+        } else {
+            logger.warn('[BoardView] notifyResize called, but ground not initialized.');
+        }
+    }
+
+    private initBoard(): void {
+        if (this.chessboardService.ground && this.chessboardService.ground.state.dom.elements.wrap.parentElement === this.container) {
+             logger.info('[BoardView] Ground already initialized for this container. Skipping re-init.');
+        } else if (this.chessboardService.ground) {
+            logger.warn('[BoardView] ChessboardService has ground, but for different container. Destroying and re-initializing.');
+            this.chessboardService.destroy();
+            this.chessboardService.init(this.container, this._getBoardConfig());
+        } else {
+             this.chessboardService.init(this.container, this._getBoardConfig());
+        }
+        
+        this.updateView(); 
+        logger.info('[BoardView] Board initialized/verified and view updated.');
+    }
+
+    private _getBoardConfig(): ChessgroundConfig {
         const initialFen = this.boardHandler.getFen().split(' ')[0];
         const initialTurnColor = this.boardHandler.getBoardTurnColor();
         const initialOrientation = this.boardHandler.getHumanPlayerColor() || 'white';
-        
-        const config: ChessgroundConfig = {
+
+        return {
             fen: initialFen,
             orientation: initialOrientation,
             turnColor: initialTurnColor,
@@ -77,18 +109,13 @@ export class BoardView {
                 enabled: true, 
             }
         };
-        
-        this.chessboardService.init(this.container, config);
-        
-        this.updateView(); 
-        logger.info('[BoardView] Board initialized and view updated.');
     }
 
     public updateView(): void {
         if (!this.chessboardService.ground) {
             logger.warn('[BoardView] updateView called but ground is not initialized in ChessboardService.');
             if (this.container && this.container.isConnected) {
-                logger.warn('[BoardView] Attempting to re-initialize board as container exists.');
+                logger.warn('[BoardView] Attempting to re-initialize board as container exists and ground is missing.');
                 this.initBoard(); 
             }
             return;
@@ -123,8 +150,6 @@ export class BoardView {
             check: gameStatus.isCheck ? gameStatus.turn : undefined, 
             lastMove: lastMoveUciArray,
         });
-        
-        logger.debug('[BoardView] View updated based on BoardHandler state.');
     }
 
     private getMovableColor(): ChessgroundColor | 'both' | undefined {
@@ -135,7 +160,6 @@ export class BoardView {
         if (gameStatus.isGameOver) {
             return undefined; 
         }
-        // ИСПРАВЛЕНО: Удалена неиспользуемая переменная humanColor
         const currentTurn = this.boardHandler.getBoardTurnColor();
         return currentTurn;
     }
@@ -164,6 +188,7 @@ export class BoardView {
     }
 
     public destroy(): void {
-        logger.info('[BoardView] Destroyed.');
+        window.removeEventListener('centerPanelResized', this.boundHandleAppPanelResize); // Отписываемся от события
+        logger.info('[BoardView] Destroyed, removed centerPanelResized listener.');
     }
 }
