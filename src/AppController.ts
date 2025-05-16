@@ -1,34 +1,28 @@
 // src/AppController.ts
 import logger from './utils/logger';
 import type { ChessboardService } from './core/chessboard.service';
-import type { ChessLogicService } from './core/chess-logic.service';
 import type { StockfishService } from './core/stockfish.service';
 import type { WebhookService } from './core/webhook.service';
+import { BoardHandler } from './core/boardHandler'; 
 
-// Импорты контроллеров режимов и их типов состояния
 import { PuzzleController } from './features/puzzle/PuzzleController';
-import { AnalysisTestController } from './features/analysis/AnalysisTestController'; // Убедитесь, что путь верный
+import { AnalysisTestController } from './features/analysis/AnalysisTestController';
 
-// Типы для страниц/режимов
 export type AppPage = 'puzzle' | 'analysisTest' | 'storm' | 'openings';
 
-// Тип для передаваемых сервисов
 export interface AppServices {
   chessboardService: ChessboardService;
-  chessLogicService: ChessLogicService;
   stockfishService: StockfishService;
   webhookService: WebhookService;
   logger: typeof logger;
 }
 
-// Тип для состояния AppController
 interface AppControllerState {
   currentPage: AppPage;
-  isNavExpanded: boolean; // Для сайдбара/меню
+  isNavExpanded: boolean;
   isPortraitMode: boolean;
 }
 
-// Тип для активного контроллера страницы
 type ActivePageController = PuzzleController | AnalysisTestController | null;
 
 export class AppController {
@@ -42,7 +36,7 @@ export class AppController {
     this.requestGlobalRedraw = requestGlobalRedraw;
 
     this.state = {
-      currentPage: 'puzzle', // Страница по умолчанию
+      currentPage: 'puzzle', 
       isNavExpanded: false,
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
     };
@@ -54,60 +48,63 @@ export class AppController {
     logger.info(`[AppController] Initializing app, setting current page to: ${this.state.currentPage}`);
     this.handleResize();
     this.loadPageController(this.state.currentPage);
-    this.requestGlobalRedraw();
   }
 
   public navigateTo(page: AppPage): void {
     if (this.state.currentPage === page && this.activePageController) {
       logger.info(`[AppController] Already on page: ${page}`);
       if (this.state.isPortraitMode && this.state.isNavExpanded) {
-        this.toggleNav();
+        this.toggleNav(); 
       }
       return;
     }
     logger.info(`[AppController] Navigating to page: ${page}`);
+    
     this.state.currentPage = page;
-    this.loadPageController(page);
+    this.loadPageController(page); 
 
     if (this.state.isPortraitMode && this.state.isNavExpanded) {
-      this.state.isNavExpanded = false;
+      this.state.isNavExpanded = false; 
     }
-    this.requestGlobalRedraw();
   }
 
   private loadPageController(page: AppPage): void {
-    if (this.activePageController && typeof (this.activePageController as any).destroy === 'function') {
-      // (this.activePageController as any).destroy();
-    }
-    this.activePageController = null;
+    this.activePageController = null; 
 
     switch (page) {
       case 'puzzle':
+        const puzzleBoardHandler = new BoardHandler(this.services.chessboardService, this.requestGlobalRedraw);
         this.activePageController = new PuzzleController(
-          this.services.chessboardService,
-          this.services.chessLogicService,
+          this.services.chessboardService, 
+          puzzleBoardHandler, 
           this.services.webhookService,
           this.services.stockfishService,
           this.requestGlobalRedraw
         );
         if (typeof (this.activePageController as PuzzleController).initializeGame === 'function') {
-            (this.activePageController as PuzzleController).initializeGame();
+            (this.activePageController as PuzzleController).initializeGame(); 
+        } else {
+            this.requestGlobalRedraw(); 
         }
         break;
       case 'analysisTest':
+        // ИСПРАВЛЕНО: Удален аргумент analysisBoardHandler.
+        // AnalysisTestController пока не использует BoardHandler и ожидает 3 аргумента.
         this.activePageController = new AnalysisTestController(
-          this.services.chessboardService,
+          this.services.chessboardService, 
           this.services.stockfishService,
-          // ИСПРАВЛЕНИЕ: this.services.chessLogicService удален из аргументов
           this.requestGlobalRedraw
         );
         if (typeof (this.activePageController as AnalysisTestController).initializeView === 'function') {
-            (this.activePageController as AnalysisTestController).initializeView();
+            (this.activePageController as AnalysisTestController).initializeView(); 
+        } else {
+            this.requestGlobalRedraw();
         }
         break;
       default:
         logger.error(`[AppController] Unknown page: ${page}. Cannot load controller.`);
         this.activePageController = null;
+        this.requestGlobalRedraw(); 
     }
     logger.info(`[AppController] Loaded controller for page: ${page}`, this.activePageController);
   }

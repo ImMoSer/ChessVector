@@ -4,7 +4,7 @@ import type { Key, Color as ChessgroundColor } from 'chessground/types';
 import type { Role } from 'chessops/types'; // Используем Role из chessops
 
 // Определяем интерфейс для состояния промоушена
-interface PromotingState {
+export interface PromotingState {
   orig: Key; // Исходная клетка пешки
   dest: Key; // Клетка превращения
   color: ChessgroundColor; // Цвет пешки, которая превращается

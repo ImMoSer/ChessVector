@@ -1,124 +1,127 @@
 // src/features/puzzle/puzzleView.ts
 import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
-// ИЗМЕНЕНО: Удален неиспользуемый импорт ChessgroundColor
-import type { Key, MoveMetadata } from 'chessground/types';
+// ИСПРАВЛЕНО: MoveMetadata удален из импорта, так как не используется
+import type { Key } from 'chessground/types';
 import type { PuzzleController } from './PuzzleController';
+import { BoardView } from '../../shared/components/boardView'; 
 import logger from '../../utils/logger';
+import { renderPromotionDialog } from '../common/promotion/promotionView';
 
-import { renderPromotionDialog } from '../promotion/promotionView';
+let boardViewInstance: BoardView | null = null;
 
 export function renderPuzzleUI(controller: PuzzleController): VNode {
-  const appState = controller.appState;
-  logger.debug(`[puzzleView.ts] Rendering view. FEN: ${appState.currentFen}, Turn: ${appState.boardTurnColor}, Human: ${appState.humanPlayerColor}, PuzzleTurn: ${appState.isUserTurnInPuzzle}`);
+  const puzzleControllerState = controller.state; 
+  const boardHandler = controller.boardHandler; 
+
+  logger.debug(`[puzzleView.ts] Rendering view. Puzzle State Feedback: ${puzzleControllerState.feedbackMessage}`);
 
   let promotionDialogVNode: VNode | null = null;
-  // Доступ к chessboardService и requestRedraw теперь корректен, так как они public в PuzzleController
-  if (controller.chessboardService.ground) {
+  if (controller.chessboardService.ground) { 
     const groundState = controller.chessboardService.ground.state;
     const boardOrientation = groundState.orientation;
     const boardDomBounds = groundState.dom?.bounds();
 
     if (boardDomBounds) {
-        promotionDialogVNode = renderPromotionDialog(
-        controller.promotionCtrl,
+      promotionDialogVNode = renderPromotionDialog(
+        boardHandler.promotionCtrl,
         boardOrientation,
         boardDomBounds
       );
-    } else if (controller.promotionCtrl.isActive()) {
-        logger.warn('[puzzleView.ts] Promotion is active, but board DOM bounds are not available yet.');
+    } else if (boardHandler.promotionCtrl.isActive()) {
+      logger.warn('[puzzleView.ts] Promotion is active, but board DOM bounds are not available yet.');
     }
   }
 
-
-  return h('div#app-container', [
-    h('h1', 'ChessVector Puzzle Alpha'),
-    h('div#board-wrapper', { style: { position: 'relative', width: 'clamp(220px, 95vmin, 900px)', margin: '10px auto' } }, [
-      h('div#board-container', {
-        key: 'board' as Key,
+  return h('div#app-container.puzzle-container', [
+    h('h1', 'Шахматные Задачи'), 
+    h('div#board-wrapper', { 
+      style: { 
+        position: 'relative', 
+        width: 'clamp(300px, 80vmin, 600px)', 
+        height: 'clamp(300px, 80vmin, 600px)', 
+        margin: '20px auto' 
+      } 
+    }, [
+      h('div#board-container.cg-wrap', { 
+        key: 'board' as Key, 
         style: {
           width: '100%',
-          height: 'clamp(320px, 95vmin, 900px)',
-          border: '1px solid #ccc'
+          height: '100%',
         },
         hook: {
           insert: (vnode: VNode) => {
             logger.info('[puzzleView.ts] Board container VNode inserted.');
             const elm = vnode.elm as HTMLElement;
-            // controller.chessboardService теперь доступен
-            const chessboardService = controller.chessboardService;
-
-            if (elm && !chessboardService.ground) {
-              logger.info('[puzzleView.ts] Chessground initializing for the first time...');
-              const initialConfig = {
-                fen: appState.currentFen.split(' ')[0],
-                orientation: appState.humanPlayerColor || 'white',
-                turnColor: appState.boardTurnColor,
-                movable: {
-                  free: false,
-                  color: controller.determineMovableColor(),
-                  dests: controller.determineCurrentDests(),
-                  events: {
-                    after: (orig: Key, dest: Key, _metadata: MoveMetadata) => {
-                      controller.handleUserMove(orig, dest);
-                    }
-                  }
-                },
-                highlight: {
-                  lastMove: true,
-                  check: true,
-                },
-                animation: {
-                  enabled: true,
-                  duration: 100,
-                },
-              };
-              chessboardService.init(elm, initialConfig);
-              logger.info('[puzzleView.ts] Chessground initialized with config:', initialConfig);
-              // controller.requestRedraw теперь доступен
-              controller.requestRedraw();
-            } else if (elm && chessboardService.ground) {
-              logger.info('[puzzleView.ts] Chessground already initialized, syncing state.');
-              chessboardService.setFen(appState.currentFen.split(' ')[0]);
-              chessboardService.ground.set({
-                orientation: appState.humanPlayerColor || (chessboardService.ground.state as any)?.orientation,
-                turnColor: appState.boardTurnColor,
-                movable: {
-                  color: controller.determineMovableColor(),
-                  dests: controller.determineCurrentDests(),
+            if (elm) {
+              if (!boardViewInstance) {
+                logger.info('[puzzleView.ts] BoardView initializing for the first time...');
+                boardViewInstance = new BoardView(
+                  elm,
+                  boardHandler, 
+                  controller.chessboardService,
+                  (orig: Key, dest: Key) => controller.handleUserMove(orig, dest)
+                );
+              } else {
+                logger.info('[puzzleView.ts] Board container re-inserted, ensuring BoardView is initialized/updated.');
+                if (boardViewInstance.container !== elm) {
+                    logger.warn('[puzzleView.ts] Board container element changed. Re-initializing BoardView.');
+                    boardViewInstance.destroy(); 
+                    boardViewInstance = new BoardView(
+                        elm, 
+                        boardHandler, 
+                        controller.chessboardService,
+                        (orig: Key, dest: Key) => controller.handleUserMove(orig, dest)
+                    );
+                } else {
+                    boardViewInstance.updateView();
                 }
-              });
-              logger.info('[puzzleView.ts] Chessground state synced on re-insert/HMR.');
+              }
             } else {
               logger.error('[puzzleView.ts] Board container element not found in VNode after insert!');
             }
           },
+          update: (_oldVnode: VNode, vnode: VNode) => {
+            if (boardViewInstance && vnode.elm === boardViewInstance.container) { 
+              logger.debug('[puzzleView.ts] Board container VNode updated, calling boardViewInstance.updateView()');
+              boardViewInstance.updateView();
+            }
+          },
           destroy: (_vnode: VNode) => {
-              logger.info('[puzzleView.ts] Board container VNode will be destroyed, destroying Chessground...');
-              controller.chessboardService.destroy();
+            logger.info('[puzzleView.ts] Board container VNode will be destroyed. Destroying BoardView instance.');
+            if (boardViewInstance) {
+              boardViewInstance.destroy();
+              boardViewInstance = null; 
+            }
           }
         }
       }),
-      promotionDialogVNode
+      promotionDialogVNode 
     ]),
-    h('div#puzzle-info', { style: { textAlign: 'center', marginTop: '10px', fontSize: '1.2em', minHeight: '2.5em' } }, [
-        h('p', appState.gameOverMessage || appState.feedbackMessage),
-        appState.activePuzzle && !appState.isInPlayOutMode && !appState.gameOverMessage
-            ? h('p', `Пазл: ${appState.activePuzzle.PuzzleId} | Рейтинг: ${appState.activePuzzle.Rating || 'N/A'}`)
-            : '',
-        appState.activePuzzle && !appState.isInPlayOutMode && appState.isUserTurnInPuzzle && appState.currentSolutionMoveIndex < appState.puzzleSolutionMoves.length && !appState.gameOverMessage
-            ? h('p', `Ожидается: ${appState.puzzleSolutionMoves[appState.currentSolutionMoveIndex]}`)
-            : '',
+    h('div#puzzle-info', { style: { textAlign: 'center', marginTop: '15px', fontSize: '1.1em', minHeight: '2.2em', padding: '0 10px' } }, [
+      h('p', { style: { fontWeight: 'bold', color: puzzleControllerState.gameOverMessage ? (puzzleControllerState.gameOverMessage.includes("победили") ? 'var(--color-accent-success)' : 'var(--color-accent-error)') : 'var(--color-text-default)' } },
+        puzzleControllerState.gameOverMessage || puzzleControllerState.feedbackMessage
+      ),
+      puzzleControllerState.activePuzzle && !puzzleControllerState.isInPlayOutMode && !puzzleControllerState.gameOverMessage
+        ? h('p.puzzle-details', `Пазл: ${puzzleControllerState.activePuzzle.PuzzleId} | Рейтинг: ${puzzleControllerState.activePuzzle.Rating || 'N/A'}`)
+        : '',
+      puzzleControllerState.activePuzzle && !puzzleControllerState.isInPlayOutMode && puzzleControllerState.isUserTurnInPuzzle && puzzleControllerState.currentSolutionMoveIndex < puzzleControllerState.puzzleSolutionMoves.length && !puzzleControllerState.gameOverMessage
+        ? h('p.expected-move', { style: { color: 'var(--color-text-muted)' } }, `Ожидается: ${puzzleControllerState.puzzleSolutionMoves[puzzleControllerState.currentSolutionMoveIndex]}`)
+        : '',
     ]),
-    h('div#controls', { style: { textAlign: 'center', marginTop: '10px', display: 'flex', justifyContent: 'center', gap: '10px' } }, [
-      h('button.button.lichess-button', {
-        attrs: { disabled: appState.isStockfishThinking || !!appState.gameOverMessage || controller.promotionCtrl.isActive() },
+    h('div#controls', { style: { textAlign: 'center', marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '12px', padding: '0 10px' } }, [
+      h('button.button.puzzle-button', {
+        attrs: { 
+          disabled: puzzleControllerState.isStockfishThinking || !!puzzleControllerState.gameOverMessage || boardHandler.promotionCtrl.isActive() 
+        },
         on: { click: () => controller.handleSetFen() }
-      }, 'Установить FEN'),
-      h('button.button.lichess-button', {
-        attrs: { disabled: appState.isStockfishThinking || !!appState.gameOverMessage || controller.promotionCtrl.isActive() },
+      }, 'Установить FEN'), 
+      h('button.button.puzzle-button.primary-button', { 
+        attrs: { 
+          disabled: puzzleControllerState.isStockfishThinking || boardHandler.promotionCtrl.isActive() 
+        },
         on: { click: () => controller.loadAndStartPuzzle() }
-        }, 'Следующий пазл')
+      }, 'Следующий пазл') 
     ])
   ]);
 }

@@ -6,18 +6,35 @@ import type { Config } from 'chessground/config';
 import type {
   Key,
   Dests,
-  Color, // Color используется для piece
+  Color, // Color используется для piece и ориентации
   FEN,
-  // Pieces, // Не используется напрямую в этом файле, но полезно знать о его существовании
+  // Pieces, // Не используется напрямую в этом файле
 } from 'chessground/types';
+// Импортируем типы, которые могут быть частью DrawShape
+import type { DrawModifiers, DrawShapePiece } from 'chessground/draw';
 import type { Role as ChessopsRole } from 'chessops/types'; // Для типа роли в setPieceAt
 import logger from '../utils/logger';
 
-interface CustomDrawShape {
+// Экспортируемый интерфейс CustomDrawShape
+// Он наследует все поля от DrawShape из chessground/draw,
+// но делает 'brush' обязательным строковым свойством.
+export interface CustomDrawShape {
   orig: Key;
   dest?: Key;
-  brush: string;
+  brush: string; // brush теперь обязательный string
+  modifiers?: DrawModifiers;
+  piece?: DrawShapePiece;
+  customSvg?: {
+    html: string;
+    center?: 'orig' | 'dest' | 'label';
+  };
+  label?: {
+    text: string;
+    fill?: string;
+  };
+  // Можно добавить и другие свойства из DrawShape, если они понадобятся
 }
+
 
 export class ChessboardService {
   public ground: Api | null = null;
@@ -28,7 +45,7 @@ export class ChessboardService {
       return this.ground;
     }
     const defaultConfig: Config = {
-      orientation: 'white',
+      orientation: 'white', // Значение по умолчанию для ориентации
     };
     const finalConfig: Config = { ...defaultConfig, ...config };
     try {
@@ -66,8 +83,7 @@ export class ChessboardService {
       const currentPieces = new Map(this.ground.state.pieces);
       if (piece) {
         // Chessground ожидает Role из своих типов, но ChessopsRole должен быть совместим.
-        // Если есть проблемы, потребуется явное преобразование.
-        // promoted: true важно для корректного отображения, если фигура была пешкой.
+        // promoted: true важно для корректного отображения, если фигура была пешкой, ставшей другой фигурой.
         currentPieces.set(key, { ...piece, promoted: piece.role !== 'pawn' });
       } else {
         currentPieces.delete(key);
@@ -89,11 +105,22 @@ export class ChessboardService {
     this.ground?.set({ orientation: color });
   }
 
+  /**
+   * Рисует пользовательские фигуры (стрелки, круги) на доске.
+   * @param shapes Массив объектов CustomDrawShape.
+   */
   public drawShapes(shapes: Array<CustomDrawShape>): void {
+    // Chessground.Api.setShapes ожидает массив объектов, совместимых с DrawShape из chessground/draw.
+    // CustomDrawShape должен быть совместим с DrawShape, но с обязательным свойством brush.
     this.ground?.setShapes(shapes.map(s => ({
         orig: s.orig,
         dest: s.dest,
-        brush: s.brush
+        brush: s.brush,
+        // Передаем остальные опциональные свойства, если они есть в CustomDrawShape
+        ...(s.modifiers && { modifiers: s.modifiers }),
+        ...(s.piece && { piece: s.piece }),
+        ...(s.customSvg && { customSvg: s.customSvg }),
+        ...(s.label && { label: s.label }),
     })));
   }
 
@@ -118,7 +145,7 @@ export class ChessboardService {
     const currentMovable = this.ground?.state?.movable;
     this.ground?.set({
       movable: {
-        ...(currentMovable || {}),
+        ...(currentMovable || {}), // Сохраняем существующие настройки movable
         dests: dests
       }
     });
