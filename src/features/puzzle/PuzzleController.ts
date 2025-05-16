@@ -8,9 +8,10 @@ import type { Role as ChessopsRole, Color as ChessopsColor } from 'chessops/type
 import type { ChessboardService } from '../../core/chessboard.service';
 import { ChessLogicService } from '../../core/chess-logic.service';
 import type { WebhookService, AppPuzzle } from '../../core/webhook.service';
-// Импортируем StockfishService и его опции, если они нужны для передачи
 import type { StockfishService } from '../../core/stockfish.service';
 import logger from '../../utils/logger';
+
+import { PromotionCtrl } from '../promotion/promotionCtrl';
 
 interface AppState {
   currentFen: string;
@@ -30,15 +31,20 @@ interface AppState {
 export class PuzzleController {
   public appState: AppState;
   private chessLogicServiceInstance: ChessLogicService;
+  public promotionCtrl: PromotionCtrl;
 
   constructor(
-    private chessboardService: ChessboardService,
+    // ИЗМЕНЕНО: chessboardService теперь public
+    public chessboardService: ChessboardService,
     chessLogicServiceInstance: ChessLogicService,
-    private webhookService: WebhookService,
-    private stockfishService: StockfishService, // Тип остается тот же
-    private requestRedraw: () => void
+    private webhookService: WebhookService, // Оставляем private, если используется только внутри
+    private stockfishService: StockfishService, // Оставляем private, если используется только внутри
+    // ИЗМЕНЕНО: requestRedraw теперь public
+    public requestRedraw: () => void
   ) {
     this.chessLogicServiceInstance = chessLogicServiceInstance;
+    this.promotionCtrl = new PromotionCtrl(this.requestRedraw);
+
     this.appState = {
       currentFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       possibleMoves: new Map<Key, Key[]>(),
@@ -48,14 +54,12 @@ export class PuzzleController {
       puzzleSolutionMoves: [],
       currentSolutionMoveIndex: 0,
       isUserTurnInPuzzle: false,
-      feedbackMessage: "Загрузите пазл для начала.", // Load a puzzle to start.
+      feedbackMessage: "Загрузите пазл для начала.",
       isInPlayOutMode: false,
       isStockfishThinking: false,
       gameOverMessage: null,
     };
   }
-
-  // --- Методы управления состоянием и логикой игры ---
 
   public initializeGame(): void {
     this.updateBoardVisualsFromFen(this.appState.currentFen, this.appState.humanPlayerColor);
@@ -63,6 +67,7 @@ export class PuzzleController {
   }
 
   public determineMovableColor(): ChessgroundColor | 'both' | undefined {
+    if (this.promotionCtrl.isActive()) return undefined;
     if (this.appState.gameOverMessage) return undefined;
     if (this.appState.isStockfishThinking) return undefined;
 
@@ -81,7 +86,7 @@ export class PuzzleController {
 
   private formatWinner(winner: ChessopsColor | undefined): string | null {
     if (winner) {
-      return `Мат! ${winner === 'white' ? 'Белые' : 'Черные'} победили.`; // Checkmate! {White/Black} won.
+      return `Мат! ${winner === 'white' ? 'Белые' : 'Черные'} победили.`;
     }
     return null;
   }
@@ -99,24 +104,23 @@ export class PuzzleController {
     if (outcome && outcome.winner) {
       this.appState.gameOverMessage = this.formatWinner(outcome.winner);
     } else if (position.isStalemate()) {
-      this.appState.gameOverMessage = "Пат! Ничья."; // Stalemate! Draw.
+      this.appState.gameOverMessage = "Пат! Ничья.";
     } else if (position.isInsufficientMaterial()) {
-      this.appState.gameOverMessage = "Ничья (недостаточно материала)."; // Draw (insufficient material).
+      this.appState.gameOverMessage = "Ничья (недостаточно материала).";
     } else if (position.halfmoves >= 100) {
-      this.appState.gameOverMessage = "Ничья (правило 50 ходов)."; // Draw (50-move rule).
+      this.appState.gameOverMessage = "Ничья (правило 50 ходов).";
     } else if (position.isVariantEnd() && !position.isCheckmate()) {
       logger.info('[PuzzleController checkAndSetGameOver] position.isVariantEnd() is true, but not checkmate or specific draw.');
-      this.appState.gameOverMessage = "Ничья (по правилам варианта или другая причина)."; // Draw (variant rules or other reason).
+      this.appState.gameOverMessage = "Ничья (по правилам варианта или другая причина).";
     } else {
       if (position.isVariantEnd() && !outcome?.winner) {
           logger.warn('[PuzzleController checkAndSetGameOver] Game is variant end, but not explicitly handled as win/draw. Defaulting to generic draw for now.');
-          this.appState.gameOverMessage = "Ничья."; // Draw.
+          this.appState.gameOverMessage = "Ничья.";
       } else {
           this.appState.gameOverMessage = null;
           return false;
       }
     }
-    // logger.warn('[PuzzleController checkAndSetGameOver] Threefold repetition check is not implemented yet.');
 
     if (this.appState.gameOverMessage) {
       this.appState.feedbackMessage = this.appState.gameOverMessage;
@@ -161,14 +165,25 @@ export class PuzzleController {
     this.requestRedraw();
   }
 
-  private isPromotionAttempt(orig: Key, dest: Key, fen: string): boolean {
-    const piece = ChessLogicService.getPieceAtSquare(fen, orig);
-    if (!piece || piece.role !== 'pawn') return false;
-    const destRank = dest.charAt(1);
-    return (piece.color === 'white' && destRank === '8') || (piece.color === 'black' && destRank === '1');
+  private isPromotionAttempt(orig: Key, dest: Key, fen: string): {isPromotion: boolean, pieceColor?: ChessgroundColor} {
+    const pieceInfo = ChessLogicService.getPieceAtSquare(fen, orig);
+    if (!pieceInfo || pieceInfo.role !== 'pawn') return {isPromotion: false};
+
+    const destRankChar = dest.charAt(1);
+
+    if (pieceInfo.color === 'white' && destRankChar === '8') {
+        return {isPromotion: true, pieceColor: 'white'};
+    }
+    if (pieceInfo.color === 'black' && destRankChar === '1') {
+        return {isPromotion: true, pieceColor: 'black'};
+    }
+    return {isPromotion: false};
   }
 
   public async loadAndStartPuzzle(): Promise<void> {
+    if (this.promotionCtrl.isActive()) {
+        this.promotionCtrl.cancel();
+    }
     logger.info("[PuzzleController] Loading new puzzle...");
     this.appState.feedbackMessage = "Загрузка пазла...";
     this.appState.isInPlayOutMode = false;
@@ -209,8 +224,8 @@ export class PuzzleController {
   }
 
   private async triggerStockfishMoveInPlayoutIfNeeded(): Promise<void> {
-    if (this.appState.gameOverMessage) {
-        logger.info("[PuzzleController] Game is over, Stockfish will not move.");
+    if (this.appState.gameOverMessage || this.promotionCtrl.isActive()) {
+        logger.info("[PuzzleController] Game is over or promotion is active, Stockfish will not move.");
         return;
     }
     if (this.appState.isInPlayOutMode &&
@@ -221,7 +236,6 @@ export class PuzzleController {
         this.appState.feedbackMessage = "Stockfish думает...";
         this.updateBoardVisualsFromFen(this.appState.currentFen, this.appState.humanPlayerColor);
         try {
-            // ИСПОЛЬЗУЕМ getBestMoveOnly
             const stockfishMoveUci = await this.stockfishService.getBestMoveOnly(this.appState.currentFen, { depth: 10 });
             this.appState.isStockfishThinking = false;
             if (stockfishMoveUci) {
@@ -261,7 +275,8 @@ export class PuzzleController {
   }
 
   private playNextSolutionMoveInternal(isContinuation: boolean = false): void {
-    if (this.appState.gameOverMessage) return;
+    if (this.appState.gameOverMessage || this.promotionCtrl.isActive()) return;
+
     if (!this.appState.activePuzzle || this.appState.currentSolutionMoveIndex >= this.appState.puzzleSolutionMoves.length) {
         if(this.appState.activePuzzle) {
             logger.info("[PuzzleController] Puzzle solution completed. Entering play out mode.");
@@ -310,18 +325,141 @@ export class PuzzleController {
     }
   }
 
+  public handleUserMove(orig: Key, dest: Key): void {
+    if (this.appState.gameOverMessage || this.promotionCtrl.isActive()) {
+        logger.warn("[PuzzleController handleUserMove] Move ignored: game over or promotion active.");
+        if (this.promotionCtrl.isActive()) {
+            this.appState.feedbackMessage = "Выберите фигуру для превращения.";
+            this.requestRedraw();
+        }
+        if(this.chessboardService.ground && this.chessboardService.getFen() !== this.appState.currentFen.split(' ')[0]) {
+            this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
+        }
+        return;
+    }
+    if (this.appState.isStockfishThinking) {
+        logger.warn("[PuzzleController handleUserMove] User attempted to move while Stockfish is thinking.");
+        this.appState.feedbackMessage = "Stockfish думает, подождите...";
+        this.requestRedraw();
+        if(this.chessboardService.ground && this.chessboardService.getFen() !== this.appState.currentFen.split(' ')[0]) {
+             this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
+        }
+        return;
+    }
+
+    const promotionCheck = this.isPromotionAttempt(orig, dest, this.appState.currentFen);
+
+    if (promotionCheck.isPromotion && promotionCheck.pieceColor) {
+        logger.info(`[PuzzleController] Promotion attempt detected from ${orig} to ${dest} for ${promotionCheck.pieceColor}`);
+        this.appState.feedbackMessage = "Выберите фигуру для превращения.";
+        this.promotionCtrl.start(orig, dest, promotionCheck.pieceColor, (selectedRole: ChessopsRole) => {
+            const uciMoveWithPromotion = this.chessLogicServiceInstance.toUci(orig, dest, selectedRole);
+            if (!uciMoveWithPromotion) {
+                logger.error("[PuzzleController] Failed to create UCI for promotion move.");
+                this.appState.feedbackMessage = "Ошибка при создании хода с превращением.";
+                this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
+                this.requestRedraw();
+                return;
+            }
+            logger.info(`[PuzzleController] Promotion selected: ${selectedRole}. UCI: ${uciMoveWithPromotion}`);
+            this.processUserMove(uciMoveWithPromotion);
+        });
+        this.requestRedraw();
+        return;
+    }
+
+    const userUciMove = this.chessLogicServiceInstance.toUci(orig, dest);
+    if (!userUciMove) {
+        logger.warn("[PuzzleController] Invalid user move (UCI conversion failed).");
+        this.appState.feedbackMessage = "Некорректный ход.";
+        this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
+        this.requestRedraw();
+        return;
+    }
+    this.processUserMove(userUciMove);
+  }
+
+  private processUserMove(uciMove: string): void {
+    if (this.appState.isInPlayOutMode) {
+        logger.info(`[PuzzleController] User move in playout mode: ${uciMove}`);
+        this.handlePlayOutMove(uciMove);
+        return;
+    }
+
+    if (!this.appState.activePuzzle) {
+        logger.warn("[PuzzleController] No active puzzle, ignoring user move.");
+        this.appState.feedbackMessage = "Нет активного пазла.";
+        this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
+        this.requestRedraw();
+        return;
+    }
+
+    if (!this.appState.isUserTurnInPuzzle) {
+        logger.warn("[PuzzleController] Not user's turn in puzzle.");
+        this.appState.feedbackMessage = "Сейчас не ваш ход.";
+        this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
+        this.requestRedraw();
+        return;
+    }
+
+    const expectedMove = this.appState.puzzleSolutionMoves[this.appState.currentSolutionMoveIndex];
+    if (uciMove === expectedMove) {
+        logger.info(`[PuzzleController] User move ${uciMove} is CORRECT!`);
+        const newFen = this.chessLogicServiceInstance.getFenAfterMove(this.appState.currentFen, uciMove);
+        if (newFen) {
+            if (this.checkAndSetGameOver(newFen)) {
+                this.appState.feedbackMessage = this.appState.gameOverMessage || "Верно! Игра завершена.";
+                this.updateBoardVisualsFromFen(newFen, this.appState.humanPlayerColor);
+                return;
+            }
+            this.appState.feedbackMessage = "Верно!";
+            this.appState.currentSolutionMoveIndex++;
+            this.appState.isUserTurnInPuzzle = false;
+
+            if (this.appState.currentSolutionMoveIndex >= this.appState.puzzleSolutionMoves.length) {
+                logger.info("[PuzzleController] PUZZLE SOLVED BY USER!");
+                this.appState.feedbackMessage = "Пазл решен! Теперь можете доигрывать.";
+                this.appState.isInPlayOutMode = true;
+                if (!this.checkAndSetGameOver(newFen)) {
+                    this.appState.isUserTurnInPuzzle = (newFen.includes(' w ') ? 'white' : 'black') === this.appState.humanPlayerColor;
+                }
+                this.updateBoardVisualsFromFen(newFen, this.appState.humanPlayerColor);
+                if (!this.appState.gameOverMessage) {
+                    this.triggerStockfishMoveInPlayoutIfNeeded();
+                }
+            } else {
+                this.appState.feedbackMessage = "Ход системы...";
+                this.updateBoardVisualsFromFen(newFen, this.appState.humanPlayerColor);
+                setTimeout(() => this.playNextSolutionMoveInternal(true), 300);
+            }
+        } else {
+             logger.error(`[PuzzleController] Error applying correct user move ${uciMove}. This should not happen if move is legal.`);
+             this.appState.feedbackMessage = "Ошибка применения вашего верного хода. Пожалуйста, сообщите об этом.";
+             this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
+             this.requestRedraw();
+        }
+    } else {
+        logger.warn(`[PuzzleController] User move ${uciMove} is INCORRECT. Expected: ${expectedMove}`);
+        this.appState.feedbackMessage = `Неверно. Ожидался ${expectedMove}. Попробуйте еще раз.`;
+        this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
+        this.requestRedraw();
+    }
+  }
+
+
   private async handlePlayOutMove(userUciMove: string): Promise<void> {
-    if (this.appState.gameOverMessage) return;
+    if (this.appState.gameOverMessage || this.promotionCtrl.isActive()) return;
     if (this.appState.isStockfishThinking) {
         logger.warn("[PuzzleController handlePlayOutMove] User attempted to move while Stockfish is thinking.");
         return;
     }
     if (this.appState.boardTurnColor !== this.appState.humanPlayerColor) {
-        logger.warn("[PuzzleController handlePlayOutMove] Not human player's turn.");
+        logger.warn("[PuzzleController handlePlayOutMove] Not human player's turn in playout.");
         this.appState.feedbackMessage = "Сейчас не ваш ход.";
         this.requestRedraw();
         return;
     }
+
     const newFenAfterUser = this.chessLogicServiceInstance.getFenAfterMove(this.appState.currentFen, userUciMove);
     if (newFenAfterUser) {
         if (this.checkAndSetGameOver(newFenAfterUser)) {
@@ -332,11 +470,12 @@ export class PuzzleController {
         this.appState.isStockfishThinking = true;
         this.appState.feedbackMessage = "Stockfish думает...";
         this.updateBoardVisualsFromFen(newFenAfterUser, this.appState.humanPlayerColor);
+
         try {
             logger.info(`[PuzzleController handlePlayOutMove] Requesting best move from Stockfish for FEN: ${this.appState.currentFen}`);
-            // ИСПОЛЬЗУЕМ getBestMoveOnly
             const stockfishMoveUci = await this.stockfishService.getBestMoveOnly(this.appState.currentFen, { depth: 10 });
             this.appState.isStockfishThinking = false;
+
             if (stockfishMoveUci) {
                 logger.info(`[PuzzleController handlePlayOutMove] Stockfish move: ${stockfishMoveUci}`);
                 const newFenAfterStockfish = this.chessLogicServiceInstance.getFenAfterMove(this.appState.currentFen, stockfishMoveUci);
@@ -365,6 +504,7 @@ export class PuzzleController {
              if (!this.checkAndSetGameOver(this.appState.currentFen)) {
                 this.appState.feedbackMessage = "Ошибка при получении хода от Stockfish. Ваш ход.";
             }
+             this.updateBoardVisualsFromFen(this.appState.currentFen, this.appState.humanPlayerColor);
         }
         if (!this.appState.gameOverMessage) {
             this.appState.isUserTurnInPuzzle = true;
@@ -373,95 +513,16 @@ export class PuzzleController {
     } else {
         logger.warn(`[PuzzleController handlePlayOutMove] Illegal user move in playout: ${userUciMove}`);
         this.appState.feedbackMessage = "Нелегальный ход.";
-        this.chessboardService.setFen(this.appState.currentFen);
+        this.chessboardService.setFen(this.appState.currentFen.split(' ')[0]);
         this.requestRedraw();
     }
   }
 
-  public handleUserMove(orig: Key, dest: Key): void {
-    if (this.appState.gameOverMessage) return;
-    if (this.appState.isStockfishThinking) {
-        logger.warn("[PuzzleController handleUserMove] User attempted to move while Stockfish is thinking.");
-        this.appState.feedbackMessage = "Stockfish думает, подождите...";
-        this.requestRedraw();
-        return;
-    }
-    let promotionRoleChessops: ChessopsRole | undefined;
-    if (this.isPromotionAttempt(orig, dest, this.appState.currentFen)) {
-        const roleChar = prompt("Promote to (q, r, b, n):", "q");
-        promotionRoleChessops = ChessLogicService.roleFromString(roleChar || "q") || 'queen';
-    }
-    const userUciMove = this.chessLogicServiceInstance.toUci(orig, dest, promotionRoleChessops);
-    if (!userUciMove) {
-        logger.warn("[PuzzleController] Invalid user move (UCI conversion failed).");
-        this.appState.feedbackMessage = "Некорректный ход.";
-        this.chessboardService.setFen(this.appState.currentFen);
-        this.requestRedraw();
-        return;
-    }
-    if (this.appState.isInPlayOutMode) {
-        logger.info(`[PuzzleController] User move in playout mode: ${userUciMove}`);
-        this.handlePlayOutMove(userUciMove);
-        return;
-    }
-    if (!this.appState.activePuzzle) {
-        logger.warn("[PuzzleController] No active puzzle, ignoring user move.");
-        this.appState.feedbackMessage = "Нет активного пазла.";
-         this.chessboardService.setFen(this.appState.currentFen);
-        this.requestRedraw();
-        return;
-    }
-    if (!this.appState.isUserTurnInPuzzle) {
-        logger.warn("[PuzzleController] Not user's turn in puzzle.");
-        this.appState.feedbackMessage = "Сейчас не ваш ход.";
-        this.chessboardService.setFen(this.appState.currentFen);
-        this.requestRedraw();
-        return;
-    }
-    const expectedMove = this.appState.puzzleSolutionMoves[this.appState.currentSolutionMoveIndex];
-    if (userUciMove === expectedMove) {
-        logger.info(`[PuzzleController] User move ${userUciMove} is CORRECT!`);
-        const newFen = this.chessLogicServiceInstance.getFenAfterMove(this.appState.currentFen, userUciMove);
-        if (newFen) {
-            if (this.checkAndSetGameOver(newFen)) {
-                this.appState.feedbackMessage = this.appState.gameOverMessage || "Верно! Игра завершена.";
-                this.updateBoardVisualsFromFen(newFen, this.appState.humanPlayerColor);
-                return;
-            }
-            this.appState.feedbackMessage = "Верно!";
-            this.appState.currentSolutionMoveIndex++;
-            this.appState.isUserTurnInPuzzle = false;
-            if (this.appState.currentSolutionMoveIndex >= this.appState.puzzleSolutionMoves.length) {
-                logger.info("[PuzzleController] PUZZLE SOLVED BY USER!");
-                this.appState.feedbackMessage = "Пазл решен! Теперь можете доигрывать.";
-                this.appState.isInPlayOutMode = true;
-                if (!this.checkAndSetGameOver(newFen)) {
-                    this.appState.isUserTurnInPuzzle = (newFen.includes(' w ') ? 'white' : 'black') === this.appState.humanPlayerColor;
-                }
-                this.updateBoardVisualsFromFen(newFen, this.appState.humanPlayerColor);
-                if (!this.appState.gameOverMessage) {
-                    this.triggerStockfishMoveInPlayoutIfNeeded();
-                }
-            } else {
-                this.appState.feedbackMessage = "Ход системы...";
-                this.updateBoardVisualsFromFen(newFen, this.appState.humanPlayerColor);
-                setTimeout(() => this.playNextSolutionMoveInternal(true), 300);
-            }
-        } else {
-             logger.error(`[PuzzleController] Error applying correct user move ${userUciMove}. This should not happen if move is legal.`);
-             this.appState.feedbackMessage = "Ошибка применения вашего верного хода. Пожалуйста, сообщите об этом.";
-             this.chessboardService.setFen(this.appState.currentFen);
-             this.requestRedraw();
-        }
-    } else {
-        logger.warn(`[PuzzleController] User move ${userUciMove} is INCORRECT. Expected: ${expectedMove}`);
-        this.appState.feedbackMessage = `Неверно. Ожидался ${expectedMove}. Попробуйте еще раз.`;
-        this.chessboardService.setFen(this.appState.currentFen);
-        this.requestRedraw();
-    }
-  }
 
   public handleSetFen(): void {
+    if (this.promotionCtrl.isActive()) {
+        this.promotionCtrl.cancel();
+    }
     const fen = prompt("Enter FEN:", this.appState.currentFen);
     if (fen) {
       this.appState.activePuzzle = null;
@@ -471,7 +532,9 @@ export class PuzzleController {
       this.appState.humanPlayerColor = fen.includes(' w ') ? 'white' : 'black';
       const currentTurnInFen = fen.includes(' w ') ? 'white' : 'black';
       this.appState.isUserTurnInPuzzle = currentTurnInFen === this.appState.humanPlayerColor;
+
       this.updateBoardVisualsFromFen(fen, this.appState.humanPlayerColor);
+
       if (!this.appState.gameOverMessage) {
           if (this.appState.boardTurnColor !== this.appState.humanPlayerColor) {
               this.appState.feedbackMessage = "FEN установлен. Ход Stockfish.";

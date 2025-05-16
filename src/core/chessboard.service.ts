@@ -1,35 +1,23 @@
 // src/core/chessboard.service.ts
 
-// Импортируем основную функцию/класс Chessground
 import { Chessground } from 'chessground';
-
-// Импортируем типы из их предполагаемых подмодулей в библиотеке chessground
 import type { Api } from 'chessground/api';
 import type { Config } from 'chessground/config';
-// Типы State и Movable не экспортируются отдельно, они являются частью Api и Config
 import type {
   Key,
   Dests,
-  Color,
-  Role, // Импортируем Role, если он нужен для Piece-подобных структур
+  Color, // Color используется для piece
   FEN,
-  Pieces,
-  // Events, // Если используется в Config
-  // Shape as CgShape, // Переименовываем, чтобы не конфликтовать с возможным вашим типом Shape
-  // MoveMetadata // Если используется
+  // Pieces, // Не используется напрямую в этом файле, но полезно знать о его существовании
 } from 'chessground/types';
-
-// Импортируем ваш логгер
+import type { Role as ChessopsRole } from 'chessops/types'; // Для типа роли в setPieceAt
 import logger from '../utils/logger';
 
-// Определяем тип для отрисовки фигур (shapes)
-// (но лучше использовать DrawShape из 'chessground/types', если он подходит и импортирован как CgShape)
 interface CustomDrawShape {
   orig: Key;
   dest?: Key;
   brush: string;
 }
-
 
 export class ChessboardService {
   public ground: Api | null = null;
@@ -39,14 +27,10 @@ export class ChessboardService {
       logger.warn('Chessground already initialized.');
       return this.ground;
     }
-
     const defaultConfig: Config = {
       orientation: 'white',
-      // movable здесь будет соответствовать структуре, определенной в Config
     };
-
     const finalConfig: Config = { ...defaultConfig, ...config };
-
     try {
       this.ground = Chessground(element, finalConfig);
       logger.info('Chessground initialized');
@@ -58,15 +42,47 @@ export class ChessboardService {
   }
 
   public getFen(): FEN | undefined {
-    return this.ground?.getFen();
+    return this.ground?.getFen(); // Возвращает только часть FEN с расстановкой фигур
   }
 
-  public setFen(fen: FEN): void {
-    this.ground?.set({ fen });
+  /**
+   * Устанавливает позицию на доске по части FEN, отвечающей за расстановку фигур.
+   * @param fenPiecePlacement - Строка FEN, содержащая только расстановку фигур (например, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR").
+   */
+  public setFen(fenPiecePlacement: string): void {
+    if (this.ground) {
+      this.ground.set({ fen: fenPiecePlacement });
+      // logger.debug(`[ChessboardService] FEN piece placement set to: ${fenPiecePlacement}`);
+    }
   }
+
+  /**
+   * Устанавливает или удаляет фигуру на указанной клетке.
+   * @param key - Клетка (например, 'e4').
+   * @param piece - Объект с фигурой { role: ChessopsRole, color: Color } или null для удаления фигуры.
+   */
+  public setPieceAt(key: Key, piece: { role: ChessopsRole; color: Color } | null): void {
+    if (this.ground) {
+      const currentPieces = new Map(this.ground.state.pieces);
+      if (piece) {
+        // Chessground ожидает Role из своих типов, но ChessopsRole должен быть совместим.
+        // Если есть проблемы, потребуется явное преобразование.
+        // promoted: true важно для корректного отображения, если фигура была пешкой.
+        currentPieces.set(key, { ...piece, promoted: piece.role !== 'pawn' });
+      } else {
+        currentPieces.delete(key);
+      }
+      this.ground.setPieces(currentPieces);
+      logger.debug(`[ChessboardService] Piece at ${key} set to:`, piece);
+    }
+  }
+
 
   public move(orig: Key, dest: Key, _promotion?: string): void {
     logger.warn(`Programmatic move from ${orig} to ${dest} - implement logic if needed.`);
+    // Для программного хода с промоушеном, Chessground ожидает ход в формате UCI,
+    // например, ground.move('e7e8', 'q') или ground.playUci('e7e8q')
+    // Если вы будете использовать этот метод, убедитесь, что он правильно обрабатывает промоушен.
   }
 
   public setOrientation(color: Color): void {
@@ -74,13 +90,6 @@ export class ChessboardService {
   }
 
   public drawShapes(shapes: Array<CustomDrawShape>): void {
-    // Тип для элемента массива shapes должен соответствовать ожиданиям setShapes в Api.
-    // В 'chessground/src/api.ts' setShapes ожидает DrawShape[]
-    // DrawShape импортируется из './draw.js' в api.ts, но не реэкспортируется.
-    // Однако, в 'chessground/src/config.ts' Config.drawable.shapes использует DrawShape.
-    // И в 'chessground/src/draw.d.ts' есть экспорт: export type DrawShape = Circle | Arrow | PieceDestination;
-    // Попробуем импортировать DrawShape из 'chessground/draw' если 'chessground/types' не сработает.
-    // Пока оставим CustomDrawShape, но это место для потенциального улучшения, если найти экспорт DrawShape.
     this.ground?.setShapes(shapes.map(s => ({
         orig: s.orig,
         dest: s.dest,
@@ -101,20 +110,15 @@ export class ChessboardService {
   }
 
   public getDests(): Dests | undefined {
-    // Тип this.ground.state будет выведен из Api.state
     const state = this.ground?.state;
-    // Тип state.movable будет выведен из определения State.movable
-    // (где State - это тип для Api.state)
     return state?.movable?.dests;
   }
 
   public setDests(dests: Dests): void {
     const currentMovable = this.ground?.state?.movable;
-    // Объект, передаваемый в movable, будет структурно проверен
-    // на соответствие типу Config.movable
     this.ground?.set({
       movable: {
-        ...(currentMovable || {}), // Распространяем текущие свойства movable, если они есть
+        ...(currentMovable || {}),
         dests: dests
       }
     });

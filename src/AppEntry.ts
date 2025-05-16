@@ -2,6 +2,7 @@
 import { init, propsModule, eventListenersModule, styleModule, classModule } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import './assets/style.css'
+import './features/promotion/promotion.css';
 
 // Импорт общих сервисов
 import { ChessboardService } from './core/chessboard.service';

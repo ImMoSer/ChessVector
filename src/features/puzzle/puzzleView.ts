@@ -1,89 +1,106 @@
 // src/features/puzzle/puzzleView.ts
 import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
-// ИСПРАВЛЕНИЕ: Импортируем Key и MoveMetadata из 'chessground/types'
+// ИЗМЕНЕНО: Удален неиспользуемый импорт ChessgroundColor
 import type { Key, MoveMetadata } from 'chessground/types';
 import type { PuzzleController } from './PuzzleController';
 import logger from '../../utils/logger';
 
+import { renderPromotionDialog } from '../promotion/promotionView';
+
 export function renderPuzzleUI(controller: PuzzleController): VNode {
   const appState = controller.appState;
-  // Логгер теперь доступен
   logger.debug(`[puzzleView.ts] Rendering view. FEN: ${appState.currentFen}, Turn: ${appState.boardTurnColor}, Human: ${appState.humanPlayerColor}, PuzzleTurn: ${appState.isUserTurnInPuzzle}`);
+
+  let promotionDialogVNode: VNode | null = null;
+  // Доступ к chessboardService и requestRedraw теперь корректен, так как они public в PuzzleController
+  if (controller.chessboardService.ground) {
+    const groundState = controller.chessboardService.ground.state;
+    const boardOrientation = groundState.orientation;
+    const boardDomBounds = groundState.dom?.bounds();
+
+    if (boardDomBounds) {
+        promotionDialogVNode = renderPromotionDialog(
+        controller.promotionCtrl,
+        boardOrientation,
+        boardDomBounds
+      );
+    } else if (controller.promotionCtrl.isActive()) {
+        logger.warn('[puzzleView.ts] Promotion is active, but board DOM bounds are not available yet.');
+    }
+  }
+
 
   return h('div#app-container', [
     h('h1', 'ChessVector Puzzle Alpha'),
-    h('div#board-container', {
-      // Используем импортированный тип Key
-      key: 'board' as Key,
-      style: { width: 'clamp(320px, 90vmin, 800px)', height: 'clamp(320px, 90vmin, 800px)', margin: '20px auto', border: '1px solid #ccc' },
-      hook: {
-        insert: (vnode: VNode) => {
-          logger.info('[puzzleView.ts] Board container VNode inserted.');
-          const elm = vnode.elm as HTMLElement;
-
-          // Доступ к chessboardService через controller.
-          // Это временное решение, как указано в ваших комментариях.
-          // В идеале, view не должен напрямую обращаться к сервисам таким образом.
-          const chessboardService = (controller as any).chessboardService;
-
-          if (elm && !chessboardService.ground) {
-            logger.info('[puzzleView.ts] Chessground initializing for the first time...');
-            // Тип для initialConfig будет проверяться внутри chessboardService.init()
-            // на соответствие типу Config из 'chessground/config'
-            const initialConfig = {
-              fen: appState.currentFen,
-              orientation: appState.humanPlayerColor || 'white',
-              turnColor: appState.boardTurnColor,
-              movable: {
-                free: false,
-                color: controller.determineMovableColor(),
-                dests: controller.determineCurrentDests(),
-                events: {
-                  // Используем импортированные типы Key и MoveMetadata
-                  after: (orig: Key, dest: Key, _metadata: MoveMetadata) => {
-                    controller.handleUserMove(orig, dest);
-                  }
-                }
-              },
-              highlight: {
-                lastMove: true,
-                check: true,
-              },
-              animation: {
-                enabled: true,
-                duration: 100,
-              },
-            };
-            chessboardService.init(elm, initialConfig);
-            logger.info('[puzzleView.ts] Chessground initialized with config:', initialConfig);
-          } else if (elm && chessboardService.ground) {
-            logger.info('[puzzleView.ts] Chessground already initialized (e.g. HMR or re-patch), syncing state.');
-
-            chessboardService.setFen(appState.currentFen);
-            // Тип для объекта конфигурации в set() также будет проверяться
-            // внутри chessboardService.ground.set()
-            chessboardService.ground.set({
-              orientation: appState.humanPlayerColor || (chessboardService.ground.state as any)?.orientation, // Добавлено (as any) для state, если тип неполный
-              turnColor: appState.boardTurnColor,
-              movable: {
-                color: controller.determineMovableColor(),
-                dests: controller.determineCurrentDests(),
-              }
-            });
-            logger.info('[puzzleView.ts] Chessground state synced on re-insert/HMR.');
-          } else {
-            logger.error('[puzzleView.ts] Board container element not found in VNode after insert!');
-          }
+    h('div#board-wrapper', { style: { position: 'relative', width: 'clamp(220px, 95vmin, 900px)', margin: '10px auto' } }, [
+      h('div#board-container', {
+        key: 'board' as Key,
+        style: {
+          width: '100%',
+          height: 'clamp(320px, 95vmin, 900px)',
+          border: '1px solid #ccc'
         },
-        destroy: (_vnode: VNode) => {
-            logger.info('[puzzleView.ts] Board container VNode will be destroyed, destroying Chessground...');
-            const chessboardService = (controller as any).chessboardService;
-            chessboardService.destroy();
-            // stockfishService.terminate(); // Управляется из puzzleEntry.ts
+        hook: {
+          insert: (vnode: VNode) => {
+            logger.info('[puzzleView.ts] Board container VNode inserted.');
+            const elm = vnode.elm as HTMLElement;
+            // controller.chessboardService теперь доступен
+            const chessboardService = controller.chessboardService;
+
+            if (elm && !chessboardService.ground) {
+              logger.info('[puzzleView.ts] Chessground initializing for the first time...');
+              const initialConfig = {
+                fen: appState.currentFen.split(' ')[0],
+                orientation: appState.humanPlayerColor || 'white',
+                turnColor: appState.boardTurnColor,
+                movable: {
+                  free: false,
+                  color: controller.determineMovableColor(),
+                  dests: controller.determineCurrentDests(),
+                  events: {
+                    after: (orig: Key, dest: Key, _metadata: MoveMetadata) => {
+                      controller.handleUserMove(orig, dest);
+                    }
+                  }
+                },
+                highlight: {
+                  lastMove: true,
+                  check: true,
+                },
+                animation: {
+                  enabled: true,
+                  duration: 100,
+                },
+              };
+              chessboardService.init(elm, initialConfig);
+              logger.info('[puzzleView.ts] Chessground initialized with config:', initialConfig);
+              // controller.requestRedraw теперь доступен
+              controller.requestRedraw();
+            } else if (elm && chessboardService.ground) {
+              logger.info('[puzzleView.ts] Chessground already initialized, syncing state.');
+              chessboardService.setFen(appState.currentFen.split(' ')[0]);
+              chessboardService.ground.set({
+                orientation: appState.humanPlayerColor || (chessboardService.ground.state as any)?.orientation,
+                turnColor: appState.boardTurnColor,
+                movable: {
+                  color: controller.determineMovableColor(),
+                  dests: controller.determineCurrentDests(),
+                }
+              });
+              logger.info('[puzzleView.ts] Chessground state synced on re-insert/HMR.');
+            } else {
+              logger.error('[puzzleView.ts] Board container element not found in VNode after insert!');
+            }
+          },
+          destroy: (_vnode: VNode) => {
+              logger.info('[puzzleView.ts] Board container VNode will be destroyed, destroying Chessground...');
+              controller.chessboardService.destroy();
+          }
         }
-      }
-    }),
+      }),
+      promotionDialogVNode
+    ]),
     h('div#puzzle-info', { style: { textAlign: 'center', marginTop: '10px', fontSize: '1.2em', minHeight: '2.5em' } }, [
         h('p', appState.gameOverMessage || appState.feedbackMessage),
         appState.activePuzzle && !appState.isInPlayOutMode && !appState.gameOverMessage
@@ -95,13 +112,13 @@ export function renderPuzzleUI(controller: PuzzleController): VNode {
     ]),
     h('div#controls', { style: { textAlign: 'center', marginTop: '10px', display: 'flex', justifyContent: 'center', gap: '10px' } }, [
       h('button.button.lichess-button', {
-        attrs: { disabled: appState.isStockfishThinking || !!appState.gameOverMessage },
+        attrs: { disabled: appState.isStockfishThinking || !!appState.gameOverMessage || controller.promotionCtrl.isActive() },
         on: { click: () => controller.handleSetFen() }
       }, 'Установить FEN'),
       h('button.button.lichess-button', {
-        attrs: { disabled: appState.isStockfishThinking || !!appState.gameOverMessage },
+        attrs: { disabled: appState.isStockfishThinking || !!appState.gameOverMessage || controller.promotionCtrl.isActive() },
         on: { click: () => controller.loadAndStartPuzzle() }
-        }, 'Следующий пазл (Мок)')
+        }, 'Следующий пазл')
     ])
   ]);
 }

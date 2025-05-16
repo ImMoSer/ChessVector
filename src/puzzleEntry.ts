@@ -27,7 +27,7 @@ const patch = init([
 const chessboardService = new ChessboardService();
 const chessLogicService = new ChessLogicService();
 const webhookService = new WebhookService();
-const stockfishService = new StockfishService(); 
+const stockfishService = new StockfishService();
 
 // Переменная для хранения предыдущего VNode
 let oldVNode: VNode | Element = document.getElementById('app')!;
