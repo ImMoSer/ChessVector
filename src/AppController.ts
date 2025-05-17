@@ -104,8 +104,8 @@ export class AppController {
 
 
     // 2. Горизонтальные ограничения
-    const leftPanelWidthPx = this._getCssVariableInPixels('--left-panel-width');
-    const rightPanelWidthPx = this._getCssVariableInPixels('--right-panel-width');
+    const leftPanelWidthPx = this._getCssVariableInPixels('--panel-width');
+    const rightPanelWidthPx = this._getCssVariableInPixels('--panel-width');
     const panelGapPx = this._getCssVariableInPixels('--panel-gap');
 
     let availableWidthForCenterPx: number;

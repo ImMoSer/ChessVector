@@ -1,17 +1,43 @@
 // src/core/pgn.service.ts
 import logger from '../utils/logger';
+import { scalachessCharPair } from 'chessops/compat';
+import { parseUci } from 'chessops/util';
+import { parseFen } from 'chessops/fen';
+import { Chess } from 'chessops/chess';
 
 /**
- * Interface for a single node in the PGN history.
+ * Interface for a single node in the PGN history tree.
+ * Each node represents a position *after* a move has been made.
  */
 export interface PgnNode {
-  ply: number; // Ply number (half-move count, starting from 1 for the first move)
-  fenBefore: string;
+  id: string; // Unique ID for this node's move (e.g., scalachessCharPair from UCI)
+  ply: number; // Ply number (half-move count, root is 0, first move leads to ply 1 node)
+  fenBefore: string; // FEN string *before* the move leading to this node's position
+  fenAfter: string; // FEN string *after* the move leading to this node's position
+  san: string; // Standard Algebraic Notation of the move leading to this node
+  uci: string; // UCI string of the move leading to this node
+  
+  parent?: PgnNode; // Reference to the parent node
+  children: PgnNode[]; // Array of child nodes (variations)
+
+  // Optional fields
+  comment?: string; // A single primary comment for the move
+  eval?: number; // Stockfish evaluation (in centipawns or mate score)
+  // glyphs?: number[]; // NAGs (Numeric Annotation Glyphs) could be added later
+  // clock?: number; // Time spent on this move (in seconds or ms)
+}
+
+/**
+ * Data required to create a new PGN node.
+ */
+export interface NewNodeData {
   san: string;
   uci: string;
+  fenBefore: string;
   fenAfter: string;
-  // variations?: PgnNode[][]; // For future tree structure
-  // parent?: PgnNode;
+  // Optional data can be added here if needed upon creation
+  comment?: string;
+  eval?: number;
 }
 
 /**
@@ -19,67 +45,96 @@ export interface PgnNode {
  */
 export interface PgnStringOptions {
   showResult?: boolean;
+  showVariations?: boolean; // New option to control variation printing
   // fromPly?: number; // For future partial PGN generation
   // toPly?: number;
 }
 
+const ROOT_NODE_ID = "__ROOT__";
+
 class PgnServiceController {
-  private initialFen: string = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  private mainline: PgnNode[] = [];
+  private rootNode!: PgnNode;
+  private currentNode!: PgnNode;
+  private currentPath!: string; // Concatenated string of node IDs, e.g., "e2e4g8f6b1c3"
+
   private gameResult: string = '*';
-  private currentPlyNavigated: number = 0; // 0: initial position, 1: after 1st ply, etc.
 
   constructor() {
-    logger.info('[PgnService] Initialized.');
-    this.reset(this.initialFen);
+    logger.info('[PgnService] Initialized with tree structure.');
+    this.reset('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   }
 
-  /**
-   * Resets the PGN history and sets the initial FEN.
-   * @param fen - The starting FEN of the game.
-   */
   public reset(fen: string): void {
-    this.initialFen = fen;
-    this.mainline = [];
+    this.rootNode = {
+      id: ROOT_NODE_ID,
+      ply: 0,
+      fenBefore: '', 
+      fenAfter: fen,
+      san: '',
+      uci: '',
+      parent: undefined,
+      children: [],
+    };
+    this.currentNode = this.rootNode;
+    this.currentPath = '';
     this.gameResult = '*';
-    this.currentPlyNavigated = 0; // Reset navigation to the initial position
-    logger.info(`[PgnService] Reset with FEN: ${this.initialFen}. Current navigated ply: ${this.currentPlyNavigated}`);
+    logger.info(`[PgnService] Reset with FEN: ${fen}. Current node is root. Path: "${this.currentPath}"`);
   }
 
-  /**
-   * Adds a move to the PGN history.
-   * If a move is added while navigating history (not at the end),
-   * the subsequent history (variations from that point) is truncated.
-   * @param fenBefore - FEN string before the move.
-   * @param san - Standard Algebraic Notation of the move.
-   * @param uci - UCI string of the move.
-   * @param fenAfter - FEN string after the move.
-   */
-  public addMove(fenBefore: string, san: string, uci: string, fenAfter: string): void {
-    // If currentPlyNavigated is not at the end of the mainline,
-    // it means we are branching off or overwriting history.
-    if (this.currentPlyNavigated < this.mainline.length) {
-      logger.warn(`[PgnService] Adding move while currentPlyNavigated (${this.currentPlyNavigated}) is not at the end of mainline (${this.mainline.length}). Truncating mainline.`);
-      this.mainline = this.mainline.slice(0, this.currentPlyNavigated);
+  public addNode(data: NewNodeData): PgnNode | null {
+    const parentNode = this.currentNode;
+
+    if (parentNode.fenAfter !== data.fenBefore) {
+        logger.error(`[PgnService] FEN mismatch: parent.fenAfter (${parentNode.fenAfter}) !== newNode.fenBefore (${data.fenBefore}). Cannot add node.`);
+        return null;
     }
 
-    const ply = this.mainline.length + 1; // Ply number for the new move
+    const chessopsMove = parseUci(data.uci);
+    if (!chessopsMove) {
+        logger.error(`[PgnService] Invalid UCI string for ID generation: ${data.uci}`);
+        return null;
+    }
+    const nodeId = scalachessCharPair(chessopsMove);
+
+    const existingChild = parentNode.children.find(child => child.id === nodeId);
+    if (existingChild) {
+        logger.debug(`[PgnService] Node with ID ${nodeId} (UCI: ${data.uci}) already exists as a child. Navigating to it.`);
+        this.currentNode = existingChild;
+        this.currentPath = this.buildPath(this.currentNode);
+        return this.currentNode;
+    }
+
     const newNode: PgnNode = {
-      ply,
-      fenBefore,
-      san,
-      uci,
-      fenAfter,
+      id: nodeId,
+      ply: parentNode.ply + 1,
+      fenBefore: data.fenBefore,
+      fenAfter: data.fenAfter,
+      san: data.san,
+      uci: data.uci,
+      parent: parentNode,
+      children: [],
+      comment: data.comment,
+      eval: data.eval,
     };
-    this.mainline.push(newNode);
-    this.currentPlyNavigated = this.mainline.length; // After adding a move, navigation points to the new last position
-    logger.debug(`[PgnService] Move added: Ply ${newNode.ply}, SAN ${san}. Current navigated ply: ${this.currentPlyNavigated}`);
+
+    parentNode.children.push(newNode);
+    this.currentNode = newNode;
+    this.currentPath = this.buildPath(this.currentNode);
+
+    logger.debug(`[PgnService] Node added: Ply ${newNode.ply}, SAN ${newNode.san}, ID ${newNode.id}. Path: "${this.currentPath}"`);
+    return newNode;
   }
 
-  /**
-   * Sets the game result.
-   * @param result - e.g., "1-0", "0-1", "1/2-1/2"
-   */
+  private buildPath(node: PgnNode): string {
+    let path = '';
+    let current: PgnNode | undefined = node;
+    while (current && current.parent) { 
+      path = current.id + path;
+      current = current.parent;
+    }
+    return path;
+  }
+
   public setGameResult(result: string): void {
     if (["1-0", "0-1", "1/2-1/2", "*"].includes(result)) {
       this.gameResult = result;
@@ -90,161 +145,293 @@ class PgnServiceController {
     }
   }
 
-  private isWhiteTurnFromFen(fen: string): boolean {
-    const parts = fen.split(' ');
-    return parts.length > 1 && parts[1] === 'w';
-  }
-
-  private getFullMoveNumberFromFen(fen: string): number {
-    const parts = fen.split(' ');
-    return parts.length > 5 ? parseInt(parts[5], 10) : 1;
-  }
-
   public getCurrentPgnString(options?: PgnStringOptions): string {
-    if (this.mainline.length === 0) {
+    let pgn = '';
+    const pathNodes: PgnNode[] = [];
+    let N = this.currentNode;
+    while (N.parent) {
+        pathNodes.unshift(N);
+        N = N.parent;
+    }
+
+    if (pathNodes.length === 0) {
       return options?.showResult ? this.gameResult : '';
     }
 
-    let pgn = '';
-    let currentFullMoveNumber = this.getFullMoveNumberFromFen(this.mainline[0].fenBefore);
-    const firstMoveIsWhite = this.isWhiteTurnFromFen(this.mainline[0].fenBefore);
+    const firstActualMoveNode = pathNodes[0];
+    
+    let currentFullMoveNumber = 1;
+    let isWhiteToMoveInitially = true;
 
-    // Iterate up to the current navigated ply, or full mainline if not specified differently
-    const movesToDisplay = this.mainline; // For now, always display the full mainline. Navigation will change what's on the board.
+    try {
+        const rootSetup = parseFen(this.rootNode.fenAfter).unwrap();
+        const rootChessPos = Chess.fromSetup(rootSetup).unwrap();
+        currentFullMoveNumber = rootChessPos.fullmoves;
+        isWhiteToMoveInitially = rootChessPos.turn === 'white';
+    } catch (e: any) {
+        logger.warn(`[PgnService] Could not parse root FEN or create Chess pos for PGN string: ${e.message}`);
+    }
 
-    for (let i = 0; i < movesToDisplay.length; i++) {
-      const node = movesToDisplay[i];
-      const isWhiteMoveInPgn = (firstMoveIsWhite && i % 2 === 0) || (!firstMoveIsWhite && i % 2 !== 0);
+    if (firstActualMoveNode && firstActualMoveNode.ply === 1) {
+        try {
+            const firstMoveFenBeforeSetup = parseFen(firstActualMoveNode.fenBefore).unwrap();
+            const firstMoveChessPos = Chess.fromSetup(firstMoveFenBeforeSetup).unwrap();
+            isWhiteToMoveInitially = firstMoveChessPos.turn === 'white';
+            currentFullMoveNumber = firstMoveChessPos.fullmoves;
+        } catch (e: any) {
+            logger.warn(`[PgnService] Could not parse firstMove.fenBefore or create Chess pos for PGN string: ${e.message}`);
+        }
+    }
+
+    for (let i = 0; i < pathNodes.length; i++) {
+      const node = pathNodes[i];
+      const isWhiteMoveInPgn = (node.ply % 2 === 1 && isWhiteToMoveInitially) || (node.ply % 2 === 0 && !isWhiteToMoveInitially);
 
       if (isWhiteMoveInPgn) {
-        if (i !== 0) pgn += '\n';
+        if (pgn.length > 0) pgn += (options?.showVariations ? ' ' : '\n');
         pgn += `${currentFullMoveNumber}. `;
-        if (i === 0 && !firstMoveIsWhite) {
-          pgn += `... `;
-        }
       } else {
-        pgn += ` `;
+        if (i === 0 && isWhiteToMoveInitially) {
+            pgn += `${currentFullMoveNumber}... `;
+        } else {
+            pgn += ` `;
+        }
       }
       pgn += node.san;
 
-      if (!isWhiteMoveInPgn) {
-        currentFullMoveNumber++;
+      if (node.comment && options?.showVariations) {
+        pgn += ` {${node.comment}}`;
+      }
+
+      if (!isWhiteMoveInPgn || (i === 0 && !isWhiteToMoveInitially && node.ply % 2 === 1) ) {
+        if (!isWhiteMoveInPgn) currentFullMoveNumber++;
       }
     }
 
-    if (options?.showResult) {
-      pgn += (pgn.length > 0 && this.mainline.length > 0 ? ' ' : '') + this.gameResult;
+    // TODO: Implement variation printing if options.showVariations is true
+    // This would involve recursively calling a helper for node.children if not the main child.
+
+    if (options?.showResult && this.gameResult !== '*') {
+      pgn += (pgn.length > 0 ? ' ' : '') + this.gameResult;
     }
     return pgn.trim();
   }
 
-  /**
-   * Returns the FEN of the currently navigated position.
-   * If ply is 0, returns initial FEN. Otherwise, FEN after the navigated ply.
-   */
+  public getCurrentNode(): PgnNode {
+    return this.currentNode;
+  }
+
+  public getRootNode(): PgnNode {
+    return this.rootNode;
+  }
+  
+  public getCurrentPath(): string {
+    return this.currentPath;
+  }
+
   public getCurrentNavigatedFen(): string {
-    if (this.currentPlyNavigated === 0) {
-      return this.initialFen;
-    }
-    if (this.currentPlyNavigated > 0 && this.currentPlyNavigated <= this.mainline.length) {
-      return this.mainline[this.currentPlyNavigated - 1].fenAfter;
-    }
-    // Should not happen if navigation is correct, but as a fallback:
-    return this.mainline.length > 0 ? this.mainline[this.mainline.length - 1].fenAfter : this.initialFen;
+    return this.currentNode.fenAfter;
   }
 
-  /**
-   * Returns the PgnNode of the move that LED TO the current navigated position.
-   * Returns null if at the initial position (ply 0).
-   */
   public getCurrentNavigatedNode(): PgnNode | null {
-    if (this.currentPlyNavigated > 0 && this.currentPlyNavigated <= this.mainline.length) {
-      return this.mainline[this.currentPlyNavigated - 1];
-    }
-    return null;
+    return this.currentNode.parent ? this.currentNode : null;
   }
-
 
   public getFenHistoryForRepetition(): string[] {
-    const history = [this.initialFen.split(' ')[0]];
-    // Consider only moves up to the current navigated ply for repetition in that specific line
-    const relevantMainline = this.mainline.slice(0, this.currentPlyNavigated);
-    relevantMainline.forEach(node => {
+    const history: string[] = [this.rootNode.fenAfter.split(' ')[0]];
+    let N: PgnNode | undefined = this.currentNode;
+    const pathNodes: PgnNode[] = [];
+
+    while (N && N.parent) {
+        pathNodes.unshift(N);
+        N = N.parent;
+    }
+    pathNodes.forEach(node => {
         history.push(node.fenAfter.split(' ')[0]);
     });
     return history;
   }
 
   public getLastMove(): PgnNode | null {
-    return this.mainline.length > 0 ? this.mainline[this.mainline.length - 1] : null;
+    if (this.currentNode === this.rootNode) return null;
+    return this.currentNode;
   }
 
-  public undoLastMainlineMove(): PgnNode | null {
-    if (this.mainline.length > 0) {
-      const undoneMove = this.mainline.pop();
-      // After undoing, the navigated ply should be the new end of the mainline
-      this.currentPlyNavigated = this.mainline.length;
-      logger.info(`[PgnService] Undid last mainline move: ${undoneMove?.san}. Current navigated ply: ${this.currentPlyNavigated}`);
-      return undoneMove || null;
+  public undoLastMove(): PgnNode | null {
+    if (this.currentNode.parent) {
+      const undoneNode = this.currentNode;
+      this.currentNode = this.currentNode.parent;
+      this.currentPath = this.buildPath(this.currentNode);
+      logger.info(`[PgnService] Undid move. Current node is now ply ${this.currentNode.ply}, SAN (of parent's move): ${this.currentNode.san}. Path: "${this.currentPath}"`);
+      return undoneNode;
     }
-    logger.warn(`[PgnService] No moves in mainline to undo.`);
+    logger.warn(`[PgnService] No move to undo (already at root).`);
     return null;
   }
 
-  // --- Navigation Methods ---
+  public pruneCurrentNodeAndGoToParent(): PgnNode | null {
+    if (this.currentNode.parent) {
+        const parent = this.currentNode.parent;
+        const nodeIdToRemove = this.currentNode.id;
+        parent.children = parent.children.filter(child => child.id !== nodeIdToRemove);
+        
+        const oldNodePly = this.currentNode.ply;
+        this.currentNode = parent;
+        this.currentPath = this.buildPath(this.currentNode);
+        logger.info(`[PgnService] Pruned node (Ply ${oldNodePly}). Current node is now ply ${this.currentNode.ply}. Path: "${this.currentPath}"`);
+        return this.currentNode;
+    }
+    logger.warn(`[PgnService] Cannot prune root node.`);
+    return null;
+  }
 
-  public navigateToPly(ply: number): boolean {
-    if (ply >= 0 && ply <= this.mainline.length) {
-      this.currentPlyNavigated = ply;
-      logger.debug(`[PgnService] Navigated to ply: ${this.currentPlyNavigated}`);
+  public navigateToPath(path: string): boolean {
+    let targetNode: PgnNode | undefined = this.rootNode;
+    let currentPathSegment = path;
+
+    while (currentPathSegment.length > 0 && targetNode) {
+        let foundChild = false;
+        for(const child of targetNode.children) {
+            if (currentPathSegment.startsWith(child.id)) {
+                targetNode = child;
+                currentPathSegment = currentPathSegment.substring(child.id.length);
+                foundChild = true;
+                break;
+            }
+        }
+        if (!foundChild) {
+            targetNode = undefined;
+            break;
+        }
+    }
+    
+    if (targetNode && currentPathSegment.length === 0) {
+      this.currentNode = targetNode;
+      this.currentPath = path;
+      logger.debug(`[PgnService] Navigated to path: "${path}", Ply: ${this.currentNode.ply}`);
       return true;
     }
-    logger.warn(`[PgnService] Cannot navigate to ply ${ply}. Out of bounds (0-${this.mainline.length}).`);
+    logger.warn(`[PgnService] Cannot navigate to path "${path}". Path not found or invalid.`);
+    return false;
+  }
+  
+  public navigateToPly(ply: number): boolean {
+    if (ply < 0) {
+        logger.warn(`[PgnService] Cannot navigate to negative ply: ${ply}`);
+        return false;
+    }
+    if (ply === 0) {
+        this.navigateToStart();
+        return true;
+    }
+
+    let targetNode: PgnNode | undefined = this.rootNode;
+    let constructedPath = "";
+    while(targetNode && targetNode.ply < ply) {
+        if (targetNode.children.length > 0) {
+            targetNode = targetNode.children[0]; // Follow main line
+            constructedPath += targetNode.id;
+        } else {
+            targetNode = undefined; // Reached end of line before target ply
+            break;
+        }
+    }
+
+    if (targetNode && targetNode.ply === ply) {
+      this.currentNode = targetNode;
+      this.currentPath = constructedPath;
+      logger.debug(`[PgnService] Navigated to ply: ${this.currentNode.ply} on main line. Path: "${this.currentPath}"`);
+      return true;
+    }
+    logger.warn(`[PgnService] Cannot navigate to ply ${ply} on main line. Max ply on main line: ${targetNode?.ply || this.rootNode.ply}.`);
     return false;
   }
 
   public navigateBackward(): boolean {
-    if (this.canNavigateBackward()) {
-      this.currentPlyNavigated--;
-      logger.debug(`[PgnService] Navigated backward to ply: ${this.currentPlyNavigated}`);
+    if (this.currentNode.parent) {
+      this.currentNode = this.currentNode.parent;
+      this.currentPath = this.buildPath(this.currentNode);
+      logger.debug(`[PgnService] Navigated backward to ply: ${this.currentNode.ply}. Path: "${this.currentPath}"`);
       return true;
     }
     return false;
   }
 
-  public navigateForward(): boolean {
-    if (this.canNavigateForward()) {
-      this.currentPlyNavigated++;
-      logger.debug(`[PgnService] Navigated forward to ply: ${this.currentPlyNavigated}`);
+  public navigateForward(variationIndex: number = 0): boolean {
+    if (this.currentNode.children && this.currentNode.children.length > variationIndex) {
+      const childNode = this.currentNode.children[variationIndex];
+      this.currentNode = childNode;
+      this.currentPath += childNode.id; // Append ID
+      logger.debug(`[PgnService] Navigated forward to ply: ${this.currentNode.ply} (Variation ${variationIndex}). Path: "${this.currentPath}"`);
       return true;
     }
     return false;
   }
 
   public navigateToStart(): void {
-    this.currentPlyNavigated = 0;
-    logger.debug(`[PgnService] Navigated to start (ply 0).`);
+    this.currentNode = this.rootNode;
+    this.currentPath = '';
+    logger.debug(`[PgnService] Navigated to start (ply 0). Path: "${this.currentPath}"`);
   }
 
   public navigateToEnd(): void {
-    this.currentPlyNavigated = this.mainline.length;
-    logger.debug(`[PgnService] Navigated to end (ply ${this.currentPlyNavigated}).`);
+    let N = this.currentNode;
+    let pathSuffix = "";
+    while (N.children.length > 0) {
+      N = N.children[0]; // Follow main variation
+      pathSuffix += N.id;
+    }
+    if (this.currentNode !== N) { 
+        this.currentNode = N;
+        if (!this.currentPath.endsWith(pathSuffix) || pathSuffix === "") { 
+           this.currentPath = this.buildPath(this.currentNode); 
+        }
+    }
+    logger.debug(`[PgnService] Navigated to end (ply ${this.currentNode.ply}). Path: "${this.currentPath}"`);
   }
 
   public canNavigateBackward(): boolean {
-    return this.currentPlyNavigated > 0;
+    return !!this.currentNode.parent;
   }
 
-  public canNavigateForward(): boolean {
-    return this.currentPlyNavigated < this.mainline.length;
+  public canNavigateForward(variationIndex: number = 0): boolean {
+    return !!this.currentNode.children && this.currentNode.children.length > variationIndex;
   }
 
-  public getCurrentPlyNavigated(): number {
-    return this.currentPlyNavigated;
+  public getCurrentPly(): number {
+    return this.currentNode.ply;
   }
 
-  public getTotalPliesInMainline(): number {
-    return this.mainline.length;
+  public getTotalPliesInCurrentLine(): number {
+    let count = 0;
+    let N: PgnNode | undefined = this.currentNode;
+    while(N && N.parent) {
+        count++;
+        N = N.parent;
+    }
+    return count;
+  }
+
+  public getVariationsForCurrentNode(): PgnNode[] {
+    return this.currentNode.children;
+  }
+
+  public promoteVariationToMainline(variationNodeId: string): boolean {
+    const parent = this.currentNode; 
+    const variationIndex = parent.children.findIndex(child => child.id === variationNodeId);
+
+    if (variationIndex > 0) { 
+      const itemToPromote = parent.children.splice(variationIndex, 1)[0];
+      parent.children.unshift(itemToPromote);
+      logger.info(`[PgnService] Promoted variation ${variationNodeId} to mainline for node at ply ${parent.ply}.`);
+      return true;
+    }
+    if (variationIndex === 0) {
+        logger.debug(`[PgnService] Variation ${variationNodeId} is already the mainline.`);
+        return true;
+    }
+    logger.warn(`[PgnService] Could not promote variation ${variationNodeId}: not found or already mainline.`);
+    return false;
   }
 }
 

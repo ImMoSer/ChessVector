@@ -7,19 +7,21 @@ import { BoardHandler } from '../../core/boardHandler';
 import type { GameStatus, GameEndOutcome, AttemptMoveResult } from '../../core/boardHandler';
 import logger from '../../utils/logger';
 import { SoundService } from '../../core/sound.service';
+// PgnNode is not directly manipulated here as much, BoardHandler and PgnService handle it.
+// import type { PgnNode } from '../../core/pgn.service'; 
 
 interface PuzzleControllerState {
   activePuzzle: AppPuzzle | null;
-  puzzleSolutionMoves: string[];
-  currentSolutionMoveIndex: number;
-  isUserTurnInPuzzle: boolean;
+  puzzleSolutionMoves: string[]; // UCI strings of the puzzle's main solution
+  currentSolutionMoveIndex: number; // Index in puzzleSolutionMoves
+  isUserTurnInPuzzle: boolean; // Is it the user's turn to make a move in the puzzle context
   feedbackMessage: string;
-  isInPlayOutMode: boolean;
-  isStockfishThinking: boolean;
-  gameOverMessage: string | null;
+  isInPlayOutMode: boolean; // True if puzzle solution is complete, and user can play on
+  isStockfishThinking: boolean; // True if Stockfish is calculating a move in playout
+  gameOverMessage: string | null; // e.g., "Checkmate! White won."
   isAnalysisModeActive: boolean;
-  currentPuzzlePieceCount: number;
-  currentPgnString: string;
+  currentPuzzlePieceCount: number; // For display or potential logic
+  currentPgnString: string; // For display in the UI
 }
 
 export class PuzzleController {
@@ -28,7 +30,7 @@ export class PuzzleController {
 
   constructor(
     public chessboardService: ChessboardService,
-    boardHandler: BoardHandler,
+    boardHandler: BoardHandler, // Expecting already refactored BoardHandler
     private webhookService: WebhookService,
     private stockfishService: StockfishService,
     public requestRedraw: () => void,
@@ -81,7 +83,9 @@ export class PuzzleController {
   }
 
   private _updatePgnDisplay(): void {
-    this.state.currentPgnString = this.boardHandler.getPgn({ showResult: true });
+    // Get PGN string for the current line, show result if game over and not in analysis
+    const showResult = this.boardHandler.getGameStatus().isGameOver && !this.state.isAnalysisModeActive;
+    this.state.currentPgnString = this.boardHandler.getPgn({ showResult, showVariations: this.state.isAnalysisModeActive });
     this.requestRedraw(); 
   }
 
@@ -90,10 +94,10 @@ export class PuzzleController {
     if (gameStatus.isGameOver && !this.boardHandler.isAnalysisMode()) { 
       this.state.gameOverMessage = this.formatGameEndMessage(gameStatus.outcome);
       this.state.feedbackMessage = this.state.gameOverMessage || "Game over.";
-      this.state.isUserTurnInPuzzle = false;
+      this.state.isUserTurnInPuzzle = false; // No more turns if game is over
       this.state.isStockfishThinking = false;
       logger.info(`[PuzzleController] Game over detected. Message: ${this.state.gameOverMessage}`);
-      this._updatePgnDisplay();
+      this._updatePgnDisplay(); // Update PGN with result
 
       if (this.state.activePuzzle && gameStatus.outcome?.reason !== 'stalemate') {
         const humanColor = this.boardHandler.getHumanPlayerColor();
@@ -108,11 +112,8 @@ export class PuzzleController {
       this.requestRedraw();
       return true;
     }
-    if (gameStatus.isGameOver && this.boardHandler.isAnalysisMode()) {
-        logger.info(`[PuzzleController] Game technically over, but in analysis mode. Outcome: ${JSON.stringify(gameStatus.outcome)}`);
-    } else {
-        this.state.gameOverMessage = null;
-    }
+    // If not game over, or if in analysis mode, clear previous game over message
+    this.state.gameOverMessage = null; 
     return false;
   }
 
@@ -121,16 +122,24 @@ export class PuzzleController {
       this.boardHandler.promotionCtrl.cancel();
     }
     if (this.state.isAnalysisModeActive) {
-        this.handleToggleAnalysisMode(false); 
+        this.handleToggleAnalysisMode(false); // Turn off analysis before loading new puzzle
     }
 
     logger.info("[PuzzleController] Loading new puzzle...");
-    this.state.feedbackMessage = "Loading puzzle...";
-    this.state.isInPlayOutMode = false;
-    this.state.isStockfishThinking = false;
-    this.state.gameOverMessage = null;
-    this.state.currentPuzzlePieceCount = 0;
-    this.state.currentPgnString = "";
+    this.state = { // Reset most of the state
+        ...this.state, // Keep some state like analysis mode if needed, or reset selectively
+        activePuzzle: null,
+        puzzleSolutionMoves: [],
+        currentSolutionMoveIndex: 0,
+        isUserTurnInPuzzle: false,
+        feedbackMessage: "Loading puzzle...",
+        isInPlayOutMode: false,
+        isStockfishThinking: false,
+        gameOverMessage: null,
+        currentPuzzlePieceCount: 0,
+        currentPgnString: "",
+        // isAnalysisModeActive: false, // Explicitly reset if desired
+    };
     this.requestRedraw();
 
     const puzzleData = await this.webhookService.fetchPuzzle();
@@ -140,14 +149,16 @@ export class PuzzleController {
       this.state.currentSolutionMoveIndex = 0;
       this.state.currentPuzzlePieceCount = this.countPiecesFromFen(puzzleData.FEN_0);
 
+      // BoardHandler.setupPosition will call PgnService.reset
       this.boardHandler.setupPosition(puzzleData.FEN_0, puzzleData.HumanColor, true);
-      this._updatePgnDisplay();
+      this._updatePgnDisplay(); // PGN will be empty initially after reset
 
       logger.info(`[PuzzleController] Puzzle loaded: ${puzzleData.PuzzleId}. Initial FEN: ${this.boardHandler.getFen()}. Pieces: ${this.state.currentPuzzlePieceCount}`);
       logger.info(`[PuzzleController] Human player color: ${this.boardHandler.getHumanPlayerColor()}. Solution moves: ${this.state.puzzleSolutionMoves.join(' ')}`);
+      
       this.state.feedbackMessage = `Puzzle ${puzzleData.PuzzleId}. You play as ${this.boardHandler.getHumanPlayerColor() || 'N/A'}.`;
 
-      if (this.checkAndSetGameOver()) return;
+      if (this.checkAndSetGameOver()) return; // Check if initial FEN is already game over
 
       const initialTurnColorInPuzzle = this.boardHandler.getBoardTurnColor();
       const humanColor = this.boardHandler.getHumanPlayerColor();
@@ -158,6 +169,7 @@ export class PuzzleController {
           this.state.isUserTurnInPuzzle = false;
           this.state.feedbackMessage = "System's turn...";
           this.requestRedraw();
+          // Delay slightly to allow UI update before system move
           setTimeout(() => this.playNextSolutionMoveInternal(false), 750);
         } else {
           this.state.isUserTurnInPuzzle = true;
@@ -165,14 +177,16 @@ export class PuzzleController {
           logger.info(`[PuzzleController] Puzzle starts with user's turn.`);
           this.requestRedraw();
         }
-      } else {
-        logger.warn("[PuzzleController] Puzzle has no moves in solution string! Setting user turn if applicable.");
+      } else { // Puzzle has no defined solution moves (e.g., mate in 1 for user)
+        logger.warn("[PuzzleController] Puzzle has no moves in solution string!");
         this.state.isUserTurnInPuzzle = initialTurnColorInPuzzle === humanColor;
-        this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn (puzzle has no solution?)." : "System's turn (puzzle has no solution?).";
+        this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn (direct solution?)." : "System's turn (direct solution?).";
         this.requestRedraw();
         if (!this.state.isUserTurnInPuzzle && !this.state.gameOverMessage) {
+          // This case implies the puzzle is for the system to solve, or it's a "play vs stockfish" from this pos.
+          // For now, let's assume if it's not user's turn, it's an error or needs playout.
           if (!this.state.isInPlayOutMode) {
-            this.state.isInPlayOutMode = true;
+            this.state.isInPlayOutMode = true; // Treat as playout if system starts and no solution moves
             SoundService.playSound('puzzle_playout_start');
           }
           this.triggerStockfishMoveInPlayoutIfNeeded();
@@ -204,8 +218,9 @@ export class PuzzleController {
 
         if (stockfishMoveUci) {
           logger.info(`[PuzzleController] Stockfish auto-move in playout: ${stockfishMoveUci}`);
+          // BoardHandler will add this to PGN tree
           const moveResult: AttemptMoveResult = this.boardHandler.applySystemMove(stockfishMoveUci);
-          this._updatePgnDisplay();
+          this._updatePgnDisplay(); 
           if (moveResult.success) {
             if (!this.checkAndSetGameOver()) {
               this.state.feedbackMessage = "Your turn.";
@@ -214,12 +229,12 @@ export class PuzzleController {
           } else {
             logger.error("[PuzzleController] Stockfish (auto) made an illegal move or FEN update failed:", stockfishMoveUci);
             this.state.feedbackMessage = "Stockfish error. Your turn.";
-            this.state.isUserTurnInPuzzle = true;
+            this.state.isUserTurnInPuzzle = true; // Give turn back to user
           }
-        } else {
+        } else { // Stockfish returned no move
           logger.warn("[PuzzleController] Stockfish (auto) did not return a move in playout.");
-          if (!this.checkAndSetGameOver()) {
-            this.state.feedbackMessage = "Stockfish found no move or an error occurred. Your turn.";
+          if (!this.checkAndSetGameOver()) { // If no move, it might be mate/stalemate already
+            this.state.feedbackMessage = "Stockfish found no move. Your turn.";
             this.state.isUserTurnInPuzzle = true;
           }
         }
@@ -239,14 +254,14 @@ export class PuzzleController {
     if (this.state.gameOverMessage || this.boardHandler.promotionCtrl.isActive() || this.state.isAnalysisModeActive) return;
     
     if (!this.state.activePuzzle || this.state.currentSolutionMoveIndex >= this.state.puzzleSolutionMoves.length) {
-      if (this.state.activePuzzle) {
+      if (this.state.activePuzzle) { // Puzzle solution is complete
         logger.info("[PuzzleController] Puzzle solution completed. Entering play out mode.");
         if (!this.state.isInPlayOutMode) {
             this.state.isInPlayOutMode = true;
             SoundService.playSound('puzzle_playout_start');
         }
         this.state.feedbackMessage = "Puzzle solved! You can continue playing.";
-        if (!this.checkAndSetGameOver()) {
+        if (!this.checkAndSetGameOver()) { // Check if the last solution move ended the game
           this.state.isUserTurnInPuzzle = this.boardHandler.getBoardTurnColor() === this.boardHandler.getHumanPlayerColor();
           if (!this.state.isUserTurnInPuzzle) {
             this.triggerStockfishMoveInPlayoutIfNeeded();
@@ -264,14 +279,15 @@ export class PuzzleController {
     this.state.feedbackMessage = isContinuation ? `System responds: ${uciSolutionMove}` : `System's first move: ${uciSolutionMove}`;
     this.requestRedraw();
 
+    // BoardHandler will add this to PGN tree
     const moveResult: AttemptMoveResult = this.boardHandler.applySystemMove(uciSolutionMove);
     this._updatePgnDisplay();
 
     if (moveResult.success) {
       this.state.currentSolutionMoveIndex++;
-      if (this.checkAndSetGameOver()) return;
+      if (this.checkAndSetGameOver()) return; // Check if system's move ended the game
 
-      if (this.state.currentSolutionMoveIndex >= this.state.puzzleSolutionMoves.length) {
+      if (this.state.currentSolutionMoveIndex >= this.state.puzzleSolutionMoves.length) { // System just completed the solution
         logger.info("[PuzzleController] SYSTEM COMPLETED PUZZLE SOLUTION!");
         if (!this.state.isInPlayOutMode) {
             this.state.isInPlayOutMode = true;
@@ -282,14 +298,14 @@ export class PuzzleController {
         if (!this.state.isUserTurnInPuzzle && !this.state.gameOverMessage) {
           this.triggerStockfishMoveInPlayoutIfNeeded();
         }
-      } else {
+      } else { // Solution continues, it's user's turn
         this.state.isUserTurnInPuzzle = true;
         this.state.feedbackMessage = `Your turn.`;
       }
     } else {
       logger.error(`[PuzzleController] Failed to apply solution move ${uciSolutionMove} from BoardHandler. Result: ${JSON.stringify(moveResult)}`);
       this.state.feedbackMessage = "Error in puzzle data. System move failed.";
-      this.state.isUserTurnInPuzzle = true;
+      this.state.isUserTurnInPuzzle = true; // Give control back to user
     }
     this.requestRedraw();
   }
@@ -312,6 +328,7 @@ export class PuzzleController {
         return;
     }
 
+    // BoardHandler will add this to PGN tree (as main line or variation depending on context)
     const moveResult: AttemptMoveResult = await this.boardHandler.attemptUserMove(orig, dest);
     this._updatePgnDisplay();
 
@@ -320,25 +337,27 @@ export class PuzzleController {
         if (moveResult.success && moveResult.uciMove) {
             this.state.feedbackMessage = `Move ${moveResult.uciMove} made. FEN: ${this.boardHandler.getFen()}`; 
             this.state.currentPuzzlePieceCount = this.countPiecesFromFen(this.boardHandler.getFen());
-            // После хода пользователя в режиме анализа, PGN не должен был измениться (согласно логике в BoardHandler)
-            // Но FEN на доске изменился.
-            logger.info(`[PuzzleController] Analysis mode: User move ${moveResult.uciMove}. Board FEN: ${this.boardHandler.getFen()}. PGN Navigated FEN: ${this.boardHandler.pgnService.getCurrentNavigatedFen()}`);
-            // TODO: Run analysis for FEN: this.boardHandler.getFen()
+            // TODO: Optionally trigger Stockfish analysis for the new PGN node (this.boardHandler.pgnService.getCurrentNode())
+            // logger.info(`[PuzzleController] Analysis mode: User move ${moveResult.uciMove}. Current PGN Path: ${this.boardHandler.getCurrentPgnPath()}`);
         } else if (moveResult.promotionStarted && !moveResult.promotionCompleted) {
             this.state.feedbackMessage = "Promotion cancelled.";
-        }
-         else {
-            this.state.feedbackMessage = "Invalid move in analysis mode.";
+        } else if (moveResult.isIllegal) {
+            this.state.feedbackMessage = "Illegal move in analysis mode.";
+        } else {
+            this.state.feedbackMessage = "Move failed in analysis mode.";
         }
         this.requestRedraw();
         return;
     }
 
-    // Логика НЕ для режима анализа
+    // --- Logic for NON-Analysis Mode (Puzzle Solving / Playout) ---
     if (moveResult.success && moveResult.uciMove) {
       if (moveResult.promotionStarted && !moveResult.promotionCompleted) {
-        logger.info("[PuzzleController handleUserMove] Promotion was started but seems to have been cancelled or not completed successfully.");
-        this.state.feedbackMessage = "Promotion cancelled or failed.";
+        // This case should ideally be handled by the promotionCtrl resolving with null,
+        // and attemptUserMove returning a specific result for cancellation.
+        // For now, we assume if promotionStarted but not completed and success is true, it means move was made.
+        logger.info("[PuzzleController handleUserMove] Promotion was completed.");
+        this.processUserMoveResult(moveResult.uciMove);
       } else {
         logger.info(`[PuzzleController handleUserMove] User move ${moveResult.uciMove} successful. Processing result...`);
         this.processUserMoveResult(moveResult.uciMove);
@@ -348,85 +367,95 @@ export class PuzzleController {
       this.state.feedbackMessage = "Promotion cancelled.";
     } else if (!moveResult.success) {
       logger.warn(`[PuzzleController handleUserMove] User move ${orig}-${dest} failed. Result: ${JSON.stringify(moveResult)}`);
-      this.state.feedbackMessage = moveResult.promotionStarted ? "Promotion cancelled." : "Invalid move.";
+      this.state.feedbackMessage = moveResult.isIllegal ? "Invalid move." : "Move processing error.";
     }
     this.requestRedraw();
   }
 
-  private processUserMoveResult(uciMove: string): void {
-    logger.info(`[PuzzleController processUserMoveResult] Processing user move: ${uciMove}. Current FEN: ${this.boardHandler.getFen()}`);
+  private processUserMoveResult(uciUserMove: string): void {
+    logger.info(`[PuzzleController processUserMoveResult] Processing user move: ${uciUserMove}. Current FEN: ${this.boardHandler.getFen()}`);
     this.state.currentPuzzlePieceCount = this.countPiecesFromFen(this.boardHandler.getFen());
     
-    if (this.checkAndSetGameOver()) {
-      logger.info(`[PuzzleController processUserMoveResult] Game over after user move ${uciMove}.`);
+    if (this.checkAndSetGameOver()) { // Check if user's move ended the game
+      logger.info(`[PuzzleController processUserMoveResult] Game over after user move ${uciUserMove}.`);
       return;
     }
+
+    // If in playout mode, user's move is accepted, then it's system's turn (Stockfish)
     if (this.state.isInPlayOutMode) {
-      logger.info(`[PuzzleController processUserMoveResult] User move in playout mode: ${uciMove}`);
-      this.state.isUserTurnInPuzzle = false;
+      logger.info(`[PuzzleController processUserMoveResult] User move in playout mode: ${uciUserMove}`);
+      this.state.isUserTurnInPuzzle = false; // System's turn next
       this.requestRedraw();
       this.triggerStockfishMoveInPlayoutIfNeeded();
       return;
     }
 
+    // --- Puzzle Solving Logic ---
     if (!this.state.activePuzzle) {
-      logger.warn("[PuzzleController processUserMoveResult] No active puzzle.");
-      this.state.feedbackMessage = "No active puzzle.";
+      logger.warn("[PuzzleController processUserMoveResult] No active puzzle. Entering playout mode.");
+      this.state.isInPlayOutMode = true; // Should not happen if puzzle loaded correctly
+      this.state.isUserTurnInPuzzle = false;
+      this.triggerStockfishMoveInPlayoutIfNeeded();
       this.requestRedraw();
       return;
     }
 
     if (!this.state.isUserTurnInPuzzle) {
-      logger.warn("[PuzzleController processUserMoveResult] NOT USER'S TURN, but move was processed. This indicates a logic flaw. Forcing user turn for safety.");
-      this.state.feedbackMessage = "Not your turn (logic error).";
-      this.state.isUserTurnInPuzzle = true;
+      // This should ideally not happen if UI disables input, but as a safeguard:
+      logger.warn("[PuzzleController processUserMoveResult] User move processed, but it was not user's turn. Undoing.");
+      this.state.feedbackMessage = "Not your turn. Move reverted.";
+      this.boardHandler.undoLastMove(); // Undo the user's move from PGN and board
+      this._updatePgnDisplay();
+      // isUserTurnInPuzzle remains false, system should proceed if it was its turn
       this.requestRedraw();
       return;
     }
 
-    const expectedMove = this.state.puzzleSolutionMoves[this.state.currentSolutionMoveIndex];
+    const expectedSolutionMove = this.state.puzzleSolutionMoves[this.state.currentSolutionMoveIndex];
 
-    if (uciMove === expectedMove) {
-      logger.info(`[PuzzleController processUserMoveResult] User move ${uciMove} is CORRECT!`);
+    if (uciUserMove === expectedSolutionMove) {
+      logger.info(`[PuzzleController processUserMoveResult] User move ${uciUserMove} is CORRECT!`);
       this.state.feedbackMessage = "Correct!";
       this.state.currentSolutionMoveIndex++;
-      this.state.isUserTurnInPuzzle = false;
+      this.state.isUserTurnInPuzzle = false; // System's turn next (if any solution moves left)
 
-      if (this.checkAndSetGameOver()) {
-        return;
-      }
+      if (this.checkAndSetGameOver()) return; // Check if correct user move ended the game
 
-      if (this.state.currentSolutionMoveIndex >= this.state.puzzleSolutionMoves.length) {
+      if (this.state.currentSolutionMoveIndex >= this.state.puzzleSolutionMoves.length) { // User made the last correct move
         logger.info("[PuzzleController processUserMoveResult] USER COMPLETED PUZZLE SOLUTION!");
          if (!this.state.isInPlayOutMode) {
             this.state.isInPlayOutMode = true;
             SoundService.playSound('puzzle_playout_start');
         }
         this.state.feedbackMessage = "Puzzle solved! You can continue playing.";
+        // Determine whose turn it is now for playout
         this.state.isUserTurnInPuzzle = this.boardHandler.getBoardTurnColor() === this.boardHandler.getHumanPlayerColor();
         if (!this.state.isUserTurnInPuzzle && !this.state.gameOverMessage) {
           this.triggerStockfishMoveInPlayoutIfNeeded();
         }
-      } else {
+      } else { // More solution moves remaining, system's turn
         this.state.feedbackMessage = "System's turn...";
         const nextSystemMove = this.state.puzzleSolutionMoves[this.state.currentSolutionMoveIndex];
-        logger.info(`[PuzzleController processUserMoveResult] Scheduling system's solution move: ${nextSystemMove} (index ${this.state.currentSolutionMoveIndex}). Current FEN: ${this.boardHandler.getFen()}`);
+        logger.info(`[PuzzleController processUserMoveResult] Scheduling system's solution move: ${nextSystemMove} (index ${this.state.currentSolutionMoveIndex}).`);
         setTimeout(() => {
-          this.playNextSolutionMoveInternal(true);
-        }, 300);
+          this.playNextSolutionMoveInternal(true); // Pass true for "continuation"
+        }, 300); // Short delay for system response
       }
-    } else {
-      logger.warn(`[PuzzleController processUserMoveResult] User move ${uciMove} is INCORRECT. Expected: ${expectedMove}. Undoing move.`);
-      this.state.feedbackMessage = `Incorrect. Try again.`;
+    } else { // User move is INCORRECT
+      logger.warn(`[PuzzleController processUserMoveResult] User move ${uciUserMove} is INCORRECT. Expected: ${expectedSolutionMove}. Undoing user's move.`);
+      this.state.feedbackMessage = `Incorrect. Expected ${expectedSolutionMove}. Try again.`;
+      // The incorrect move was already added to PGN by BoardHandler. We need to undo it.
       if (this.boardHandler.undoLastMove()) {
-        logger.info(`[PuzzleController processUserMoveResult] Incorrect user move ${uciMove} was undone by BoardHandler. FEN is now: ${this.boardHandler.getFen()}`);
+        logger.info(`[PuzzleController processUserMoveResult] Incorrect user move ${uciUserMove} was undone. FEN is now: ${this.boardHandler.getFen()}`);
         this.state.currentPuzzlePieceCount = this.countPiecesFromFen(this.boardHandler.getFen());
         this._updatePgnDisplay(); 
       } else {
-        logger.error(`[PuzzleController processUserMoveResult] Failed to undo incorrect user move ${uciMove} from BoardHandler.`);
+        logger.error(`[PuzzleController processUserMoveResult] Failed to undo incorrect user move ${uciUserMove}. This is a critical state.`);
+        // Potentially reset puzzle or force user turn on current (incorrect) board state.
       }
-      this.state.isUserTurnInPuzzle = true;
+      this.state.isUserTurnInPuzzle = true; // It's still user's turn to try again
     }
+    this.requestRedraw();
   }
 
   public handleSetFen(): void {
@@ -440,11 +469,11 @@ export class PuzzleController {
 
     const fen = prompt("Enter FEN:", this.boardHandler.getFen());
     if (fen) {
-      this.state.activePuzzle = null;
+      this.state.activePuzzle = null; // No longer a specific puzzle
       this.state.puzzleSolutionMoves = [];
       this.state.currentSolutionMoveIndex = 0;
       this.state.currentPuzzlePieceCount = this.countPiecesFromFen(fen);
-      if (!this.state.isInPlayOutMode) {
+      if (!this.state.isInPlayOutMode) { // Entering playout if not already
         this.state.isInPlayOutMode = true;
         SoundService.playSound('puzzle_playout_start');
       }
@@ -452,7 +481,7 @@ export class PuzzleController {
       this.state.gameOverMessage = null;
 
       const humanPlayerColorBasedOnTurn = fen.includes(' w ') ? 'white' : 'black';
-      this.boardHandler.setupPosition(fen, humanPlayerColorBasedOnTurn, true);
+      this.boardHandler.setupPosition(fen, humanPlayerColorBasedOnTurn, true); // Reset PGN with this FEN
       this._updatePgnDisplay();
 
       if (this.checkAndSetGameOver()) return;
@@ -465,9 +494,7 @@ export class PuzzleController {
         this.triggerStockfishMoveInPlayoutIfNeeded();
       } else if (this.state.isUserTurnInPuzzle && !this.state.gameOverMessage) {
         this.state.feedbackMessage = "FEN set. Your turn.";
-      } else if (this.state.gameOverMessage) {
-        // Message already set
-      }
+      } // If gameOverMessage is set, it will be displayed.
       this.requestRedraw();
     }
   }
@@ -483,8 +510,9 @@ export class PuzzleController {
 
     if (this.state.activePuzzle) {
       logger.info(`[PuzzleController] Restarting puzzle: ${this.state.activePuzzle.PuzzleId}`);
-      const puzzleToRestart = this.state.activePuzzle;
+      const puzzleToRestart = this.state.activePuzzle; // Keep a reference
 
+      // Reset state related to puzzle progress
       this.state.puzzleSolutionMoves = puzzleToRestart.Moves ? puzzleToRestart.Moves.split(' ') : [];
       this.state.currentSolutionMoveIndex = 0;
       this.state.isInPlayOutMode = false;
@@ -492,8 +520,9 @@ export class PuzzleController {
       this.state.gameOverMessage = null;
       this.state.currentPuzzlePieceCount = this.countPiecesFromFen(puzzleToRestart.FEN_0);
 
+      // Setup board with initial puzzle FEN, this also resets PGN in PgnService via BoardHandler
       this.boardHandler.setupPosition(puzzleToRestart.FEN_0, puzzleToRestart.HumanColor, true);
-      this._updatePgnDisplay();
+      this._updatePgnDisplay(); // PGN will be empty
 
       this.state.feedbackMessage = `Puzzle ${puzzleToRestart.PuzzleId} restarted. You play as ${this.boardHandler.getHumanPlayerColor() || 'N/A'}.`;
 
@@ -507,15 +536,15 @@ export class PuzzleController {
           this.state.isUserTurnInPuzzle = false;
           this.state.feedbackMessage = "System's turn...";
           this.requestRedraw();
-          setTimeout(() => this.playNextSolutionMoveInternal(false), 50);
+          setTimeout(() => this.playNextSolutionMoveInternal(false), 50); // Minimal delay
         } else {
           this.state.isUserTurnInPuzzle = true;
           this.state.feedbackMessage = `Your turn.`;
           this.requestRedraw();
         }
-      } else {
+      } else { // No solution moves, e.g. mate in 1 for user
         this.state.isUserTurnInPuzzle = initialTurnColorInPuzzle === humanColor;
-        this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn (puzzle has no solution?)." : "System's turn (puzzle has no solution?).";
+        this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn (direct solution?)." : "System's turn (direct solution?).";
         this.requestRedraw();
         if (!this.state.isUserTurnInPuzzle && !this.state.gameOverMessage) {
           if (!this.state.isInPlayOutMode) {
@@ -527,7 +556,7 @@ export class PuzzleController {
       }
     } else {
       logger.warn("[PuzzleController] Restart puzzle called, but no active puzzle to restart.");
-      this.state.feedbackMessage = "No active puzzle to restart.";
+      this.state.feedbackMessage = "No active puzzle to restart. Load one first.";
       this.requestRedraw();
     }
   }
@@ -544,102 +573,146 @@ export class PuzzleController {
 
     if (newAnalysisState === this.state.isAnalysisModeActive) {
         logger.info(`[PuzzleController] Analysis mode already in desired state: ${newAnalysisState}`);
-        if (typeof forceValue === 'boolean') this.requestRedraw();
+        if (typeof forceValue === 'boolean') this.requestRedraw(); // Redraw if forced, to update UI if needed
         return;
     }
 
     this.state.isAnalysisModeActive = newAnalysisState;
     this.boardHandler.setAnalysisMode(this.state.isAnalysisModeActive); 
-    // _updatePgnDisplay будет вызван после навигации или в конце, если навигации нет
-
+    
     if (this.state.isAnalysisModeActive) {
       logger.info("[PuzzleController] Analysis mode ACTIVATED.");
       this.state.feedbackMessage = "Analysis mode active. Make moves or use PGN navigation.";
-      this.state.isStockfishThinking = false; 
-      this.boardHandler.clearAllDrawings();
+      this.state.isStockfishThinking = false; // Stop any playout thinking
+      this.boardHandler.clearAllDrawings(); // Clear any puzzle-related drawings
       
-      this.boardHandler.handleNavigatePgnToEnd(); // Навигация к концу PGN
-      this._updatePgnDisplay(); // Обновить PGN после навигации
+      // Ensure the board reflects the current end of the PGN tree's main line
+      this.boardHandler.handleNavigatePgnToEnd(); 
+      this._updatePgnDisplay(); // Update PGN display for analysis context
       
-      logger.info(`[PuzzleController] Analysis mode: Navigated to end. Current FEN on board: ${this.boardHandler.getFen()}. PGN Nav FEN: ${this.boardHandler.pgnService.getCurrentNavigatedFen()}`);
-      // TODO: Trigger analysis for the current FEN (this.boardHandler.getFen())
-      logger.info(`[PuzzleController] TODO: Run analysis for FEN: ${this.boardHandler.getFen()} when analysis mode is activated.`);
+      logger.info(`[PuzzleController] Analysis mode: Navigated to end. Current FEN on board: ${this.boardHandler.getFen()}. PGN Path: ${this.boardHandler.getCurrentPgnPath()}`);
+      // TODO: Optionally trigger Stockfish analysis for the current PGN node
+      // logger.info(`[PuzzleController] TODO: Run analysis for FEN: ${this.boardHandler.getFen()} when analysis mode is activated.`);
 
-    } else {
+    } else { // Deactivating analysis mode
       logger.info("[PuzzleController] Analysis mode DEACTIVATED.");
-      this.state.feedbackMessage = "Analysis ended.";
       this.boardHandler.clearAllDrawings();
-      // При выходе из режима анализа, синхронизируем доску с PGN, если они разошлись
-      this.boardHandler.handleNavigatePgnToPly(this.boardHandler.pgnService.getCurrentPlyNavigated());
-      this._updatePgnDisplay();
+      // BoardHandler's setAnalysisMode(false) already ensures chessground settings are updated.
+      // We need to restore the puzzle/playout context.
+      // The board is already at PgnService.currentNode. We need to determine the game state from there.
+      
+      this._updatePgnDisplay(); // Update PGN for non-analysis context
+      if (!this.checkAndSetGameOver()) { // Check game status based on current PGN node
+          // Determine if it's user's turn based on the current board state
+          this.state.isUserTurnInPuzzle = this.boardHandler.getBoardTurnColor() === this.boardHandler.getHumanPlayerColor();
 
-      if (!this.checkAndSetGameOver()) { // Проверяем статус игры после синхронизации
-          if (this.state.isInPlayOutMode) {
+          if (this.state.isInPlayOutMode) { // Was in playout before analysis
+              this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn (playout)." : "System's turn (playout)...";
+              if(!this.state.isUserTurnInPuzzle) this.triggerStockfishMoveInPlayoutIfNeeded();
+          } else if (this.state.activePuzzle) { // Was solving a puzzle
+              // Recalculate where we are in the solution
+              // const currentPgnPath = this.boardHandler.getCurrentPgnPath(); // Unused variable
+              // const solutionPathSoFar = this.state.puzzleSolutionMoves.slice(0, this.boardHandler.pgnService.getCurrentPly()).map(uci => this.boardHandler.pgnService.getRootNode().children.find(c => c.uci === uci)?.id || '').join(''); // Unused variable
+              
+              // A more robust way is to check if current PGN node's UCI matches the expected solution move
+              const currentPgnNode = this.boardHandler.pgnService.getCurrentNode();
+              let solutionMatch = true;
+              let tempNode = currentPgnNode;
+              let tempSolutionIndex = currentPgnNode.ply -1; // if ply 1, index 0
+
+              while(tempNode.parent && tempSolutionIndex >= 0) {
+                if (tempSolutionIndex >= this.state.puzzleSolutionMoves.length || tempNode.uci !== this.state.puzzleSolutionMoves[tempSolutionIndex]) {
+                    solutionMatch = false;
+                    break;
+                }
+                tempSolutionIndex--;
+                tempNode = tempNode.parent;
+              }
+              // After loop, if solutionMatch is true, tempNode should be root if all moves matched
+              if (solutionMatch && tempNode !== this.boardHandler.pgnService.getRootNode() && currentPgnNode.ply > 0) {
+                // This means we matched some moves but didn't reach the root, or currentPgnNode.ply is 0 (root)
+                // but we expected to match against solution moves.
+                // This condition implies a mismatch if we are not at the root after checking all relevant plies.
+                // Exception: if currentPgnNode.ply is 0, then tempNode is root, and solutionMatch should be true (empty path matches empty solution part).
+                if (currentPgnNode.ply > 0) solutionMatch = false;
+              }
+
+
+              if (solutionMatch && currentPgnNode.ply < this.state.puzzleSolutionMoves.length) {
+                this.state.currentSolutionMoveIndex = currentPgnNode.ply; // Next expected solution move index
+                this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn." : "System's turn...";
+                if(!this.state.isUserTurnInPuzzle) this.playNextSolutionMoveInternal(true);
+
+              } else { // Deviated from solution or solution ended (or puzzle was fully solved and we are at the end)
+                this.state.isInPlayOutMode = true; // Enter or confirm playout mode
+                this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn (playout from variation)." : "System's turn (playout from variation)...";
+                if (currentPgnNode.ply >= this.state.puzzleSolutionMoves.length && solutionMatch && this.state.activePuzzle) {
+                    this.state.feedbackMessage = "Puzzle solved! Continue playing."; // More specific message if solution was matched fully
+                }
+                if(!this.state.isUserTurnInPuzzle) this.triggerStockfishMoveInPlayoutIfNeeded();
+              }
+          } else { // No active puzzle, was free play
               this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn." : "System's turn...";
-          } else if (this.state.activePuzzle) {
-              this.state.feedbackMessage = this.state.isUserTurnInPuzzle ? "Your turn." : "System's turn...";
-          } else {
-              this.state.feedbackMessage = "Load a puzzle or set FEN.";
+              if(!this.state.isUserTurnInPuzzle) this.triggerStockfishMoveInPlayoutIfNeeded();
           }
+      } else {
+        // gameOverMessage is already set by checkAndSetGameOver
       }
-      // Если checkAndSetGameOver установил gameOverMessage, он будет использован
     }
     this.requestRedraw();
   }
 
-  // --- PGN Navigation Handlers ---
+  // --- PGN Navigation Handlers (delegated to BoardHandler) ---
   public handlePgnNavToStart(): void {
-    // ИСПРАВЛЕНИЕ: Используем возвращаемое значение boolean
     if (this.boardHandler.handleNavigatePgnToStart()) {
       this._updatePgnDisplay();
       if (this.state.isAnalysisModeActive) {
         logger.info(`[PuzzleController] PGN Nav: Start. FEN on board: ${this.boardHandler.getFen()}`);
-        // TODO: Trigger analysis
+        // TODO: Optionally trigger analysis for the new current node
       }
+      this.requestRedraw();
     }
   }
 
   public handlePgnNavBackward(): void {
-    // ИСПРАВЛЕНИЕ: Используем возвращаемое значение boolean
     if (this.boardHandler.handleNavigatePgnBackward()) {
       this._updatePgnDisplay();
       if (this.state.isAnalysisModeActive) {
         logger.info(`[PuzzleController] PGN Nav: Backward. FEN on board: ${this.boardHandler.getFen()}`);
-        // TODO: Trigger analysis
+        // TODO: Optionally trigger analysis
       }
+      this.requestRedraw();
     }
   }
 
-  public handlePgnNavForward(): void {
-    // ИСПРАВЛЕНИЕ: Используем возвращаемое значение boolean
-    if (this.boardHandler.handleNavigatePgnForward()) {
+  public handlePgnNavForward(variationIndex: number = 0): void {
+    if (this.boardHandler.handleNavigatePgnForward(variationIndex)) {
       this._updatePgnDisplay();
       if (this.state.isAnalysisModeActive) {
-        logger.info(`[PuzzleController] PGN Nav: Forward. FEN on board: ${this.boardHandler.getFen()}`);
-        // TODO: Trigger analysis
+        logger.info(`[PuzzleController] PGN Nav: Forward (Var ${variationIndex}). FEN on board: ${this.boardHandler.getFen()}`);
+        // TODO: Optionally trigger analysis
       }
+      this.requestRedraw();
     }
   }
 
   public handlePgnNavToEnd(): void {
-    // ИСПРАВЛЕНИЕ: Используем возвращаемое значение boolean
     if (this.boardHandler.handleNavigatePgnToEnd()) {
       this._updatePgnDisplay();
       if (this.state.isAnalysisModeActive) {
         logger.info(`[PuzzleController] PGN Nav: End. FEN on board: ${this.boardHandler.getFen()}`);
-        // TODO: Trigger analysis
+        // TODO: Optionally trigger analysis
       }
+      this.requestRedraw();
     }
   }
 
-  // --- PGN Navigation State Getters ---
   public canNavigatePgnBackward(): boolean {
-    // ИСПРАВЛЕНИЕ: Используем новый публичный метод из BoardHandler
     return this.boardHandler.canPgnNavigateBackward();
   }
 
-  public canNavigatePgnForward(): boolean {
-    // ИСПРАВЛЕНИЕ: Используем новый публичный метод из BoardHandler
-    return this.boardHandler.canPgnNavigateForward();
+  public canNavigatePgnForward(variationIndex: number = 0): boolean {
+    // Check if the current PGN node has a child at the given index
+    return this.boardHandler.canPgnNavigateForward(variationIndex);
   }
 }
