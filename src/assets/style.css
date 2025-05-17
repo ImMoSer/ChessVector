@@ -20,12 +20,14 @@
   --color-accent-info: #0072b1;
   --color-accent-special: #b72fc6;
 
-  --left-panel-width: 240px; 
-  --initial-center-panel-width: 480px; 
+  --left-panel-width: 240px;
+  --initial-center-panel-width: 480px;
   --right-panel-width: 280px;
-  --resize-handle-visual-size: 16px; 
-  --resize-handle-clickable-size: 24px; 
-  --page-vertical-padding: 10px; /* Отступы для #page-content-wrapper */
+  --resize-handle-visual-size: 16px;
+  --resize-handle-clickable-size: 24px;
+  --page-vertical-padding: 10px;
+  --panel-gap: 10px; /* Новая переменная для зазора */
+  --panel-border-radius: 8px; /* Новая переменная для радиуса углов */
 }
 
 html, body {
@@ -36,8 +38,8 @@ html, body {
   line-height: 1.6;
   background-color: var(--color-bg-primary);
   color: var(--color-text-default);
-  height: 100vh; 
-  overflow: hidden; 
+  height: 100vh;
+  overflow: hidden;
 }
 
 *, *::before, *::after {
@@ -47,7 +49,7 @@ html, body {
 #app-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh; 
+  height: 100vh;
 }
 
 #app-header {
@@ -85,7 +87,7 @@ html, body {
   font-size: 1.5em;
   padding: 5px;
   line-height: 1;
-  display: none; 
+  display: none;
   margin-left: auto;
 }
 
@@ -122,114 +124,113 @@ html, body {
 }
 
 #page-content-wrapper {
-  flex-grow: 1; 
-  display: flex; 
-  justify-content: center; 
-  align-items: flex-start; /* Выравниваем весь блок .three-column-layout по верху */
-  overflow: hidden; 
-  height: calc(100vh - var(--header-height)); 
-  padding-top: var(--page-vertical-padding); 
-  padding-bottom: var(--page-vertical-padding); 
+  flex-grow: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: hidden;
+  height: calc(100vh - var(--header-height));
+  padding-top: var(--page-vertical-padding);
+  padding-bottom: var(--page-vertical-padding);
+  /* Добавляем боковые отступы, чтобы зазор не прижимал панели к краям окна */
+  padding-left: var(--panel-gap);
+  padding-right: var(--panel-gap);
 }
 
 .three-column-layout {
   display: flex;
   flex-direction: row;
-  width: auto; 
-  max-width: 100%; 
-  /* Высота будет определяться самым высоким элементом, если align-items: stretch */
-  /* или высотой контента, если align-items: flex-start */
-  /* height: 100%; -- Убрано, чтобы высота определялась контентом или была ограничена */
-  align-items: stretch; /* ИЗМЕНЕНО: Заставляет все колонки иметь одинаковую высоту (самой высокой) */
-  max-height: 100%; /* Ограничиваем высоту трехколоночного макета высотой родителя */
+  width: auto;
+  max-width: 100%;
+  align-items: stretch;
+  max-height: 100%;
+  gap: var(--panel-gap); /* <--- ДОБАВЛЕН ЗАЗОР МЕЖДУ ПАНЕЛЯМИ */
 }
 
 #left-panel, #right-panel {
   background-color: var(--color-bg-secondary);
   padding: 15px;
-  overflow-y: auto; 
-  flex-shrink: 0; 
+  overflow-y: auto;
+  flex-shrink: 0;
   box-shadow: 0 0 10px rgba(0,0,0,0.2);
-  /* height: 100%; -- Удалено, высота будет управляться align-items: stretch родителя */
+  border-radius: var(--panel-border-radius); /* <--- ДОБАВЛЕНЫ ЗАКРУГЛЕННЫЕ УГЛЫ */
 }
 
 #left-panel {
   width: var(--left-panel-width);
-  border-right: 1px solid var(--color-border);
+  /* Убираем border-right, так как теперь есть gap */
+  /* border-right: 1px solid var(--color-border); */
 }
 
 #right-panel {
   width: var(--right-panel-width);
-  border-left: 1px solid var(--color-border);
+  /* Убираем border-left, так как теперь есть gap */
+  /* border-left: 1px solid var(--color-border); */
 }
 
 #center-panel-resizable-wrapper {
-  position: relative; 
-  display: flex; /* Для правильного поведения aspect-ratio дочернего элемента */
-  /* align-items и justify-content здесь не так важны, если #center-panel занимает 100% */
+  position: relative;
+  display: flex;
   width: var(--initial-center-panel-width); /* Управляется JS */
-  min-width: 300px; 
+  min-width: 300px;
   flex-shrink: 0;
-  /* Высота этой обертки будет определяться шириной из-за #board-wrapper с aspect-ratio */
-  /* Не устанавливаем height или max-height здесь, они будут косвенно ограничены */
+  /* Добавляем радиус и для центральной панели, если нужно */
+  border-radius: var(--panel-border-radius);
+  overflow: hidden; /* Чтобы доска с острыми углами не вылезала за скругление контейнера */
 }
 
-#center-panel { 
+#center-panel {
   width: 100%;
-  /* height: 100%; -- Удалено, высота будет от #board-wrapper */
-  display: flex; /* Для центрирования #board-wrapper, если он будет меньше (из-за max-width/max-height) */
+  display: flex;
   justify-content: center;
-  align-items: center; 
+  align-items: center;
 }
 
+/* Изменения для .resize-handle-center из предыдущего шага */
 .resize-handle-center {
   position: absolute;
-  right: calc(-1 * var(--resize-handle-clickable-size) / 2 + var(--resize-handle-visual-size) / 2 - 2px); 
-  bottom: calc(-1 * var(--resize-handle-clickable-size) / 2 + var(--resize-handle-visual-size) / 2 - 2px);
-  width: var(--resize-handle-clickable-size); 
+  right: 0;
+  bottom: 0;
+  width: var(--resize-handle-clickable-size);
   height: var(--resize-handle-clickable-size);
   cursor: nwse-resize;
   z-index: 50;
-  display: block; 
+  display: block;
+  border-radius: 50%;
+  background-color: transparent;
+  box-shadow: none;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
+
 .resize-handle-center::before,
 .resize-handle-center::after {
   content: '';
   position: absolute;
-  background-color: var(--color-text-muted);
-  border-radius: 1px;
-}
-.resize-handle-center::before { 
-  bottom: 4px; 
-  right: 4px;
-  width: var(--resize-handle-visual-size);
-  height: 3px;
-}
-.resize-handle-center::after { 
-  bottom: 4px;
-  right: 4px;
-  width: 3px;
-  height: var(--resize-handle-visual-size);
-}
-.resize-handle-center:hover::before,
-.resize-handle-center:hover::after {
-  background-color: var(--color-accent-primary);
+  background-color: transparent;
+  width: 0;
+  height: 0;
 }
 
-#board-wrapper { 
-    width: 100%; /* Занимает всю ширину #center-panel */
-    display: flex; /* Не обязательно, если #board-container единственный ребенок */
-    /* justify-content: center; */
-    /* align-items: center; */
-    aspect-ratio: 1 / 1; /* Ключ к квадратной доске и определению высоты родителя */
-    /* Ограничение максимального размера доски, чтобы она не вылезала за пределы окна */
-    /* max-width остается, max-height тоже, чтобы JS мог на них ориентироваться */
-    max-width: calc(100vh - var(--header-height) - (2 * var(--page-vertical-padding))); 
-    max-height: calc(100vh - var(--header-height) - (2 * var(--page-vertical-padding)));
+.resize-handle-center:hover {
+  background-color: rgba(255, 0, 0, 0.15);
+  box-shadow: 0 0 12px 4px rgba(255, 0, 0, 0.35);
 }
-#board-container { /* Контейнер для chessground */
-    width: 100%; 
-    height: 100%; /* Заполняет квадратный #board-wrapper */
+/* Конец изменений для .resize-handle-center */
+
+
+#board-wrapper {
+    width: 100%;
+    display: flex;
+    aspect-ratio: 1 / 1;
+    max-width: calc(100vh - var(--header-height) - (2 * var(--page-vertical-padding)));
+    max-height: calc(100vh - var(--header-height) - (2 * var(--page-vertical-padding)));
+    /* Можно добавить border-radius и сюда, если доска должна быть скругленной */
+    /* border-radius: calc(var(--panel-border-radius) - 1px); /* Чуть меньше, чем у родителя */
+    /* overflow: hidden; */ /* Если доска сама по себе имеет фон и должна быть обрезана по радиусу */
+}
+#board-container {
+    width: 100%;
+    height: 100%;
 }
 
 body.board-resizing {
@@ -240,62 +241,65 @@ body.board-resizing {
   cursor: nwse-resize !important;
 }
 
-@media (orientation: portrait), (max-width: 768px) { 
+@media (orientation: portrait), (max-width: 768px) {
   #page-content-wrapper {
-    align-items: flex-start; 
+    align-items: flex-start;
     padding: 0; /* Убираем внешние отступы для контента страницы */
-    overflow-y: auto; 
+    overflow-y: auto;
   }
 
-  .three-column-layout.portrait-mode-layout { 
+  .three-column-layout.portrait-mode-layout {
     flex-direction: column;
-    align-items: center; 
-    width: 100%; 
-    height: auto; 
+    align-items: center;
+    width: 100%;
+    height: auto;
     padding: var(--page-vertical-padding); /* Внутренние отступы для всего блока */
+    gap: var(--panel-gap); /* Сохраняем зазор и в портретном режиме */
   }
 
-  #left-panel.portrait-mode-layout { 
-    display: none; 
+  #left-panel.portrait-mode-layout {
+    display: none;
   }
-  
+
   #right-panel.portrait-mode-layout {
-    order: 3; 
-    width: 100%; 
-    max-width: 100%; 
-    height: auto; 
-    min-height: auto; 
-    border-left: none;
-    border-right: none;
-    border-top: 1px solid var(--color-border); 
-    margin-top: 20px; 
-    padding: 15px; 
-    box-shadow: none; /* Убираем тень в портретном режиме */
-  }
-  
-  #center-panel-resizable-wrapper.portrait-mode-layout {
-    order: 1; /* ИЗМЕНЕНО: Доска теперь первая */
-    width: 100% !important; 
-    max-width: 100%; 
-    min-width: unset;
-    height: auto; /* Высота будет определяться доской */
-    /* margin-bottom: 20px; -- Убрано, т.к. правая панель теперь под ней */
-  }
-  
-  #board-wrapper.portrait-mode-layout { 
-      max-width: 100%; 
-      max-height: none; 
-      /* Можно добавить padding, если нужно, чтобы доска не прилипала к краям экрана */
-      /* padding: 0 10px; */
+    order: 3;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: auto;
+    /* border-left: none; */ /* Уже убрано */
+    /* border-right: none; */
+    border-top: 1px solid var(--color-border);
+    /* margin-top: 20px; -- Заменено на gap */
+    padding: 15px;
+    box-shadow: none;
+    border-radius: var(--panel-border-radius); /* Сохраняем скругление */
   }
 
-  .resize-handle-center { 
-    display: none !important; 
+  #center-panel-resizable-wrapper.portrait-mode-layout {
+    order: 1;
+    width: 100% !important;
+    max-width: 100%;
+    min-width: unset;
+    height: auto;
+    border-radius: var(--panel-border-radius); /* Сохраняем скругление */
+    overflow: hidden; /* Сохраняем */
+  }
+
+  #board-wrapper.portrait-mode-layout {
+      max-width: 100%;
+      max-height: none;
+      /* border-radius: calc(var(--panel-border-radius) - 1px); */ /* Если нужно */
+      /* overflow: hidden; */
+  }
+
+  .resize-handle-center {
+    display: none !important;
   }
 
   .nav-toggle-button { display: block; }
-  .nav-links { 
-    display: none; 
+  .nav-links {
+    display: none;
     position: absolute;
     top: var(--header-height);
     left: 0;
@@ -304,7 +308,7 @@ body.board-resizing {
     flex-direction: column;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
   }
-  #app-header.menu-open .nav-links { 
+  #app-header.menu-open .nav-links {
     display: flex;
   }
 }
@@ -333,17 +337,42 @@ body.board-resizing {
   color: var(--color-text-on-accent);
 }
 .button.primary-button:hover:not(:disabled) {
-  background-color: var(--color-accent-warning); 
+  background-color: var(--color-accent-warning);
   border-color: var(--color-accent-warning);
 }
 
 .puzzle-container {}
 
-.puzzle-details, .expected-move {
+.puzzle-details, .expected-move { /* .expected-move больше не используется */
   font-size: 0.9em;
   margin-top: 5px;
   margin-bottom: 5px;
 }
-.expected-move {
+/* .expected-move {
+  color: var(--color-text-muted);
+} */
+
+/* Стили для отображения информации о пазле в левой панели */
+.puzzle-left-content .info-item {
+  margin-bottom: 8px;
+}
+.puzzle-left-content .info-label {
+  font-weight: 600;
   color: var(--color-text-muted);
 }
+.puzzle-left-content .info-value {
+  color: var(--color-text-default);
+  margin-left: 5px;
+}
+
+/* Стили для активной кнопки анализа */
+.button.active-analysis {
+  background-color: var(--color-accent-info);
+  border-color: var(--color-accent-info);
+  color: var(--color-text-on-accent);
+}
+.button.active-analysis:hover:not(:disabled) {
+  background-color: #005f92; /* Немного темнее для ховера */
+  border-color: #005f92;
+}
+

@@ -2,9 +2,9 @@
 import { h } from 'snabbdom';
 import type { VNode, Hooks } from 'snabbdom';
 import type { AppController, AppPage } from './AppController';
-import { PuzzleController } from './features/puzzle/PuzzleController'; // Обычный импорт
+import { PuzzleController } from './features/puzzle/PuzzleController';
 import { renderPuzzleUI, type PuzzlePageViewLayout } from './features/puzzle/puzzleView';
-import { AnalysisTestController } from './features/analysis/AnalysisTestController'; // Обычный импорт
+import { AnalysisTestController } from './features/analysis/AnalysisTestController';
 import { renderAnalysisTestUI } from './features/analysis/analysisTestView';
 import logger from './utils/logger';
 
@@ -14,8 +14,20 @@ let initialCenterPanelMouseX: number | null = null;
 let initialCenterPanelWidth: number | null = null;
 let centerPanelResizableWrapperEl: HTMLElement | null = null;
 
-const MIN_CENTER_PANEL_WIDTH_APPVIEW = 300; 
+const MIN_CENTER_PANEL_WIDTH_APPVIEW = 300;
 const MAX_CENTER_PANEL_WIDTH_PERCENT_APPVIEW = 0.9; // Макс. % от ширины окна для центральной панели
+
+function getCssVariableValue(variableName: string, element: HTMLElement = document.documentElement): number {
+    const value = getComputedStyle(element).getPropertyValue(variableName).trim();
+    if (value.endsWith('px')) {
+        return parseFloat(value);
+    }
+    // Если значение не в px, или не удалось распарсить, возвращаем 0 или другое значение по умолчанию
+    // Для простоты, предполагаем, что наши переменные будут в px
+    logger.warn(`[appView getCssVariableValue] Could not parse CSS variable ${variableName} as px. Value: ${value}`);
+    return 0;
+}
+
 
 function onCenterPanelResizeStart(event: MouseEvent | TouchEvent, wrapperElement: HTMLElement) {
     event.preventDefault();
@@ -23,13 +35,12 @@ function onCenterPanelResizeStart(event: MouseEvent | TouchEvent, wrapperElement
 
     isResizingCenterPanel = true;
     centerPanelResizableWrapperEl = wrapperElement;
-    document.body.classList.add('board-resizing'); 
+    document.body.classList.add('board-resizing');
 
     const clientX = (event as TouchEvent).touches ? (event as TouchEvent).touches[0].clientX : (event as MouseEvent).clientX;
     initialCenterPanelMouseX = clientX;
     initialCenterPanelWidth = centerPanelResizableWrapperEl.offsetWidth;
 
-    // Привязываем обработчики к document для глобального отслеживания
     document.addEventListener('mousemove', onCenterPanelResizeMove, { passive: false });
     document.addEventListener('mouseup', onCenterPanelResizeEnd, { once: true });
     document.addEventListener('touchmove', onCenterPanelResizeMove, { passive: false });
@@ -46,18 +57,36 @@ function onCenterPanelResizeMove(event: MouseEvent | TouchEvent) {
 
     let newWidth = initialCenterPanelWidth + deltaX;
     newWidth = Math.max(MIN_CENTER_PANEL_WIDTH_APPVIEW, newWidth);
-    
-    // Ограничиваем максимальную ширину относительно окна, но также и относительно родителя, если он меньше
-    const parentMaxWidth = centerPanelResizableWrapperEl.parentElement ? centerPanelResizableWrapperEl.parentElement.clientWidth * MAX_CENTER_PANEL_WIDTH_PERCENT_APPVIEW : window.innerWidth * MAX_CENTER_PANEL_WIDTH_PERCENT_APPVIEW;
+
+    // Ограничиваем максимальную ширину относительно родителя
+    const parentElement = centerPanelResizableWrapperEl.parentElement;
+    let parentMaxWidth = window.innerWidth * MAX_CENTER_PANEL_WIDTH_PERCENT_APPVIEW; // Fallback
+    if (parentElement) {
+        // Учитываем padding родителя, если он есть, чтобы не выйти за его контентную область
+        const parentStyle = getComputedStyle(parentElement);
+        const parentPaddingLeft = parseFloat(parentStyle.paddingLeft) || 0;
+        const parentPaddingRight = parseFloat(parentStyle.paddingRight) || 0;
+        parentMaxWidth = (parentElement.clientWidth - parentPaddingLeft - parentPaddingRight) * MAX_CENTER_PANEL_WIDTH_PERCENT_APPVIEW;
+    }
     newWidth = Math.min(newWidth, parentMaxWidth);
+
+    // --- НОВОЕ ОГРАНИЧЕНИЕ: по максимальной высоте доски ---
+    // Получаем значения CSS переменных для расчета максимальной высоты доски
+    // Эти переменные должны быть определены в :root или body в вашем style.css
+    const headerHeight = getCssVariableValue('--header-height');
+    const pageVerticalPadding = getCssVariableValue('--page-vertical-padding');
+    
+    // Максимальный размер доски (и, следовательно, #center-panel-resizable-wrapper)
+    // ограничен высотой окна просмотра.
+    // #board-wrapper имеет max-width и max-height = calc(100vh - var(--header-height) - (2 * var(--page-vertical-padding)))
+    const maxBoardDimensionBasedOnViewportHeight = window.innerHeight - headerHeight - (2 * pageVerticalPadding);
+    
+    newWidth = Math.min(newWidth, maxBoardDimensionBasedOnViewportHeight);
+    // --- КОНЕЦ НОВОГО ОГРАНИЧЕНИЯ ---
 
 
     centerPanelResizableWrapperEl.style.width = `${newWidth}px`;
-    // Высота центральной панели будет управляться через aspect-ratio доски внутри нее,
-    // а высота боковых панелей будет равна высоте центральной через flexbox.
 
-    // Уведомляем BoardView о необходимости перерисовки через кастомное событие
-    // requestAnimationFrame для плавности и избежания слишком частых перерисовок
     requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent('centerPanelResized'));
     });
@@ -77,15 +106,13 @@ function onCenterPanelResizeEnd() {
       logger.debug(`[appView onCenterPanelResizeEnd] Center panel resize ended. New width: ${centerPanelResizableWrapperEl.style.width}`);
       localStorage.setItem('centerPanelWidth', centerPanelResizableWrapperEl.style.width);
     }
-    
+
     centerPanelResizableWrapperEl = null;
     initialCenterPanelMouseX = null;
     initialCenterPanelWidth = null;
-    
-    // Финальное уведомление, на всякий случай, если последний move не вызвал requestAnimationFrame
+
     window.dispatchEvent(new CustomEvent('centerPanelResized'));
 }
-// --- Конец логики изменения размера ---
 
 
 export function renderAppUI(controller: AppController): VNode {
@@ -93,14 +120,14 @@ export function renderAppUI(controller: AppController): VNode {
   const activePageController = controller.activePageController;
 
   const navLinks = [
-    { page: 'puzzle' as AppPage, text: 'Пазлы' },
-    { page: 'analysisTest' as AppPage, text: 'Тест Анализа' },
+    { page: 'puzzle' as AppPage, text: 'Puzzles' }, // Translated
+    { page: 'analysisTest' as AppPage, text: 'Analysis Test' }, // Translated
   ];
 
-  let pageSpecificVNodes: PuzzlePageViewLayout = { 
-    left: h('div.panel-placeholder', 'Левая панель не загружена'),
-    center: h('div.panel-placeholder', 'Центральная панель не загружена'),
-    right: h('div.panel-placeholder', 'Правая панель не загружена')
+  let pageSpecificVNodes: PuzzlePageViewLayout = {
+    left: h('div.panel-placeholder', 'Left panel not loaded'),
+    center: h('div.panel-placeholder', 'Center panel not loaded'),
+    right: h('div.panel-placeholder', 'Right panel not loaded')
   };
 
   if (activePageController) {
@@ -108,32 +135,30 @@ export function renderAppUI(controller: AppController): VNode {
       pageSpecificVNodes = renderPuzzleUI(activePageController);
     } else if (appState.currentPage === 'analysisTest' && activePageController instanceof AnalysisTestController) {
       const analysisLayout = renderAnalysisTestUI(activePageController);
-      if (analysisLayout && typeof analysisLayout === 'object' && 
-          'center' in analysisLayout && 'left' in analysisLayout && 'right' in analysisLayout) {
-        pageSpecificVNodes = analysisLayout as PuzzlePageViewLayout; 
-      } else if (analysisLayout) { 
-        logger.warn('[appView] renderAnalysisTestUI did not return a full layout object. Using placeholders for side panels.');
-        pageSpecificVNodes = {
-            left: h('div.analysis-left-placeholder', 'Панель настроек анализа'), 
-            center: analysisLayout as VNode, 
-            right: h('div.analysis-right-placeholder', 'Результаты анализа') 
+      // Ensure analysisLayout is a VNode before assigning.
+      // If it's a full layout, it will be handled inside renderAnalysisTestUI or by its return type.
+      // This example assumes renderAnalysisTestUI returns a VNode for the center panel.
+      if (analysisLayout && typeof analysisLayout === 'object' && 'sel' in analysisLayout) {
+         pageSpecificVNodes = {
+            left: h('div.analysis-left-placeholder', 'Analysis Settings'),
+            center: analysisLayout as VNode,
+            right: h('div.analysis-right-placeholder', 'Analysis Results')
         };
       } else {
-        pageSpecificVNodes.center = h('p', `Ошибка: renderAnalysisTestUI не вернул VNode для страницы ${appState.currentPage}`);
+        pageSpecificVNodes.center = h('p', `Error: renderAnalysisTestUI did not return a VNode for page ${appState.currentPage}`);
       }
     } else {
-        pageSpecificVNodes.center = h('p', `Ошибка: Неверный контроллер для страницы ${appState.currentPage}`);
+        pageSpecificVNodes.center = h('p', `Error: Invalid controller for page ${appState.currentPage}`);
     }
   } else {
-    pageSpecificVNodes.center = h('p', 'Загрузка контроллера страницы...');
+    pageSpecificVNodes.center = h('p', 'Loading page controller...');
   }
-  
+
   const resizeHandleHook: Hooks = {
     insert: (vnode: VNode) => {
         const handleEl = vnode.elm as HTMLElement;
-        const wrapperEl = handleEl.parentElement; // #center-panel-resizable-wrapper
+        const wrapperEl = handleEl.parentElement;
         if (wrapperEl) {
-            // Удаляем старые слушатели перед добавлением новых, на случай HMR
             handleEl.removeEventListener('mousedown', (e) => onCenterPanelResizeStart(e, wrapperEl));
             handleEl.removeEventListener('touchstart', (e) => onCenterPanelResizeStart(e, wrapperEl));
 
@@ -144,11 +169,10 @@ export function renderAppUI(controller: AppController): VNode {
             logger.error('[appView resizeHandleHook.insert] Parent wrapper for resize handle not found!');
         }
     },
-    // destroy хук может быть полезен для очистки слушателей, если ручка удаляется
     destroy: (vnode: VNode) => {
         const handleEl = vnode.elm as HTMLElement;
-        const wrapperEl = handleEl.parentElement; // Может быть null, если родитель уже удален
-         if (wrapperEl) { // Проверяем, что wrapperEl существует
+        const wrapperEl = handleEl.parentElement;
+         if (wrapperEl) {
             handleEl.removeEventListener('mousedown', (e) => onCenterPanelResizeStart(e, wrapperEl));
             handleEl.removeEventListener('touchstart', (e) => onCenterPanelResizeStart(e, wrapperEl));
         }
@@ -158,24 +182,25 @@ export function renderAppUI(controller: AppController): VNode {
 
   const savedCenterPanelWidth = localStorage.getItem('centerPanelWidth');
   const centerPanelInitialStyle: Record<string, string> = {};
-  if (savedCenterPanelWidth && !appState.isPortraitMode) { // Применяем сохраненную ширину только для альбомного режима
+  if (savedCenterPanelWidth && !appState.isPortraitMode) {
     centerPanelInitialStyle.width = savedCenterPanelWidth;
   } else if (!appState.isPortraitMode) {
-    centerPanelInitialStyle.width = 'var(--center-panel-width)'; // Используем дефолтную из CSS переменных
+    // Fallback to CSS variable if nothing saved or in portrait mode initially.
+    // The actual width for portrait mode will be controlled by CSS class.
+    // centerPanelInitialStyle.width = 'var(--initial-center-panel-width)'; // Removed, let CSS handle default
   }
-  // В портретном режиме ширина будет 100% через CSS класс
 
 
   return h('div#app-layout', [
-    h('header#app-header', [
+    h('header#app-header', { class: { 'menu-open': appState.isNavExpanded && appState.isPortraitMode } }, [ // Added menu-open class
       h('div.nav-header-content', [
         h('span.app-title', 'ChessApp'),
-        h('button.nav-toggle-button', { 
-          style: { display: appState.isPortraitMode ? 'block' : 'none' }, 
-          on: { click: () => controller.toggleNav() } 
+        h('button.nav-toggle-button', {
+          // style: { display: appState.isPortraitMode ? 'block' : 'none' }, // Controlled by CSS media query
+          on: { click: () => controller.toggleNav() }
         }, appState.isNavExpanded ? '✕' : '☰'),
-        h('ul.nav-links', { 
-          style: { display: appState.isPortraitMode ? (appState.isNavExpanded ? 'flex' : 'none') : 'flex' }
+        h('ul.nav-links', {
+          // style: { display: appState.isPortraitMode ? (appState.isNavExpanded ? 'flex' : 'none') : 'flex' } // Controlled by CSS
         },
           navLinks.map(link =>
             h('li', [
@@ -196,26 +221,24 @@ export function renderAppUI(controller: AppController): VNode {
     ]),
     h('main#page-content-wrapper', [
       h(`div.three-column-layout`, {
-        class: { 'portrait-mode-layout': appState.isPortraitMode } 
+        class: { 'portrait-mode-layout': appState.isPortraitMode }
       },[
-        // Боковые панели и их содержимое рендерятся условно
-        appState.isPortraitMode ? null : h('aside#left-panel', { style: { width: 'var(--left-panel-width)' } }, [pageSpecificVNodes.left]),
-        
-        h('div#center-panel-resizable-wrapper', { 
-            key: 'center-wrapper', // Стабильный ключ
-            style: appState.isPortraitMode ? { width: '100%', minWidth:'unset' } : centerPanelInitialStyle,
+        appState.isPortraitMode ? null : h('aside#left-panel', { /* style: { width: 'var(--left-panel-width)' } -- width from CSS */ }, [pageSpecificVNodes.left]),
+
+        h('div#center-panel-resizable-wrapper', {
+            key: 'center-wrapper',
+            style: centerPanelInitialStyle, // Apply initial width only if not in portrait mode and value exists
+            class: { 'portrait-mode-layout': appState.isPortraitMode } // Add class for portrait specific styles
         }, [
           h('section#center-panel', [pageSpecificVNodes.center]),
-          // Ручка отображается только в альбомном режиме и если не было ошибки загрузки pageSpecificVNodes.center
-          (appState.isPortraitMode || !pageSpecificVNodes.center || (pageSpecificVNodes.center as VNode).sel === 'p') 
-            ? null 
+          (appState.isPortraitMode || !pageSpecificVNodes.center || (pageSpecificVNodes.center as VNode).sel === 'p')
+            ? null
             : h('div.resize-handle-center', { hook: resizeHandleHook, key: 'center-resize-handle' })
         ]),
 
-        // Правая панель в портретном режиме отображается, если есть контент
-        (appState.isPortraitMode && pageSpecificVNodes.right) 
-            ? h('aside#right-panel.portrait-mode-layout', [pageSpecificVNodes.right]) 
-            : (appState.isPortraitMode ? null : h('aside#right-panel', { style: { width: 'var(--right-panel-width)' } }, [pageSpecificVNodes.right]))
+        (appState.isPortraitMode && pageSpecificVNodes.right)
+            ? h('aside#right-panel.portrait-mode-layout', [pageSpecificVNodes.right])
+            : (appState.isPortraitMode ? null : h('aside#right-panel', { /* style: { width: 'var(--right-panel-width)' } -- width from CSS */ }, [pageSpecificVNodes.right]))
       ])
     ])
   ]);

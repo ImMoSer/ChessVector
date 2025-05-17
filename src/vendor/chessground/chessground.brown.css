@@ -1,58 +1,94 @@
-/** Colored board squares as an embedded SVG */
+/**
+ * Wooden Chessboard Theme
+ * Uses a background image for the board texture.
+ * Highlights for possible moves are restored to the "dot" style.
+ */
+
 cg-board {
-  background-color: #F0D9B5;
-  background-image: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4PSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIgogICAgIHZpZXdCb3g9IjAgMCA4IDgiIHNoYXBlLXJlbmRlcmluZz0iY3Jpc3BFZGdlcyI+CjxnIGlkPSJhIj4KICA8ZyBpZD0iYiI+CiAgICA8ZyBpZD0iYyI+CiAgICAgIDxnIGlkPSJkIj4KICAgICAgICA8cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBpZD0iZSIgb3BhY2l0eT0iMCIvPgogICAgICAgIDx1c2UgeD0iMSIgeT0iMSIgaHJlZj0iI2UiIHg6aHJlZj0iI2UiLz4KICAgICAgICA8cmVjdCB5PSIxIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBpZD0iZiIgb3BhY2l0eT0iMC4yIi8+CiAgICAgICAgPHVzZSB4PSIxIiB5PSItMSIgaHJlZj0iI2YiIHg6aHJlZj0iI2YiLz4KICAgICAgPC9nPgogICAgICA8dXNlIHg9IjIiIGhyZWY9IiNkIiB4OmhyZWY9IiNkIi8+CiAgICA8L2c+CiAgICA8dXNlIHg9IjQiIGhyZWY9IiNjIiB4OmhyZWY9IiNjIi8+CiAgPC9nPgogIDx1c2UgeT0iMiIgaHJlZj0iI2IiIHg6aHJlZj0iI2IiLz4KPC9nPgo8dXNlIHk9IjQiIGhyZWY9IiNhIiB4OmhyZWY9IiNhIi8+Cjwvc3ZnPg==');
+  background-image: url('/images/lichess_org.jpg'); /* !!! ЗАМЕНИТЕ НА ПУТЬ К ВАШЕМУ ИЗОБРАЖЕНИЮ !!! */
+  background-size: 100% 100%; 
+  background-repeat: no-repeat;
 }
 
-/** Interactive board square colors */
+cg-board square.dark {
+  background-color: transparent; 
+}
+cg-board square.light {
+  background-color: transparent; 
+}
+
+cg-board square {
+  box-sizing: border-box;
+  border: 1px solid rgba(80, 45, 20, 0.2); 
+}
+
+/**
+ * Interactive board square colors
+ * Restored "dot" style for move destinations.
+ */
 cg-board square.move-dest {
-  background: radial-gradient(rgba(20, 85, 30, 0.5) 22%, #208530 0, rgba(0, 0, 0, 0.3) 0, rgba(0, 0, 0, 0) 0);
+  background: radial-gradient(rgba(20, 85, 30, 0.5) 19%, transparent 22%); /* Greenish dot */
+  /* Alternative using the original complex gradient if the simpler one isn't quite right: */
+  /* background: radial-gradient(rgba(20, 85, 30, 0.5) 22%, #208530 0, rgba(0,0,0,0.3) 0, rgba(0,0,0,0) 0); */
+  pointer-events: auto; /* This was missing in the simplified version, but present in base.css and important */
 }
 cg-board square.premove-dest {
-  background: radial-gradient(rgba(20, 30, 85, 0.5) 22%, #203085 0, rgba(0, 0, 0, 0.3) 0, rgba(0, 0, 0, 0) 0);
+  background: radial-gradient(rgba(20, 30, 85, 0.5) 19%, transparent 22%); /* Bluish dot */
+  /* Alternative using the original complex gradient: */
+  /* background: radial-gradient(rgba(20, 30, 85, 0.5) 22%, #203085 0, rgba(0,0,0,0.3) 0, rgba(0,0,0,0) 0); */
+  pointer-events: auto; /* Important for premove dests too */
 }
+
+/* For squares where a capture is possible */
 cg-board square.oc.move-dest {
-  background: radial-gradient(transparent 0%, transparent 80%, rgba(20, 85, 0, 0.3) 80%);
+  background: radial-gradient(transparent 0%, transparent 79%, rgba(20, 85, 0, 0.3) 80%); /* Outer ring for capture */
 }
 cg-board square.oc.premove-dest {
-  background: radial-gradient(transparent 0%, transparent 80%, rgba(20, 30, 85, 0.2) 80%);
+  background: radial-gradient(transparent 0%, transparent 79%, rgba(20, 30, 85, 0.2) 80%); /* Outer ring for premove capture */
 }
+
 cg-board square.move-dest:hover {
-  background: rgba(20, 85, 30, 0.3);
+  background: rgba(20, 85, 30, 0.3); /* Solid fill on hover for better feedback */
 }
 cg-board square.premove-dest:hover {
-  background: rgba(20, 30, 85, 0.2);
+  background: rgba(20, 30, 85, 0.2); /* Solid fill on hover */
 }
+
 cg-board square.last-move {
-  background-color: rgba(155, 199, 0, 0.41);
+  background-color: rgba(200, 200, 0, 0.3); 
 }
 cg-board square.selected {
-  background-color: rgba(20, 85, 30, 0.5);
+  background-color: rgba(40, 100, 50, 0.45); 
 }
 cg-board square.check {
-  background: radial-gradient(
+  background-image: radial-gradient(
     ellipse at center,
-    rgba(255, 0, 0, 1) 0%,
-    rgba(231, 0, 0, 1) 25%,
+    rgba(255, 0, 0, 0.5) 0%, 
+    rgba(231, 0, 0, 0.4) 25%,
     rgba(169, 0, 0, 0) 89%,
     rgba(158, 0, 0, 0) 100%
   );
+  background-color: transparent;
 }
 cg-board square.current-premove {
-  background-color: rgba(20, 30, 85, 0.5);
+  background-color: rgba(30, 60, 120, 0.45);
 }
 
-/** Alternating colors in rank/file/square labels */
-.cg-wrap coords:nth-child(odd) coord:nth-child(even),
-.cg-wrap coords.squares:nth-child(even) coord:nth-child(odd),
-.cg-wrap.orientation-black coords.files:nth-child(even) coord:nth-child(odd),
-.cg-wrap coords.files:nth-child(even) coord:nth-child(even) {
-  color: rgba(72, 72, 72, 0.8);
-}
-
+/**
+ * Coordinate colors
+ */
 .cg-wrap coords:nth-child(odd) coord:nth-child(odd),
 .cg-wrap coords.squares:nth-child(even) coord:nth-child(even),
 .cg-wrap.orientation-black coords.files:nth-child(even) coord:nth-child(even),
 .cg-wrap coords.files:nth-child(even) coord:nth-child(odd) {
-  color: rgba(255, 255, 255, 0.8);
+  color: #6a4028; 
+  text-shadow: 0 0 2px #f0e0c0, 0 0 2px #f0e0c0; 
+}
+
+.cg-wrap coords:nth-child(odd) coord:nth-child(even),
+.cg-wrap coords.squares:nth-child(even) coord:nth-child(odd),
+.cg-wrap.orientation-black coords.files:nth-child(even) coord:nth-child(odd),
+.cg-wrap coords.files:nth-child(even) coord:nth-child(even) {
+  color: #f0e0d0; 
+  text-shadow: 0 0 2px #502010, 0 0 2px #502010; 
 }
