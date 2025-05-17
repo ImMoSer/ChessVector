@@ -4,6 +4,8 @@ import type { ChessboardService } from './core/chessboard.service';
 import type { StockfishService } from './core/stockfish.service';
 import type { WebhookService } from './core/webhook.service';
 import { BoardHandler } from './core/boardHandler';
+import { PgnService } from './core/pgn.service'; 
+import { AnalysisService } from './core/analysis.service'; 
 
 import { PuzzleController } from './features/puzzle/PuzzleController';
 import { AnalysisTestController } from './features/analysis/AnalysisTestController';
@@ -14,6 +16,7 @@ export interface AppServices {
   chessboardService: ChessboardService;
   stockfishService: StockfishService;
   webhookService: WebhookService;
+  analysisService?: AnalysisService; 
   logger: typeof logger;
 }
 
@@ -21,34 +24,37 @@ interface AppControllerState {
   currentPage: AppPage;
   isNavExpanded: boolean;
   isPortraitMode: boolean;
-  // userPreferredBoardSizeVh больше не в state, а как приватное свойство контроллера
 }
 
 type ActivePageController = PuzzleController | AnalysisTestController | null;
 
-// Константы для расчета размера доски
-const BOARD_MAX_VH = 94; // a_max = 95vh
-const BOARD_MIN_VH = 10; // a_min = 10vh
-const DEFAULT_BOARD_VH = 70; // Начальный/дефолтный размер доски в vh
+const BOARD_MAX_VH = 94; 
+const BOARD_MIN_VH = 10; 
+const DEFAULT_BOARD_VH = 70; 
 
 export class AppController {
   public state: AppControllerState;
   public activePageController: ActivePageController | null = null;
-  private services: AppServices;
+  private services: AppServices; 
   private requestGlobalRedraw: () => void;
+  private userPreferredBoardSizeVh: number;
+  private activeAnalysisService: AnalysisService | null = null; 
 
-  private userPreferredBoardSizeVh: number; // Предпочтительный размер доски в VH, управляемый пользователем
-
-  constructor(services: AppServices, requestGlobalRedraw: () => void) {
-    this.services = services;
+  constructor(
+    globalServices: { 
+      chessboardService: ChessboardService;
+      stockfishService: StockfishService;
+      webhookService: WebhookService;
+      logger: typeof logger;
+    },
+    requestGlobalRedraw: () => void
+  ) {
+    this.services = globalServices; 
     this.requestGlobalRedraw = requestGlobalRedraw;
 
-    // Загрузка сохраненного предпочтения или установка дефолтного
     const savedVhPreference = localStorage.getItem('userPreferredBoardSizeVh');
     this.userPreferredBoardSizeVh = savedVhPreference ? parseFloat(savedVhPreference) : DEFAULT_BOARD_VH;
-    // Убедимся, что загруженное значение находится в допустимых пределах
     this.userPreferredBoardSizeVh = Math.max(BOARD_MIN_VH, Math.min(BOARD_MAX_VH, this.userPreferredBoardSizeVh));
-
 
     this.state = {
       currentPage: 'puzzle',
@@ -65,7 +71,6 @@ export class AppController {
     this.loadPageController(this.state.currentPage);
   }
 
-  // --- Управление предпочтительным размером доски ---
   public getUserPreferredBoardSizeVh(): number {
     return this.userPreferredBoardSizeVh;
   }
@@ -75,13 +80,11 @@ export class AppController {
     if (this.userPreferredBoardSizeVh !== clampedVh) {
       this.userPreferredBoardSizeVh = clampedVh;
       logger.debug(`[AppController] User preferred board size Vh set to: ${this.userPreferredBoardSizeVh.toFixed(2)}vh`);
-      localStorage.setItem('userPreferredBoardSizeVh', this.userPreferredBoardSizeVh.toString()); // Сохраняем предпочтение
-      this._calculateAndSetBoardSize(); // Пересчитать и применить новый размер
-      this.requestGlobalRedraw();     // Запросить перерисовку UI
+      localStorage.setItem('userPreferredBoardSizeVh', this.userPreferredBoardSizeVh.toString()); 
+      this._calculateAndSetBoardSize(); 
+      this.requestGlobalRedraw();     
     }
   }
-  // --- Конец управления предпочтительным размером ---
-
 
   private _getCssVariableInPixels(variableName: string): number {
     const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
@@ -95,19 +98,11 @@ export class AppController {
   private _calculateAndSetBoardSize(): void {
     const viewportHeightPx = window.innerHeight;
     const viewportWidthPx = window.innerWidth;
-
-    // 1. Используем userPreferredBoardSizeVh для определения целевой высоты доски
     let currentBoardTargetSizePx = (this.userPreferredBoardSizeVh / 100) * viewportHeightPx;
-
-    // Минимальный размер доски в пикселях, соответствующий BOARD_MIN_VH
     const minBoardSizeBasedOnMinVhPx = (BOARD_MIN_VH / 100) * viewportHeightPx;
-
-
-    // 2. Горизонтальные ограничения
     const leftPanelWidthPx = this._getCssVariableInPixels('--panel-width');
     const rightPanelWidthPx = this._getCssVariableInPixels('--panel-width');
     const panelGapPx = this._getCssVariableInPixels('--panel-gap');
-
     let availableWidthForCenterPx: number;
 
     if (this.state.isPortraitMode) {
@@ -115,48 +110,22 @@ export class AppController {
     } else {
       const actualLeftPanelWidth = document.getElementById('left-panel')?.offsetParent !== null ? leftPanelWidthPx : 0;
       const actualRightPanelWidth = document.getElementById('right-panel')?.offsetParent !== null ? rightPanelWidthPx : 0;
-      
       let numberOfGaps = 2;
-      if (actualLeftPanelWidth > 0 && actualRightPanelWidth > 0) {
-        numberOfGaps = 4; // gaps: page-left, left-center, center-right, right-page
-      } else if (actualLeftPanelWidth > 0 || actualRightPanelWidth > 0) {
-        numberOfGaps = 3; // gaps: page-left, left-center, center-page (or mirrored)
-      }
-      // numberOfGaps = 2; // Минимум два отступа по краям страницы
-      // if (actualLeftPanelWidth > 0) numberOfGaps++;
-      // if (actualRightPanelWidth > 0) numberOfGaps++;
-      // if (actualLeftPanelWidth > 0 && actualRightPanelWidth > 0) numberOfGaps--; // Неверная логика была
-
+      if (actualLeftPanelWidth > 0 && actualRightPanelWidth > 0) numberOfGaps = 4;
+      else if (actualLeftPanelWidth > 0 || actualRightPanelWidth > 0) numberOfGaps = 3;
       const totalHorizontalSpacingPx = actualLeftPanelWidth + actualRightPanelWidth + (numberOfGaps * panelGapPx);
       availableWidthForCenterPx = viewportWidthPx - totalHorizontalSpacingPx;
     }
     
-    const minPracticalWidthPx = 50; // Абсолютный минимум для ширины
+    const minPracticalWidthPx = 50; 
     availableWidthForCenterPx = Math.max(availableWidthForCenterPx, minPracticalWidthPx);
-
-    // 3. Итоговый размер доски в пикселях (квадрат)
-    // Доска должна поместиться и по высоте (currentBoardTargetSizePx), и по ширине (availableWidthForCenterPx)
     let finalBoardSizePx = Math.min(currentBoardTargetSizePx, availableWidthForCenterPx);
-
-    // 4. Применяем минимальный размер (исходя из BOARD_MIN_VH)
     finalBoardSizePx = Math.max(finalBoardSizePx, minBoardSizeBasedOnMinVhPx);
-    
-    // Важно: если finalBoardSizePx стал меньше, чем currentBoardTargetSizePx из-за ширины,
-    // то userPreferredBoardSizeVh как бы "не достигается". Это нормально.
-
-    // 5. Конвертируем итоговый размер обратно в VH для установки CSS переменной
     const finalBoardSizeVh = (finalBoardSizePx / viewportHeightPx) * 100;
 
-    logger.debug(`[AppController _calc] VH H: ${viewportHeightPx}px, W: ${viewportWidthPx}px`);
-    logger.debug(`[AppController _calc] UserPref: ${this.userPreferredBoardSizeVh.toFixed(2)}vh -> Target Board H: ${currentBoardTargetSizePx.toFixed(2)}px`);
-    logger.debug(`[AppController _calc] MinBoard H (from MinVH): ${minBoardSizeBasedOnMinVhPx.toFixed(2)}px`);
-    logger.debug(`[AppController _calc] Panels L: ${leftPanelWidthPx}px, R: ${rightPanelWidthPx}px, Gap: ${panelGapPx}px, Portrait: ${this.state.isPortraitMode}`);
-    logger.debug(`[AppController _calc] Available Center W: ${availableWidthForCenterPx.toFixed(2)}px`);
-    logger.debug(`[AppController _calc] Final Board Size: ${finalBoardSizePx.toFixed(2)}px -> ${finalBoardSizeVh.toFixed(2)}vh (to be set)`);
-
+    logger.debug(`[AppController _calc] Final Board Size: ${finalBoardSizePx.toFixed(2)}px -> ${finalBoardSizeVh.toFixed(2)}vh`);
     document.documentElement.style.setProperty('--calculated-board-size-vh', `${finalBoardSizeVh.toFixed(3)}vh`);
   }
-
 
   public navigateTo(page: AppPage): void {
     if (this.state.currentPage === page && this.activePageController) {
@@ -169,7 +138,13 @@ export class AppController {
     logger.info(`[AppController] Navigating to page: ${page}`);
     
     if (this.activePageController && typeof (this.activePageController as any).destroy === 'function') {
-      // (this.activePageController as any).destroy(); 
+      (this.activePageController as any).destroy(); 
+      logger.info('[AppController] Previous page controller destroyed.');
+    }
+    if (this.activeAnalysisService) {
+        this.activeAnalysisService.destroy();
+        this.activeAnalysisService = null;
+        logger.info('[AppController] Previous AnalysisService destroyed.');
     }
     
     this.state.currentPage = page;
@@ -182,17 +157,28 @@ export class AppController {
 
   private loadPageController(page: AppPage): void {
     this.activePageController = null; 
+    this._calculateAndSetBoardSize(); 
 
-    this._calculateAndSetBoardSize(); // Убедимся, что размер актуален перед загрузкой контроллера
+    const boardHandlerForPage = new BoardHandler(
+        this.services.chessboardService,
+        this.requestGlobalRedraw 
+    );
+
+    const analysisServiceForPage = new AnalysisService(
+        this.services.stockfishService,
+        boardHandlerForPage, 
+        PgnService 
+    );
+    this.activeAnalysisService = analysisServiceForPage; 
 
     switch (page) {
       case 'puzzle':
-        const puzzleBoardHandler = new BoardHandler(this.services.chessboardService, this.requestGlobalRedraw);
         this.activePageController = new PuzzleController(
           this.services.chessboardService,
-          puzzleBoardHandler,
+          boardHandlerForPage, 
           this.services.webhookService,
           this.services.stockfishService,
+          analysisServiceForPage, 
           this.requestGlobalRedraw
         );
         if (typeof (this.activePageController as PuzzleController).initializeGame === 'function') {
@@ -202,9 +188,12 @@ export class AppController {
         }
         break;
       case 'analysisTest':
+        // Если AnalysisTestController будет использоваться, ему также нужно передать boardHandlerForPage и analysisServiceForPage
         this.activePageController = new AnalysisTestController(
           this.services.chessboardService,
           this.services.stockfishService,
+          // boardHandlerForPage, // Раскомментировать и добавить в конструктор AnalysisTestController
+          // analysisServiceForPage, // Раскомментировать и добавить в конструктор AnalysisTestController
           this.requestGlobalRedraw
         );
         if (typeof (this.activePageController as AnalysisTestController).initializeView === 'function') {
@@ -216,6 +205,10 @@ export class AppController {
       default:
         logger.error(`[AppController] Unknown page: ${page}. Cannot load controller.`);
         this.activePageController = null;
+        if (this.activeAnalysisService) { 
+            this.activeAnalysisService.destroy();
+            this.activeAnalysisService = null;
+        }
         this.requestGlobalRedraw(); 
     }
     logger.info(`[AppController] Loaded controller for page: ${page}`, this.activePageController);

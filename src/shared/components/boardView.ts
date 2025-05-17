@@ -45,17 +45,24 @@ export class BoardView {
     }
 
     private initBoard(): void {
+        const initialConfig = this._getBoardConfig();
         if (this.chessboardService.ground && this.chessboardService.ground.state.dom.elements.wrap.parentElement === this.container) {
-             logger.info('[BoardView] Ground already initialized for this container. Skipping re-init.');
+             logger.info('[BoardView] Ground already initialized for this container. Applying new config.');
+             this.chessboardService.ground.set(initialConfig);
         } else if (this.chessboardService.ground) {
             logger.warn('[BoardView] ChessboardService has ground, but for different container. Destroying and re-initializing.');
-            this.chessboardService.destroy(); // Destroy old instance if container changed
-            this.chessboardService.init(this.container, this._getBoardConfig());
+            this.chessboardService.destroy(); 
+            this.chessboardService.init(this.container, initialConfig);
         } else {
-             this.chessboardService.init(this.container, this._getBoardConfig());
+             this.chessboardService.init(this.container, initialConfig);
         }
 
-        this.updateView(); // Initial view update
+        // No need to call updateView() here if initBoard is called with full config
+        // and BoardHandler's state is already correct for the initial setup.
+        // However, if there's a chance BoardHandler's state might be more up-to-date
+        // than what _getBoardConfig can surmise initially, then call updateView().
+        // For safety, let's call it, but it might be redundant if _getBoardConfig is perfect.
+        this.updateView(); 
         logger.info('[BoardView] Board initialized/verified and view updated.');
     }
 
@@ -63,35 +70,44 @@ export class BoardView {
         const initialFen = this.boardHandler.getFen().split(' ')[0];
         const initialTurnColor = this.boardHandler.getBoardTurnColor();
         const initialOrientation = this.boardHandler.getHumanPlayerColor() || 'white';
-        // const isAnalysis = this.boardHandler.isAnalysisMode(); // Эта переменная здесь больше не нужна для movable.free
+        const gameStatus: GameStatus = this.boardHandler.getGameStatus();
+        const isConfiguredForAnalysis = this.boardHandler.isBoardConfiguredForAnalysis();
+
+        let movableColor: ChessgroundColor | undefined = initialTurnColor;
+        let dests: Dests = this.boardHandler.getPossibleMoves();
+
+        if (gameStatus.isGameOver && !isConfiguredForAnalysis) {
+            movableColor = undefined;
+            dests = new Map();
+        }
+        // If isConfiguredForAnalysis, movableColor remains initialTurnColor,
+        // and dests are already the possible moves for that turn.
 
         return {
             fen: initialFen,
             orientation: initialOrientation,
-            turnColor: initialTurnColor, // Всегда устанавливаем turnColor из BoardHandler
+            turnColor: initialTurnColor,
             movable: {
-                free: false, // <--- ИЗМЕНЕНИЕ: Всегда false для строгого соблюдения правил
-                color: this.boardHandler.getBoardTurnColor(), // Всегда цвет из BoardHandler
-                dests: this.boardHandler.getPossibleMoves(),   // Всегда ходы из BoardHandler
+                free: false, 
+                color: movableColor,
+                dests: dests,   
                 events: {
                     after: (orig: Key, dest: Key, metadata: MoveMetadata) => {
                         logger.debug(`[BoardView] User move on board: ${orig}-${dest}. Calling onUserMoveCallback.`);
                         this.onUserMoveCallback(orig, dest, metadata)
                             .catch(error => {
                                 logger.error('[BoardView] Error in onUserMoveCallback:', error);
-                                // Consider re-syncing view on error.
-                                // this.updateView(); // Может вызвать цикл, если ошибка в onUserMoveCallback постоянная
                             });
                     },
                 },
                 showDests: true,
             },
             premovable: {
-                enabled: false,
+                enabled: false, // Explicitly false, not managed by this app version
             },
             highlight: {
                 lastMove: true,
-                check: true,
+                check: true, // Chessground will use turnColor to determine which king to highlight
             },
             animation: {
                 enabled: true,
@@ -101,9 +117,11 @@ export class BoardView {
                 select: (key: Key) => {
                     logger.debug(`[BoardView] Square selected by user: ${key}`);
                 },
+                // insert: (elements: cg.Elements) => void; // If needed
             },
             drawable: {
-                enabled: true,
+                enabled: true, // Allows drawing shapes via API
+                // Other drawable options can be set here if needed
             }
         };
     }
@@ -113,16 +131,16 @@ export class BoardView {
             logger.warn('[BoardView] updateView called but ground is not initialized in ChessboardService.');
             if (this.container && this.container.isConnected) {
                 logger.warn('[BoardView] Attempting to re-initialize board as container exists and ground is missing.');
-                this.initBoard(); // Попробуем переинициализировать, если контейнер все еще существует
+                this.initBoard(); 
             }
             return;
         }
 
         const gameStatus: GameStatus = this.boardHandler.getGameStatus();
         const currentFen = this.boardHandler.getFen().split(' ')[0];
-        const turnColor = this.boardHandler.getBoardTurnColor(); // От BoardHandler
+        const turnColor = this.boardHandler.getBoardTurnColor(); 
         const orientation = this.boardHandler.getHumanPlayerColor() || this.chessboardService.ground.state.orientation;
-        // const isAnalysis = this.boardHandler.isAnalysisMode(); // Больше не используется для определения movable.free здесь
+        const isConfiguredForAnalysis = this.boardHandler.isBoardConfiguredForAnalysis();
 
         let lastMoveUciArray: [Key, Key] | undefined = undefined;
         const lastPgnNode = this.boardHandler.getLastPgnMoveNode();
@@ -136,21 +154,31 @@ export class BoardView {
             }
         }
 
+        let movableColor: ChessgroundColor | undefined = turnColor;
+        let destsForGround: Dests = this.boardHandler.getPossibleMoves();
+
+        if (gameStatus.isGameOver && !isConfiguredForAnalysis) {
+            movableColor = undefined;
+            destsForGround = new Map();
+        }
+        // If isConfiguredForAnalysis, movableColor remains turnColor,
+        // and destsForGround are already the possible moves for that turn.
+
         this.chessboardService.ground.set({
             fen: currentFen,
-            turnColor: turnColor, // <--- ИЗМЕНЕНИЕ: всегда из boardHandler
+            turnColor: turnColor, 
             orientation: orientation,
             movable: {
-                free: false, // <--- ИЗМЕНЕНИЕ: всегда false
-                color: gameStatus.isGameOver ? undefined : turnColor, // <--- ИЗМЕНЕНИЕ: цвет из boardHandler, если игра не окончена
-                dests: gameStatus.isGameOver ? new Map() : this.boardHandler.getPossibleMoves(), // <--- ИЗМЕНЕНИЕ: ходы из boardHandler
+                free: false, 
+                color: movableColor, 
+                dests: destsForGround, 
                 showDests: true,
+                // events.after is set during init and should persist
             },
-            // check: gameStatus.isCheck ? turnColor : undefined, // <--- ИЗМЕНЕНИЕ: если шах, подсвечиваем короля текущего хода
-            // ИЛИ, если chessground сам определяет короля по turnColor, когда check: true:
-            check: gameStatus.isCheck ? true : undefined, // <--- БОЛЕЕ ПРАВИЛЬНО для chessground
+            check: gameStatus.isCheck ? true : undefined, 
             lastMove: lastMoveUciArray,
         });
+        // logger.debug(`[BoardView updateView] Updated. FEN: ${currentFen}, Turn: ${turnColor}, Movable: ${movableColor}, Check: ${gameStatus.isCheck}`);
     }
 
     public drawShapes(shapes: CustomDrawShape[]): void {
@@ -171,8 +199,11 @@ export class BoardView {
 
     public destroy(): void {
         window.removeEventListener('centerPanelResized', this.boundHandleAppPanelResize);
-        // Chessground уничтожается в chessboardService, если он там есть
-        // this.chessboardService.destroy(); // Не нужно здесь, если destroy вызывается для сервиса централизованно
+        // Chessground instance itself is managed by ChessboardService.
+        // If BoardView instance is destroyed, it should not necessarily destroy the
+        // ChessboardService's ground instance if that service is a singleton used elsewhere.
+        // However, if BoardView "owns" its ground instance via ChessboardService, then:
+        // this.chessboardService.destroy(); // This would be called if ChessboardService instance is per BoardView
         logger.info('[BoardView] Destroyed, removed centerPanelResized listener.');
     }
 }

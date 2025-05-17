@@ -169,7 +169,7 @@ class PgnServiceController {
         currentFullMoveNumber = rootChessPos.fullmoves;
         isWhiteToMoveInitially = rootChessPos.turn === 'white';
     } catch (e: any) {
-        logger.warn(`[PgnService] Could not parse root FEN or create Chess pos for PGN string: ${e.message}`);
+        logger.warn(`[PgnService] Could not parse root FEN or create Chess pos for PGN string: ${(e as Error).message}`);
     }
 
     if (firstActualMoveNode && firstActualMoveNode.ply === 1) {
@@ -179,7 +179,7 @@ class PgnServiceController {
             isWhiteToMoveInitially = firstMoveChessPos.turn === 'white';
             currentFullMoveNumber = firstMoveChessPos.fullmoves;
         } catch (e: any) {
-            logger.warn(`[PgnService] Could not parse firstMove.fenBefore or create Chess pos for PGN string: ${e.message}`);
+            logger.warn(`[PgnService] Could not parse firstMove.fenBefore or create Chess pos for PGN string: ${(e as Error).message}`);
         }
     }
 
@@ -191,7 +191,7 @@ class PgnServiceController {
         if (pgn.length > 0) pgn += (options?.showVariations ? ' ' : '\n');
         pgn += `${currentFullMoveNumber}. `;
       } else {
-        if (i === 0 && isWhiteToMoveInitially) {
+        if (i === 0 && !isWhiteToMoveInitially) { // Check if it's Black's first move in the PGN string
             pgn += `${currentFullMoveNumber}... `;
         } else {
             pgn += ` `;
@@ -203,8 +203,8 @@ class PgnServiceController {
         pgn += ` {${node.comment}}`;
       }
 
-      if (!isWhiteMoveInPgn || (i === 0 && !isWhiteToMoveInitially && node.ply % 2 === 1) ) {
-        if (!isWhiteMoveInPgn) currentFullMoveNumber++;
+      if (!isWhiteMoveInPgn) {
+        currentFullMoveNumber++;
       }
     }
 
@@ -432,6 +432,56 @@ class PgnServiceController {
     }
     logger.warn(`[PgnService] Could not promote variation ${variationNodeId}: not found or already mainline.`);
     return false;
+  }
+
+  /**
+   * Sets a comment on the currently active PGN node.
+   * @param comment The comment string.
+   */
+  public setCommentOnCurrentNode(comment: string): void {
+    if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) { // Comments are usually for moves, not root
+      this.currentNode.comment = comment;
+      logger.debug(`[PgnService] Comment set on current node (Ply ${this.currentNode.ply}): "${comment}"`);
+    } else {
+      logger.warn('[PgnService] Cannot set comment, no current node or current node is root.');
+    }
+  }
+
+  /**
+   * Clears the comment from the currently active PGN node.
+   */
+  public clearCommentOnCurrentNode(): void {
+    if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) {
+      this.currentNode.comment = undefined;
+      logger.debug(`[PgnService] Comment cleared from current node (Ply ${this.currentNode.ply})`);
+    } else {
+      logger.warn('[PgnService] Cannot clear comment, no current node or current node is root.');
+    }
+  }
+
+  /**
+   * Sets an evaluation score on the currently active PGN node.
+   * @param evalValue The evaluation value (e.g., centipawns or mate score).
+   */
+  public setEvaluationOnCurrentNode(evalValue: number): void {
+    if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) { // Evaluations are for moves
+      this.currentNode.eval = evalValue;
+      logger.debug(`[PgnService] Evaluation set on current node (Ply ${this.currentNode.ply}): ${evalValue}`);
+    } else {
+      logger.warn('[PgnService] Cannot set evaluation, no current node or current node is root.');
+    }
+  }
+
+  /**
+   * Clears the evaluation score from the currently active PGN node.
+   */
+  public clearEvaluationOnCurrentNode(): void {
+    if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) {
+      this.currentNode.eval = undefined;
+      logger.debug(`[PgnService] Evaluation cleared from current node (Ply ${this.currentNode.ply})`);
+    } else {
+      logger.warn('[PgnService] Cannot clear evaluation, no current node or current node is root.');
+    }
   }
 }
 

@@ -24,15 +24,13 @@ export interface EvaluatedLine {
 
 // Интерфейс для результата анализа
 export interface AnalysisResult {
-  bestMoveUci: string | null; // Абсолютно лучший ход от Stockfish (первый ход основной линии)
+  bestMoveUci: string | null; 
   evaluatedLines: EvaluatedLine[];
 }
 
-// Типы для resolve/reject промиса анализа
 type AnalysisResolve = (value: AnalysisResult | null) => void;
 type AnalysisReject = (reason?: any) => void;
 
-// Интерфейс для отслеживания текущего запроса на анализ
 interface PendingAnalysisRequest {
   resolve: AnalysisResolve;
   reject: AnalysisReject;
@@ -41,6 +39,7 @@ interface PendingAnalysisRequest {
   options: AnalysisOptions;
   collectedLines: Map<number, EvaluatedLine>;
   currentBestMove: string | null;
+  isActive: boolean; // Флаг, чтобы пометить запрос как отмененный/перекрытый
 }
 
 export class StockfishService {
@@ -96,17 +95,14 @@ export class StockfishService {
         }
         logger.error('[StockfishService] Worker error:', errorMessage, errorEvent);
         this.isReady = false;
-        // Убедимся, что rejectInitPromise существует и является функцией перед вызовом
         if (this.rejectInitPromise && typeof this.rejectInitPromise === 'function') {
-            try {
-                this.rejectInitPromise(new Error(errorMessage));
-            } catch(e) { /* Promise might already be settled */ }
+            try { this.rejectInitPromise(new Error(errorMessage)); } catch(e) { /* Promise might already be settled */ }
         }
         if (this.pendingAnalysisRequest) {
-          clearTimeout(this.pendingAnalysisRequest.timeoutId);
-          try {
-            this.pendingAnalysisRequest.reject(new Error('Worker error occurred during analysis request'));
-          } catch(e) { /* Promise might already be settled */ }
+          if (this.pendingAnalysisRequest.isActive) { // Отклоняем только если он все еще считается активным
+            clearTimeout(this.pendingAnalysisRequest.timeoutId);
+            try { this.pendingAnalysisRequest.reject(new Error('Worker error occurred during analysis request')); } catch(e) { /* Promise might already be settled */ }
+          }
           this.pendingAnalysisRequest = null;
         }
       };
@@ -118,9 +114,7 @@ export class StockfishService {
             const errorMsg = 'UCI handshake timeout';
             logger.error(`[StockfishService] ${errorMsg}`);
             if (this.rejectInitPromise && typeof this.rejectInitPromise === 'function') {
-                try {
-                    this.rejectInitPromise(new Error(errorMsg));
-                } catch(e) { /* Promise might already be settled */ }
+                try { this.rejectInitPromise(new Error(errorMsg)); } catch(e) { /* Promise might already be settled */ }
             }
         }
       }, 15000);
@@ -129,9 +123,7 @@ export class StockfishService {
       logger.error('[StockfishService] Failed to initialize worker (constructor error):', error.message, error);
       this.isReady = false;
       if (this.rejectInitPromise && typeof this.rejectInitPromise === 'function') {
-          try {
-            this.rejectInitPromise(error);
-          } catch(e) { /* Promise might already be settled */ }
+          try { this.rejectInitPromise(error); } catch(e) { /* Promise might already be settled */ }
       }
     }
   }
@@ -176,31 +168,30 @@ export class StockfishService {
     } else if (message === 'readyok') {
       this.isReady = true;
       logger.info('[StockfishService] Engine is ready (readyok received).');
-
       if (this.resolveInitPromise && typeof this.resolveInitPromise === 'function') {
-        try {
-            this.resolveInitPromise();
-        } catch(e) { /* Promise might already be settled */ }
+        try { this.resolveInitPromise(); } catch(e) { /* Promise might already be settled */ }
       }
       this.processCommandQueue();
-    } else if (parts[0] === 'info' && this.pendingAnalysisRequest) {
+    } else if (parts[0] === 'info' && this.pendingAnalysisRequest && this.pendingAnalysisRequest.isActive) {
       this.parseInfoLine(message, this.pendingAnalysisRequest.collectedLines);
-    } else if (parts[0] === 'bestmove' && parts[1]) {
+    } else if (parts[0] === 'bestmove') { // Removed parts[1] check, as 'bestmove (none)' is valid
       if (this.pendingAnalysisRequest) {
-        clearTimeout(this.pendingAnalysisRequest.timeoutId);
-        const bestMoveUci = parts[1] === '(none)' ? null : parts[1];
-        this.pendingAnalysisRequest.currentBestMove = bestMoveUci;
+        if (this.pendingAnalysisRequest.isActive) { // Только если запрос не был отменен/перекрыт
+            clearTimeout(this.pendingAnalysisRequest.timeoutId);
+            const bestMoveUci = (parts[1] && parts[1] !== '(none)') ? parts[1] : null;
+            this.pendingAnalysisRequest.currentBestMove = bestMoveUci;
 
-        const result: AnalysisResult = {
-          bestMoveUci: this.pendingAnalysisRequest.currentBestMove,
-          evaluatedLines: Array.from(this.pendingAnalysisRequest.collectedLines.values())
-                              .sort((a, b) => a.id - b.id)
-        };
-        logger.info('[StockfishService] Analysis complete. Best move:', bestMoveUci, 'Lines:', result.evaluatedLines.length);
-        try {
-            this.pendingAnalysisRequest.resolve(result);
-        } catch(e) { /* Promise might already be settled */ }
-        this.pendingAnalysisRequest = null;
+            const result: AnalysisResult = {
+              bestMoveUci: this.pendingAnalysisRequest.currentBestMove,
+              evaluatedLines: Array.from(this.pendingAnalysisRequest.collectedLines.values())
+                                  .sort((a, b) => a.id - b.id)
+            };
+            logger.info('[StockfishService] Analysis complete. Best move:', bestMoveUci, 'Lines:', result.evaluatedLines.length);
+            try { this.pendingAnalysisRequest.resolve(result); } catch(e) { /* Promise might already be settled */ }
+        } else {
+            logger.info('[StockfishService] Received bestmove for a superseded/cancelled request. Ignoring.');
+        }
+        this.pendingAnalysisRequest = null; // Запрос обработан или был неактивен
       } else {
         logger.warn('[StockfishService] Received bestmove but no pending analysis request.');
       }
@@ -213,37 +204,24 @@ export class StockfishService {
       let depth = 0;
       let score: ScoreInfo | null = null;
       let pvUci: string[] = [];
-
       const parts = line.split(' ');
       let i = 0;
       while (i < parts.length) {
         const token = parts[i];
         switch (token) {
-          case 'depth':
-            depth = parseInt(parts[++i], 10);
-            break;
-          case 'multipv':
-            currentLineId = parseInt(parts[++i], 10);
-            break;
+          case 'depth': depth = parseInt(parts[++i], 10); break;
+          case 'multipv': currentLineId = parseInt(parts[++i], 10); break;
           case 'score':
             const type = parts[++i];
             const value = parseInt(parts[++i], 10);
-            if (type === 'cp' || type === 'mate') {
-              score = { type, value };
-            }
+            if (type === 'cp' || type === 'mate') score = { type, value };
             break;
-          case 'pv':
-            pvUci = parts.slice(i + 1);
-            i = parts.length;
-            break;
+          case 'pv': pvUci = parts.slice(i + 1); i = parts.length; break;
         }
         i++;
       }
-
-      if (score && pvUci.length > 0 && !isNaN(depth) && depth > 0) { // Добавлена проверка на валидность depth
+      if (score && pvUci.length > 0 && !isNaN(depth) && depth > 0) {
         const existingLine = collectedLines.get(currentLineId);
-        // Обновляем линию, только если новая глубина больше или равна,
-        // или если это первая информация для этой линии
         if (!existingLine || depth >= existingLine.depth) {
              collectedLines.set(currentLineId, { id: currentLineId, depth, score, pvUci });
         }
@@ -254,9 +232,7 @@ export class StockfishService {
   }
 
   public async ensureReady(): Promise<void> {
-    if (this.isReady) {
-      return Promise.resolve();
-    }
+    if (this.isReady) return Promise.resolve();
     return this.initPromise;
   }
 
@@ -265,23 +241,31 @@ export class StockfishService {
       await this.ensureReady();
     } catch (error) {
       logger.error('[StockfishService] Engine failed to initialize for getAnalysis:', error);
-      return null;
+      return Promise.reject(error); // Отклоняем промис, если движок не готов
     }
 
     if (!this.worker) {
-        logger.error('[StockfishService] Worker not available for getAnalysis.');
-        return null;
+        const workerError = new Error('Worker not available for getAnalysis.');
+        logger.error(`[StockfishService] ${workerError.message}`);
+        return Promise.reject(workerError);
     }
 
     if (this.pendingAnalysisRequest) {
-        logger.warn('[StockfishService] Another analysis request is already pending. Rejecting new request.');
-        return Promise.reject(new Error('Another analysis request is pending.'));
+        logger.warn('[StockfishService] New analysis request received while previous one is pending. Superseding previous request.');
+        if (this.pendingAnalysisRequest.isActive) {
+            this.pendingAnalysisRequest.isActive = false; // Помечаем старый запрос как неактивный
+            clearTimeout(this.pendingAnalysisRequest.timeoutId);
+            try {
+                this.pendingAnalysisRequest.reject(new Error('Analysis request superseded by a new one.'));
+            } catch (e) { /* Старый промис мог уже быть урегулирован (например, по таймауту) */ }
+        }
+        this.sendCommand('stop'); // Останавливаем текущие вычисления движка
+        // this.pendingAnalysisRequest = null; // Не сбрасываем здесь, он будет перезаписан
     }
 
     return new Promise<AnalysisResult | null>((resolve, reject) => {
       const lines = options.lines || 1;
-      const baseTimeout = 5000; // 5 секунд базовый таймаут
-      // Увеличиваем время расчета немного, если глубина большая или много линий
+      const baseTimeout = 5000; 
       const depthFactor = Math.max(1, (options.depth || 10) / 10);
       const linesFactor = lines > 1 ? 1.5 : 1;
       const calculationTime = options.movetime || (options.depth || 10) * 1000 * depthFactor * linesFactor;
@@ -289,43 +273,42 @@ export class StockfishService {
 
       logger.debug(`[StockfishService] getAnalysis: FEN=${fen}, Options=${JSON.stringify(options)}, TimeoutDuration=${timeoutDuration}ms`);
 
-
-      const timeoutId = window.setTimeout(() => {
-        logger.warn(`[StockfishService] getAnalysis timeout for FEN: ${fen} after ${timeoutDuration}ms`);
-        if (this.pendingAnalysisRequest && this.pendingAnalysisRequest.timeoutId === timeoutId) {
-            // Попытка отправить 'stop' перед тем, как отклонить промис
-            this.sendCommand('stop');
-            try {
-                this.pendingAnalysisRequest.reject(new Error('Stockfish getAnalysis timeout'));
-            } catch(e) { /* Promise might already be settled */ }
-            this.pendingAnalysisRequest = null;
-        }
-      }, timeoutDuration);
-
-      this.pendingAnalysisRequest = {
+      const currentRequestObject: PendingAnalysisRequest = { // Создаем объект запроса сразу
         resolve,
         reject,
-        timeoutId,
+        timeoutId: 0, // Будет установлен ниже
         fen,
         options,
         collectedLines: new Map<number, EvaluatedLine>(),
         currentBestMove: null,
+        isActive: true, // Новый запрос всегда активен
       };
 
-      this.sendCommand('ucinewgame');
+      currentRequestObject.timeoutId = window.setTimeout(() => {
+        if (this.pendingAnalysisRequest === currentRequestObject && currentRequestObject.isActive) { // Проверяем, что это таймаут для текущего активного запроса
+            logger.warn(`[StockfishService] getAnalysis timeout for FEN: ${fen} after ${timeoutDuration}ms`);
+            this.sendCommand('stop');
+            currentRequestObject.isActive = false; // Помечаем как неактивный из-за таймаута
+            try {
+                reject(new Error('Stockfish getAnalysis timeout'));
+            } catch(e) { /* Промис мог быть уже урегулирован */ }
+            if (this.pendingAnalysisRequest === currentRequestObject) {
+                this.pendingAnalysisRequest = null;
+            }
+        }
+      }, timeoutDuration);
+
+      this.pendingAnalysisRequest = currentRequestObject;
+
+      this.sendCommand('ucinewgame'); // Всегда начинаем с новой игры для чистоты состояния
       this.sendCommand(`setoption name MultiPV value ${lines}`);
       this.sendCommand(`position fen ${fen}`);
 
       let goCommand = 'go';
-      if (options.depth) {
-        goCommand += ` depth ${options.depth}`;
-      }
-      if (options.movetime) {
-        goCommand += ` movetime ${options.movetime}`;
-      }
-      if (!options.depth && !options.movetime) {
-        goCommand += ` depth 10`;
-      }
+      if (options.depth) goCommand += ` depth ${options.depth}`;
+      if (options.movetime) goCommand += ` movetime ${options.movetime}`;
+      if (!options.depth && !options.movetime) goCommand += ` depth 10`; // Дефолтная глубина, если ничего не указано
+      
       this.sendCommand(goCommand);
     });
   }
@@ -335,18 +318,22 @@ export class StockfishService {
       ...options,
       lines: 1,
     };
-    const result = await this.getAnalysis(fen, analysisOptions);
-    return result ? result.bestMoveUci : null;
+    try {
+        const result = await this.getAnalysis(fen, analysisOptions);
+        return result ? result.bestMoveUci : null;
+    } catch (error) {
+        // Если getAnalysis был отклонен (например, из-за ошибки инициализации или перекрытия запроса),
+        // то getBestMoveOnly также должен вернуть null или перебросить ошибку.
+        // Для простоты возвращаем null.
+        logger.warn(`[StockfishService getBestMoveOnly] Underlying getAnalysis failed: ${(error as Error).message}`);
+        return null;
+    }
   }
 
   public terminate(): void {
     if (this.worker) {
       logger.info('[StockfishService] Terminating worker...');
-      try {
-        this.worker.postMessage('quit');
-      } catch (e) {
-        logger.warn('[StockfishService] Error sending "quit" command, worker might already be terminated.', e);
-      }
+      try { this.worker.postMessage('quit'); } catch (e) { /* ... */ }
       setTimeout(() => {
         if (this.worker) {
             this.worker.terminate();
@@ -358,9 +345,7 @@ export class StockfishService {
       this.isReady = false;
       this.commandQueue = [];
       if (this.rejectInitPromise && typeof this.rejectInitPromise === 'function') {
-        try {
-            this.rejectInitPromise(new Error('Worker terminated during initialization.'));
-        } catch (e) { /* ignore if promise already settled */ }
+        try { this.rejectInitPromise(new Error('Worker terminated during initialization.')); } catch (e) { /* ... */ }
       }
       this.initPromise = new Promise<void>((resolve, reject) => {
         this.resolveInitPromise = resolve;
@@ -368,10 +353,10 @@ export class StockfishService {
       });
 
       if (this.pendingAnalysisRequest) {
-          clearTimeout(this.pendingAnalysisRequest.timeoutId);
-          try {
-            this.pendingAnalysisRequest.reject(new Error('Worker terminated during analysis request'));
-          } catch (e) { /* ignore if promise already settled */ }
+          if (this.pendingAnalysisRequest.isActive) {
+            clearTimeout(this.pendingAnalysisRequest.timeoutId);
+            try { this.pendingAnalysisRequest.reject(new Error('Worker terminated during analysis request')); } catch (e) { /* ... */ }
+          }
           this.pendingAnalysisRequest = null;
       }
     }

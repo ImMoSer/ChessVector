@@ -54,8 +54,8 @@ export class WebhookService {
 
     const hardcodedPayload: PuzzleRequestPayload = {
       lichess_id: "valid_all",
-      pieceCount: 8,
-      rating: 600
+      pieceCount: 10,
+      rating: 1800
     };
 
     logger.info(`[WebhookService] Sending POST request to: ${this.puzzleWebhookUrl}`);
