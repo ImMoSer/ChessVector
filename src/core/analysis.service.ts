@@ -1,25 +1,40 @@
 // src/core/analysis.service.ts
 import logger from '../utils/logger';
-import type { StockfishService, EvaluatedLine, AnalysisOptions } from './stockfish.service';
+import type { StockfishService, EvaluatedLine, AnalysisOptions, ScoreInfo } from './stockfish.service';
 import type { BoardHandler, MoveMadeEventData, PgnNavigatedEventData } from './boardHandler';
 import { PgnService, type PgnNode } from './pgn.service';
-import type { Key } from 'chessground/types';
-import type { CustomDrawShape } from './chessboard.service'; // Импортируем CustomDrawShape
+import type { Key,  } from 'chessground/types'; // Color импортирован
+import type { CustomDrawShape } from './chessboard.service'; 
+
+import { Chess } from 'chessops/chess';
+import type { Color as ChessopsColor } from 'chessops/types'; // Color импортирован
+import { parseFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+import { makeSan } from 'chessops/san';
+
+
+export interface EvaluatedLineWithSan extends EvaluatedLine {
+  pvSan: string[];
+  startingFen: string; // FEN, с которого начинается эта линия PV
+  // Добавляем информацию для корректной нумерации в UI
+  initialFullMoveNumber: number;
+  initialTurn: ChessopsColor; // 'white' или 'black'
+}
 
 export interface AnalysisStateForUI {
   isActive: boolean;
   isLoading: boolean;
-  lines: EvaluatedLine[] | null;
+  lines: EvaluatedLineWithSan[] | null; 
   currentFenAnalyzed: string | null; 
 }
 
-const DEFAULT_ANALYSIS_DEPTH = 15;
+const DEFAULT_ANALYSIS_DEPTH = 10;
 const DEFAULT_ANALYSIS_LINES = 3;
 const ANALYSIS_REQUEST_TIMEOUT = 20000; 
 
 const ARROW_BRUSHES = {
-  bestLine: 'blue',   
-  secondLine: 'green', 
+  bestLine: 'green',   
+  secondLine: 'yellow', 
   thirdLine: 'red',   
 };
 
@@ -30,7 +45,7 @@ export class AnalysisService {
 
   private isActive: boolean = false;
   private isLoadingAnalysis: boolean = false;
-  private currentAnalysisLines: EvaluatedLine[] | null = null;
+  private currentAnalysisLines: EvaluatedLineWithSan[] | null = null; 
   private currentFenForAnalysis: string | null = null; 
   private currentAnalysisNodePath: string | null = null; 
 
@@ -170,6 +185,36 @@ export class AnalysisService {
     }
   }
 
+  private _convertUciToSanForLine(fen: string, pvUci: string[]): { pvSan: string[], initialFullMoveNumber: number, initialTurn: ChessopsColor } {
+    const sanMoves: string[] = [];
+    let initialFullMoveNumber = 1;
+    let initialTurn: ChessopsColor = 'white';
+
+    try {
+      const setup = parseFen(fen).unwrap();
+      const pos = Chess.fromSetup(setup).unwrap(); 
+      initialFullMoveNumber = pos.fullmoves;
+      initialTurn = pos.turn;
+      
+      for (const uciMove of pvUci) {
+        const move = parseUci(uciMove);
+        if (move) {
+          const san = makeSan(pos, move);
+          sanMoves.push(san);
+          pos.play(move); 
+        } else {
+          sanMoves.push(uciMove); 
+          logger.warn(`[AnalysisService] Failed to parse UCI move for SAN conversion: ${uciMove}`);
+          break; 
+        }
+      }
+    } catch (e) {
+      logger.error('[AnalysisService] Error converting UCI to SAN for line:', e);
+      return { pvSan: pvUci, initialFullMoveNumber: 1, initialTurn: 'white' }; // Fallback
+    }
+    return { pvSan: sanMoves, initialFullMoveNumber, initialTurn };
+  }
+
   private async _requestAndDisplayAnalysis(): Promise<void> {
     if (!this.isActive || !this.currentFenForAnalysis) {
       logger.warn('[AnalysisService _requestAndDisplayAnalysis] Analysis not active or no FEN. Aborting.');
@@ -193,10 +238,10 @@ export class AnalysisService {
 
     this.isLoadingAnalysis = true;
     this.currentAnalysisLines = null; 
-    // Очистка рисунков теперь перед установкой новых
-    // this.boardHandler.clearAllDrawings(); 
-    this._notifySubscribers();
+    this._notifySubscribers(); 
     logger.info(`[AnalysisService promiseId: ${promiseId}] Requesting analysis from Stockfish for FEN: ${this.currentFenForAnalysis}`);
+
+    this.boardHandler.clearAllDrawings(); 
 
     if (this.analysisTimeoutId) { 
         clearTimeout(this.analysisTimeoutId);
@@ -206,7 +251,12 @@ export class AnalysisService {
       if (this.isLoadingAnalysis && this.currentAnalysisPromiseId === promiseId) { 
           logger.warn(`[AnalysisService promiseId: ${promiseId}] Stockfish analysis request timed out for FEN: ${this.currentFenForAnalysis}`);
           this.isLoadingAnalysis = false;
-          this.currentAnalysisLines = [{id: 0, depth: 0, score: {type: 'cp', value:0}, pvUci: ['timeout'] }]; 
+          this.currentAnalysisLines = [{
+              id: 0, depth: 0, score: {type: 'cp', value:0} as ScoreInfo, 
+              pvUci: ['timeout'], pvSan: ['таймаут'], 
+              startingFen: this.currentFenForAnalysis || '', 
+              initialFullMoveNumber: 1, initialTurn: 'white'
+          }]; 
           this._notifySubscribers();
       }
     }, ANALYSIS_REQUEST_TIMEOUT);
@@ -228,14 +278,25 @@ export class AnalysisService {
       if(this.analysisTimeoutId) clearTimeout(this.analysisTimeoutId); 
       this.analysisTimeoutId = null;
 
-      if (result && result.evaluatedLines && result.evaluatedLines.length > 0) {
-        this.currentAnalysisLines = result.evaluatedLines;
-        logger.info(`[AnalysisService promiseId: ${promiseId}] Analysis received. Best move: ${result.bestMoveUci}. Lines:`, this.currentAnalysisLines);
-        this._drawAnalysisResult(); // Используем новый метод
+      if (result && result.evaluatedLines && result.evaluatedLines.length > 0 && this.currentFenForAnalysis) {
+        const fenForSanConversion = this.currentFenForAnalysis; // FEN перед первым ходом линии
+        const linesWithSan: EvaluatedLineWithSan[] = result.evaluatedLines.map(line => {
+            const conversionResult = this._convertUciToSanForLine(fenForSanConversion, line.pvUci);
+            return {
+                ...line,
+                pvSan: conversionResult.pvSan,
+                startingFen: fenForSanConversion,
+                initialFullMoveNumber: conversionResult.initialFullMoveNumber,
+                initialTurn: conversionResult.initialTurn,
+            };
+        });
+        this.currentAnalysisLines = linesWithSan;
+        logger.info(`[AnalysisService promiseId: ${promiseId}] Analysis received. Best move: ${result.bestMoveUci}. Lines (with SAN):`, this.currentAnalysisLines);
+        this._drawAnalysisResult(); 
       } else {
         logger.warn(`[AnalysisService promiseId: ${promiseId}] Stockfish returned no lines or an empty result.`);
         this.currentAnalysisLines = null;
-        this.boardHandler.clearAllDrawings(); // Очищаем, если нет линий
+        this.boardHandler.clearAllDrawings(); 
       }
     } catch (error) {
       logger.error(`[AnalysisService promiseId: ${promiseId}] Error getting analysis from Stockfish:`, error);
@@ -243,7 +304,7 @@ export class AnalysisService {
         this.currentAnalysisLines = null;
         if(this.analysisTimeoutId) clearTimeout(this.analysisTimeoutId);
         this.analysisTimeoutId = null;
-        this.boardHandler.clearAllDrawings(); // Очищаем при ошибке
+        this.boardHandler.clearAllDrawings(); 
       }
     } finally {
       if (this.currentAnalysisPromiseId === promiseId) {
@@ -253,7 +314,6 @@ export class AnalysisService {
     }
   }
 
-  // Новый метод для сборки всех фигур и их установки
   private _drawAnalysisResult(): void {
     if (!this.currentAnalysisLines || this.currentAnalysisLines.length === 0) {
       this.boardHandler.clearAllDrawings();
@@ -262,7 +322,7 @@ export class AnalysisService {
 
     const shapesToDraw: CustomDrawShape[] = [];
     this.currentAnalysisLines.slice(0, 3).forEach((line, index) => {
-      if (line.pvUci && line.pvUci.length > 0) {
+      if (line.pvUci && line.pvUci.length > 0) { 
         const uciMove = line.pvUci[0]; 
         const orig = uciMove.substring(0, 2) as Key;
         const dest = uciMove.substring(2, 4) as Key;
@@ -274,14 +334,11 @@ export class AnalysisService {
       }
     });
 
-    this.boardHandler.clearAllDrawings(); // Очищаем перед отрисовкой нового набора
+    this.boardHandler.clearAllDrawings(); 
     if (shapesToDraw.length > 0) {
       this.boardHandler.setDrawableShapes(shapesToDraw);
     }
   }
-
-  // Старый метод _drawAnalysisLines удален, так как его логика перенесена в _drawAnalysisResult
-  // private _drawAnalysisLines(): void { ... } 
 
   private _getNodeByPath(path: string): PgnNode | null {
     const originalPath = this.pgnServiceInstance.getCurrentPath();

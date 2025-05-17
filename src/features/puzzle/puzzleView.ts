@@ -2,12 +2,13 @@
 import { h } from 'snabbdom';
 import type { VNode, Hooks } from 'snabbdom';
 import type { Key } from 'chessground/types';
-import type { PuzzleController } from './PuzzleController'; // Предполагается, что PuzzleController будет обновлен
+import type { PuzzleController } from './PuzzleController';
 import { BoardView } from '../../shared/components/boardView';
 import logger from '../../utils/logger';
 import { renderPromotionDialog } from '../common/promotion/promotionView';
-import type { EvaluatedLine }
-from '../../core/stockfish.service'; // Для типизации линий анализа
+import type { EvaluatedLineWithSan } from '../../core/analysis.service';
+import type { Color as ChessopsColor } from 'chessops/types';
+
 
 let boardViewInstance: BoardView | null = null;
 
@@ -17,7 +18,6 @@ export interface PuzzlePageViewLayout {
   right: VNode | null;
 }
 
-// Вспомогательная функция для отображения вариантов PGN
 function renderVariations(controller: PuzzleController): VNode | null {
   if (!controller.boardHandler.isBoardConfiguredForAnalysis()) {
     return null;
@@ -59,7 +59,52 @@ function renderVariations(controller: PuzzleController): VNode | null {
   ]);
 }
 
-// Новая вспомогательная функция для отображения линий анализа
+function formatSanLine(
+    pvSan: string[], 
+    initialFullMoveNumber: number, 
+    initialTurn: ChessopsColor,
+    controller: PuzzleController, // Для обработчика клика
+    lineIndexForLog: number // Для логирования
+): VNode[] {
+    const elements: VNode[] = [];
+    let currentMoveNumber = initialFullMoveNumber;
+    let currentTurn = initialTurn;
+
+    pvSan.forEach((sanMove, moveIndex) => {
+        const uciMoveForClick = controller.state.analysisUiState?.lines?.[lineIndexForLog]?.pvUci[moveIndex];
+
+        if (currentTurn === 'white') {
+            elements.push(h('span.move-number', `${currentMoveNumber}. `));
+        } else if (moveIndex === 0) { // Первый ход черных в варианте
+            elements.push(h('span.move-number', `${currentMoveNumber}... `));
+        }
+
+        elements.push(h('span.pv-move', {
+            style: {
+                cursor: uciMoveForClick ? 'pointer' : 'default',
+                textDecoration: uciMoveForClick ? 'underline' : 'none',
+                color: uciMoveForClick ? 'var(--color-text-link)' : 'inherit',
+                marginRight: '5px'
+            },
+            on: {
+                click: () => {
+                    if (uciMoveForClick && controller.boardHandler.isBoardConfiguredForAnalysis()) {
+                        logger.info(`[puzzleView] Clicked analysis move: ${uciMoveForClick} from line ${lineIndexForLog}, SAN: ${sanMove}`);
+                        controller.handlePlayAnalysisMove(uciMoveForClick);
+                    }
+                }
+            }
+        }, sanMove));
+
+        if (currentTurn === 'black') {
+            currentMoveNumber++;
+        }
+        currentTurn = currentTurn === 'white' ? 'black' : 'white';
+    });
+    return elements;
+}
+
+
 function renderAnalysisLines(controller: PuzzleController): VNode {
   const analysisState = controller.state.analysisUiState;
 
@@ -84,10 +129,12 @@ function renderAnalysisLines(controller: PuzzleController): VNode {
   return h('div.analysis-lines-container', { style: { marginTop: '15px', fontFamily: 'monospace', fontSize: '0.9em', borderTop: '1px solid var(--color-border)', paddingTop: '10px' } }, [
     h('h4.analysis-title', { style: { margin: '0 0 10px 0', color: 'var(--color-text-muted)' } }, 'Линии Анализа:'),
     h('ul.analysis-list', { style: { listStyle: 'none', padding: '0', margin: '0' } }, 
-      analysisState.lines.map((line: EvaluatedLine, lineIndex: number) => {
+      analysisState.lines.map((line: EvaluatedLineWithSan, lineIndex: number) => {
         const scoreType = line.score.type;
         const scoreValue = scoreType === 'cp' ? (line.score.value / 100).toFixed(2) : `мат в ${line.score.value}`;
         
+        const formattedPvNodes = formatSanLine(line.pvSan, line.initialFullMoveNumber, line.initialTurn, controller, lineIndex);
+
         return h('li.analysis-line-item', { 
           style: { 
             marginBottom: '8px', 
@@ -96,33 +143,7 @@ function renderAnalysisLines(controller: PuzzleController): VNode {
           } 
         }, [
           h('div.line-info', `Гл: ${line.depth}, Оценка: ${scoreValue}`),
-          h('div.line-pv', [
-            'PV: ',
-            ...line.pvUci.map((uciMove, moveIndex) => 
-              h('span.pv-move', {
-                style: { 
-                  cursor: 'pointer', 
-                  marginLeft: moveIndex > 0 ? '5px' : '0',
-                  textDecoration: 'underline',
-                  color: 'var(--color-text-link)'
-                },
-                on: {
-                  click: () => {
-                    if (controller.boardHandler.isBoardConfiguredForAnalysis()) {
-                       // Для простоты пока будем проигрывать только первый ход варианта
-                       // В будущем можно реализовать проигрывание всей линии или навигацию по ней
-                       if (moveIndex === 0) {
-                           logger.info(`[puzzleView] Clicked analysis move: ${uciMove} from line ${lineIndex}`);
-                           controller.handlePlayAnalysisMove(uciMove);
-                       } else {
-                           logger.info(`[puzzleView] Clicked subsequent analysis move ${uciMove} - not yet implemented for direct play.`);
-                       }
-                    }
-                  }
-                }
-              }, uciMove)
-            )
-          ])
+          h('div.line-pv', ['PV: ', ...formattedPvNodes])
         ]);
       })
     )
@@ -363,7 +384,6 @@ export function renderPuzzleUI(controller: PuzzleController): PuzzlePageViewLayo
         on: { click: () => controller.handleSetFen() }
       }, 'Установить FEN'),
     ]),
-    // Контейнер для вывода анализа, будет заполнен если анализ активен
     renderAnalysisLines(controller) 
   ]);
 
