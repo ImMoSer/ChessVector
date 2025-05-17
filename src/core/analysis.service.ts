@@ -4,6 +4,7 @@ import type { StockfishService, EvaluatedLine, AnalysisOptions } from './stockfi
 import type { BoardHandler, MoveMadeEventData, PgnNavigatedEventData } from './boardHandler';
 import { PgnService, type PgnNode } from './pgn.service';
 import type { Key } from 'chessground/types';
+import type { CustomDrawShape } from './chessboard.service'; // Импортируем CustomDrawShape
 
 export interface AnalysisStateForUI {
   isActive: boolean;
@@ -34,7 +35,7 @@ export class AnalysisService {
   private currentAnalysisNodePath: string | null = null; 
 
   private analysisTimeoutId: number | null = null;
-  private currentAnalysisPromiseId: number = 0; // Для отслеживания актуального промиса
+  private currentAnalysisPromiseId: number = 0; 
 
   private onAnalysisUpdateSubscribers: Array<(state: AnalysisStateForUI) => void> = [];
 
@@ -75,8 +76,6 @@ export class AnalysisService {
   public startAnalysis(nodePath?: string): void {
     logger.info(`[AnalysisService] Attempting to start analysis. Requested nodePath: ${nodePath}`);
     this.isActive = true;
-    // Не сбрасываем isLoadingAnalysis здесь, это сделает _requestAndDisplayAnalysis
-    // this.currentAnalysisLines = null; // Очистится в _requestAndDisplayAnalysis
     this.boardHandler.configureBoardForAnalysis(true);
 
     const pathToAnalyze = nodePath || this.pgnServiceInstance.getCurrentPath();
@@ -86,7 +85,7 @@ export class AnalysisService {
     if (pgnNode) {
       this.currentFenForAnalysis = pgnNode.fenAfter;
       logger.info(`[AnalysisService] Starting analysis for PGN Path: ${pathToAnalyze}, FEN: ${this.currentFenForAnalysis}`);
-      this._requestAndDisplayAnalysis(); // Запускаем новый анализ
+      this._requestAndDisplayAnalysis(); 
     } else {
       this.currentFenForAnalysis = this.boardHandler.getFen(); 
       logger.warn(`[AnalysisService] Could not find PGN node for path: ${pathToAnalyze}. Using current board FEN: ${this.currentFenForAnalysis} for initial analysis.`);
@@ -98,21 +97,19 @@ export class AnalysisService {
         this.boardHandler.configureBoardForAnalysis(false);
       }
     }
-    this._notifySubscribers(); // Уведомить, что isActive=true
+    this._notifySubscribers(); 
   }
 
   public stopAnalysis(): void {
     logger.info('[AnalysisService] Stopping analysis.');
     this.isActive = false;
-    this.isLoadingAnalysis = false; // Важно сбросить флаг загрузки
-    this.currentAnalysisPromiseId++; // Инкрементируем ID, чтобы текущие промисы анализа поняли, что они устарели
+    this.isLoadingAnalysis = false; 
+    this.currentAnalysisPromiseId++; 
 
     if (this.analysisTimeoutId) {
       clearTimeout(this.analysisTimeoutId);
       this.analysisTimeoutId = null;
     }
-    // Посылаем команду stop в StockfishService, если он ее поддерживает
-    // this.stockfishService.sendCommand('stop'); // Зависит от реализации StockfishService
     
     this.boardHandler.configureBoardForAnalysis(false);
     this.boardHandler.clearAllDrawings(); 
@@ -159,7 +156,6 @@ export class AnalysisService {
       logger.info(`[AnalysisService] Board move detected. Requesting new analysis for PGN Path: ${this.currentAnalysisNodePath}, FEN: ${this.currentFenForAnalysis}`);
       this._requestAndDisplayAnalysis();
     }
-    // _notifySubscribers() будет вызван из _requestAndDisplayAnalysis
   }
 
   private _handlePgnNavigated(data: PgnNavigatedEventData): void {
@@ -172,29 +168,23 @@ export class AnalysisService {
       logger.info(`[AnalysisService] PGN navigation detected. Requesting new analysis for PGN Path: ${this.currentAnalysisNodePath}, FEN: ${this.currentFenForAnalysis}`);
       this._requestAndDisplayAnalysis();
     }
-     // _notifySubscribers() будет вызван из _requestAndDisplayAnalysis
   }
 
   private async _requestAndDisplayAnalysis(): Promise<void> {
     if (!this.isActive || !this.currentFenForAnalysis) {
       logger.warn('[AnalysisService _requestAndDisplayAnalysis] Analysis not active or no FEN. Aborting.');
-      if (this.isLoadingAnalysis) { // Если мы прерываем из-за неактивности, но загрузка шла
+      if (this.isLoadingAnalysis) { 
           this.isLoadingAnalysis = false;
           this._notifySubscribers();
       }
       return;
     }
 
-    // Увеличиваем ID для нового запроса
     this.currentAnalysisPromiseId++;
     const promiseId = this.currentAnalysisPromiseId;
 
-    // Если уже идет анализ, и это не тот же самый FEN (на всякий случай, хотя path должен быть главным)
-    // или если просто хотим прервать предыдущий и начать новый
     if (this.isLoadingAnalysis) {
         logger.warn('[AnalysisService _requestAndDisplayAnalysis] Previous analysis request in progress. Attempting to stop it and start new one.');
-        // Попытка остановить предыдущий анализ в Stockfish, если это возможно
-        // this.stockfishService.sendCommand('stop'); // Зависит от StockfishService
         if (this.analysisTimeoutId) {
             clearTimeout(this.analysisTimeoutId);
             this.analysisTimeoutId = null;
@@ -203,19 +193,19 @@ export class AnalysisService {
 
     this.isLoadingAnalysis = true;
     this.currentAnalysisLines = null; 
-    this.boardHandler.clearAllDrawings(); 
+    // Очистка рисунков теперь перед установкой новых
+    // this.boardHandler.clearAllDrawings(); 
     this._notifySubscribers();
     logger.info(`[AnalysisService promiseId: ${promiseId}] Requesting analysis from Stockfish for FEN: ${this.currentFenForAnalysis}`);
 
-    if (this.analysisTimeoutId) { // Очищаем предыдущий таймаут, если он был
+    if (this.analysisTimeoutId) { 
         clearTimeout(this.analysisTimeoutId);
     }
     this.analysisTimeoutId = window.setTimeout(() => {
-      this.analysisTimeoutId = null; // Сбрасываем ID таймаута
-      if (this.isLoadingAnalysis && this.currentAnalysisPromiseId === promiseId) { // Проверяем, что это таймаут для текущего запроса
+      this.analysisTimeoutId = null; 
+      if (this.isLoadingAnalysis && this.currentAnalysisPromiseId === promiseId) { 
           logger.warn(`[AnalysisService promiseId: ${promiseId}] Stockfish analysis request timed out for FEN: ${this.currentFenForAnalysis}`);
           this.isLoadingAnalysis = false;
-          // this.stockfishService.sendCommand('stop'); 
           this.currentAnalysisLines = [{id: 0, depth: 0, score: {type: 'cp', value:0}, pvUci: ['timeout'] }]; 
           this._notifySubscribers();
       }
@@ -228,51 +218,49 @@ export class AnalysisService {
       };
       const result = await this.stockfishService.getAnalysis(this.currentFenForAnalysis, options);
 
-      // Проверяем, не был ли анализ остановлен или не начался ли новый запрос, пока этот выполнялся
       if (!this.isActive || this.currentAnalysisPromiseId !== promiseId) { 
         logger.info(`[AnalysisService promiseId: ${promiseId}] Analysis was stopped or superseded while waiting for Stockfish result.`);
-        // isLoadingAnalysis и currentAnalysisLines уже могли быть изменены новым запросом или stopAnalysis
-        // Если isLoadingAnalysis все еще true для этого промиса, сбрасываем
         if (this.isLoadingAnalysis && this.currentAnalysisPromiseId === promiseId) this.isLoadingAnalysis = false;
-        if(this.analysisTimeoutId && this.currentAnalysisPromiseId === promiseId) clearTimeout(this.analysisTimeoutId); // Очищаем таймаут, если он еще активен для этого промиса
-        // Не вызываем _notifySubscribers здесь, так как состояние могло быть обновлено другим процессом
+        if(this.analysisTimeoutId && this.currentAnalysisPromiseId === promiseId) clearTimeout(this.analysisTimeoutId); 
         return;
       }
       
-      if(this.analysisTimeoutId) clearTimeout(this.analysisTimeoutId); // Успешное завершение, очищаем таймаут
+      if(this.analysisTimeoutId) clearTimeout(this.analysisTimeoutId); 
       this.analysisTimeoutId = null;
 
       if (result && result.evaluatedLines && result.evaluatedLines.length > 0) {
         this.currentAnalysisLines = result.evaluatedLines;
         logger.info(`[AnalysisService promiseId: ${promiseId}] Analysis received. Best move: ${result.bestMoveUci}. Lines:`, this.currentAnalysisLines);
-        this._drawAnalysisLines();
+        this._drawAnalysisResult(); // Используем новый метод
       } else {
         logger.warn(`[AnalysisService promiseId: ${promiseId}] Stockfish returned no lines or an empty result.`);
         this.currentAnalysisLines = null;
+        this.boardHandler.clearAllDrawings(); // Очищаем, если нет линий
       }
     } catch (error) {
       logger.error(`[AnalysisService promiseId: ${promiseId}] Error getting analysis from Stockfish:`, error);
-      if (this.currentAnalysisPromiseId === promiseId) { // Обновляем состояние только если это был текущий промис
+      if (this.currentAnalysisPromiseId === promiseId) { 
         this.currentAnalysisLines = null;
         if(this.analysisTimeoutId) clearTimeout(this.analysisTimeoutId);
         this.analysisTimeoutId = null;
+        this.boardHandler.clearAllDrawings(); // Очищаем при ошибке
       }
     } finally {
-      // Устанавливаем isLoadingAnalysis = false только если это был последний активный промис
       if (this.currentAnalysisPromiseId === promiseId) {
         this.isLoadingAnalysis = false;
       }
-      // Уведомляем подписчиков в любом случае, чтобы UI обновился (например, убрал спиннер)
       this._notifySubscribers();
     }
   }
 
-  private _drawAnalysisLines(): void {
+  // Новый метод для сборки всех фигур и их установки
+  private _drawAnalysisResult(): void {
     if (!this.currentAnalysisLines || this.currentAnalysisLines.length === 0) {
+      this.boardHandler.clearAllDrawings();
       return;
     }
-    this.boardHandler.clearAllDrawings();
 
+    const shapesToDraw: CustomDrawShape[] = [];
     this.currentAnalysisLines.slice(0, 3).forEach((line, index) => {
       if (line.pvUci && line.pvUci.length > 0) {
         const uciMove = line.pvUci[0]; 
@@ -282,30 +270,32 @@ export class AnalysisService {
         if (index === 1) brush = ARROW_BRUSHES.secondLine;
         if (index === 2) brush = ARROW_BRUSHES.thirdLine;
         
-        this.boardHandler.drawArrow(orig, dest, brush);
+        shapesToDraw.push({ orig, dest, brush });
       }
     });
+
+    this.boardHandler.clearAllDrawings(); // Очищаем перед отрисовкой нового набора
+    if (shapesToDraw.length > 0) {
+      this.boardHandler.setDrawableShapes(shapesToDraw);
+    }
   }
+
+  // Старый метод _drawAnalysisLines удален, так как его логика перенесена в _drawAnalysisResult
+  // private _drawAnalysisLines(): void { ... } 
 
   private _getNodeByPath(path: string): PgnNode | null {
     const originalPath = this.pgnServiceInstance.getCurrentPath();
     let node: PgnNode | null = null;
 
-    // Если PgnService уже на нужном пути, просто берем текущий узел
     if (originalPath === path) {
         node = this.pgnServiceInstance.getCurrentNode();
-    } else { // Иначе, пытаемся навигироваться
+    } else { 
         if (this.pgnServiceInstance.navigateToPath(path)) {
             node = this.pgnServiceInstance.getCurrentNode();
         } else {
             logger.warn(`[AnalysisService] _getNodeByPath: Failed to navigate to path ${path} in PgnService.`);
         }
         
-        // Возвращаемся на исходный путь, если он отличался и навигация была успешной
-        // Это может быть не всегда желаемым поведением, зависит от логики PgnService.
-        // Если navigateToPath меняет состояние PgnService перманентно, то этот возврат может быть не нужен
-        // или должен координироваться с тем, как BoardHandler и другие части ожидают состояние PgnService.
-        // Для _getNodeByPath, которое просто *получает* узел, лучше не менять состояние PgnService перманентно.
         if (this.pgnServiceInstance.getCurrentPath() !== originalPath) {
             if (!this.pgnServiceInstance.navigateToPath(originalPath)) {
                 logger.error(`[AnalysisService] _getNodeByPath: Critical error! Failed to navigate back to original path ${originalPath}.`);

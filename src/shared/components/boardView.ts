@@ -56,12 +56,6 @@ export class BoardView {
         } else {
              this.chessboardService.init(this.container, initialConfig);
         }
-
-        // No need to call updateView() here if initBoard is called with full config
-        // and BoardHandler's state is already correct for the initial setup.
-        // However, if there's a chance BoardHandler's state might be more up-to-date
-        // than what _getBoardConfig can surmise initially, then call updateView().
-        // For safety, let's call it, but it might be redundant if _getBoardConfig is perfect.
         this.updateView(); 
         logger.info('[BoardView] Board initialized/verified and view updated.');
     }
@@ -80,8 +74,6 @@ export class BoardView {
             movableColor = undefined;
             dests = new Map();
         }
-        // If isConfiguredForAnalysis, movableColor remains initialTurnColor,
-        // and dests are already the possible moves for that turn.
 
         return {
             fen: initialFen,
@@ -103,11 +95,11 @@ export class BoardView {
                 showDests: true,
             },
             premovable: {
-                enabled: false, // Explicitly false, not managed by this app version
+                enabled: false, 
             },
             highlight: {
                 lastMove: true,
-                check: true, // Chessground will use turnColor to determine which king to highlight
+                check: true, 
             },
             animation: {
                 enabled: true,
@@ -117,17 +109,19 @@ export class BoardView {
                 select: (key: Key) => {
                     logger.debug(`[BoardView] Square selected by user: ${key}`);
                 },
-                // insert: (elements: cg.Elements) => void; // If needed
             },
             drawable: {
-                enabled: true, // Allows drawing shapes via API
-                // Other drawable options can be set here if needed
+                enabled: true, 
+                eraseOnClick: false, // ИЗМЕНЕНИЕ: Явно отключаем стирание по клику
+                shapes: [], // Начальные shapes - пустой массив
+                // brushes: {}, // Можно определить кастомные кисти здесь, если нужно
             }
         };
     }
 
     public updateView(): void {
-        if (!this.chessboardService.ground) {
+        const ground = this.chessboardService.ground;
+        if (!ground) {
             logger.warn('[BoardView] updateView called but ground is not initialized in ChessboardService.');
             if (this.container && this.container.isConnected) {
                 logger.warn('[BoardView] Attempting to re-initialize board as container exists and ground is missing.');
@@ -139,7 +133,7 @@ export class BoardView {
         const gameStatus: GameStatus = this.boardHandler.getGameStatus();
         const currentFen = this.boardHandler.getFen().split(' ')[0];
         const turnColor = this.boardHandler.getBoardTurnColor(); 
-        const orientation = this.boardHandler.getHumanPlayerColor() || this.chessboardService.ground.state.orientation;
+        const orientation = this.boardHandler.getHumanPlayerColor() || ground.state.orientation;
         const isConfiguredForAnalysis = this.boardHandler.isBoardConfiguredForAnalysis();
 
         let lastMoveUciArray: [Key, Key] | undefined = undefined;
@@ -161,10 +155,9 @@ export class BoardView {
             movableColor = undefined;
             destsForGround = new Map();
         }
-        // If isConfiguredForAnalysis, movableColor remains turnColor,
-        // and destsForGround are already the possible moves for that turn.
 
-        this.chessboardService.ground.set({
+        // Собираем новую конфигурацию, сохраняя существующие drawable shapes
+        const newConfig: Partial<ChessgroundConfig> = {
             fen: currentFen,
             turnColor: turnColor, 
             orientation: orientation,
@@ -173,12 +166,19 @@ export class BoardView {
                 color: movableColor, 
                 dests: destsForGround, 
                 showDests: true,
-                // events.after is set during init and should persist
+                // events.after не меняется, остается из initialConfig
             },
             check: gameStatus.isCheck ? true : undefined, 
             lastMove: lastMoveUciArray,
-        });
-        // logger.debug(`[BoardView updateView] Updated. FEN: ${currentFen}, Turn: ${turnColor}, Movable: ${movableColor}, Check: ${gameStatus.isCheck}`);
+            drawable: {
+                // Распространяем существующие настройки drawable (например, enabled, eraseOnClick)
+                ...(ground.state.drawable || { enabled: true, eraseOnClick: false }), 
+                // Явно передаем текущие shapes, чтобы они не сбросились
+                shapes: ground.state.drawable.shapes || [] 
+            }
+        };
+        
+        ground.set(newConfig);
     }
 
     public drawShapes(shapes: CustomDrawShape[]): void {
@@ -199,11 +199,6 @@ export class BoardView {
 
     public destroy(): void {
         window.removeEventListener('centerPanelResized', this.boundHandleAppPanelResize);
-        // Chessground instance itself is managed by ChessboardService.
-        // If BoardView instance is destroyed, it should not necessarily destroy the
-        // ChessboardService's ground instance if that service is a singleton used elsewhere.
-        // However, if BoardView "owns" its ground instance via ChessboardService, then:
-        // this.chessboardService.destroy(); // This would be called if ChessboardService instance is per BoardView
         logger.info('[BoardView] Destroyed, removed centerPanelResized listener.');
     }
 }
