@@ -133,7 +133,6 @@ export function renderPuzzleUI(controller: PuzzleController): PuzzlePageViewLayo
         h('span.info-label', 'Rating: '),
         h('span.info-value', `${puzzleControllerState.activePuzzle.Rating || 'N/A'}`)
     ]));
-    // Используем currentPuzzlePieceCount из состояния контроллера
     if (puzzleControllerState.currentPuzzlePieceCount > 0) {
         puzzleInfoItems.push(h('div.info-item', [
             h('span.info-label', 'Level (Pieces): '),
@@ -144,56 +143,103 @@ export function renderPuzzleUI(controller: PuzzleController): PuzzlePageViewLayo
 
   const leftContent = h('div.puzzle-left-content', {
     style: {
-        padding: '10px', // Add some padding
+        padding: '10px',
         fontSize: '0.9em',
-        lineHeight: '1.6'
+        lineHeight: '1.6',
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100%' 
     }
   }, [
-    h('h3', { style: { marginTop: '0', marginBottom: '15px', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px' } }, 'Puzzle Details'),
+    h('h3', { style: { marginTop: '0', marginBottom: '15px', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px', flexShrink: '0' } }, 'Puzzle Details'),
     puzzleControllerState.activePuzzle
-      ? h('div.puzzle-details-list', puzzleInfoItems)
-      : h('p', {style: {color: 'var(--color-text-muted)'}}, 'Load a puzzle to see details.'),
-    // PGN display will go here later
-    // h('div#pgn-display-container', { style: { marginTop: '20px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', border: '1px solid var(--color-border)', padding: '10px', maxHeight: '300px', overflowY: 'auto' } },
-    //   puzzleControllerState.currentPgnString || "PGN will appear here..."
-    // )
+      ? h('div.puzzle-details-list', { style: { marginBottom: '20px', flexShrink: '0'} }, puzzleInfoItems)
+      : h('p', {style: {color: 'var(--color-text-muted)', marginBottom: '20px', flexShrink: '0'}}, 'Load a puzzle to see details.'),
+
+    h('h4', { style: { marginTop: '0', marginBottom: '10px', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px', flexShrink: '0' } }, 'Game Notation (PGN)'),
+    h('div#pgn-display-container', {
+        style: {
+            fontFamily: 'monospace, "Courier New", Courier',
+            whiteSpace: 'pre-wrap', 
+            border: '1px solid var(--color-border)',
+            padding: '10px',
+            backgroundColor: 'var(--color-bg-tertiary)', 
+            borderRadius: 'var(--panel-border-radius)',
+            overflowY: 'auto', 
+            flexGrow: '1', 
+            minHeight: '100px', 
+            fontSize: '0.9em', 
+        }
+      },
+      puzzleControllerState.currentPgnString || "PGN will appear here..."
+    )
   ]);
   // --- End Left Panel Content ---
 
   const isPuzzleActive = !!puzzleControllerState.activePuzzle;
   const canActivateAnalysis = isPuzzleActive && (puzzleControllerState.gameOverMessage || puzzleControllerState.isInPlayOutMode);
 
+  // --- PGN Navigation Buttons ---
+  let pgnNavigationControls: VNode | null = null;
+  if (puzzleControllerState.isAnalysisModeActive) {
+    pgnNavigationControls = h('div#pgn-navigation-controls.button-group', {
+        style: {
+            display: 'flex',
+            justifyContent: 'space-between', // Distribute space between buttons
+            gap: '5px', // Small gap between buttons in the group
+            marginBottom: '10px' // Space below the navigation group
+        }
+    }, [
+        h('button.button.pgn-nav-button', {
+            attrs: { disabled: !controller.canNavigatePgnBackward() || boardHandler.promotionCtrl.isActive() },
+            on: { click: () => controller.handlePgnNavToStart() }
+        }, '|◀ Start'),
+        h('button.button.pgn-nav-button', {
+            attrs: { disabled: !controller.canNavigatePgnBackward() || boardHandler.promotionCtrl.isActive() },
+            on: { click: () => controller.handlePgnNavBackward() }
+        }, '◀ Previous'),
+        h('button.button.pgn-nav-button', {
+            attrs: { disabled: !controller.canNavigatePgnForward() || boardHandler.promotionCtrl.isActive() },
+            on: { click: () => controller.handlePgnNavForward() }
+        }, 'Next ▶'),
+        h('button.button.pgn-nav-button', {
+            attrs: { disabled: !controller.canNavigatePgnForward() || boardHandler.promotionCtrl.isActive() },
+            on: { click: () => controller.handlePgnNavToEnd() }
+        }, 'End ▶|'),
+    ]);
+  }
+  // --- End PGN Navigation Buttons ---
+
+
   const rightContent = h('div.puzzle-right-content', { style: { display: 'flex', flexDirection: 'column', height: '100%' } }, [
-    h('div#puzzle-info-feedback', { style: { textAlign: 'center', marginBottom: '20px', fontSize: '1.1em', flexShrink: '0' } }, [ // Renamed from #puzzle-info to avoid clash
+    h('div#puzzle-info-feedback', { style: { textAlign: 'center', marginBottom: '20px', fontSize: '1.1em', flexShrink: '0' } }, [
       h('p', { style: { fontWeight: 'bold', color: puzzleControllerState.gameOverMessage ? (puzzleControllerState.gameOverMessage.toLowerCase().includes("won") ? 'var(--color-accent-success)' : 'var(--color-accent-error)') : 'var(--color-text-default)' } },
         puzzleControllerState.gameOverMessage || puzzleControllerState.feedbackMessage
       ),
-      // Информация о пазле теперь в левой панели
-      // puzzleControllerState.activePuzzle && !puzzleControllerState.isInPlayOutMode && !puzzleControllerState.gameOverMessage
-      //   ? h('p.puzzle-details', `Puzzle ID: ${puzzleControllerState.activePuzzle.PuzzleId} | Rating: ${puzzleControllerState.activePuzzle.Rating || 'N/A'}`)
-      //   : '',
     ]),
-    h('div#controls', { style: { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '10px', marginTop: 'auto' } }, [
-      h('button.button.puzzle-button.primary-button', { // Next Puzzle
+    // Вставляем блок навигации PGN перед основными кнопками управления, если он есть
+    pgnNavigationControls, 
+    h('div#controls.button-group', { style: { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '10px', marginTop: pgnNavigationControls ? '0' : 'auto' } }, [
+      h('button.button.puzzle-button.primary-button', { 
         attrs: {
           disabled: puzzleControllerState.isStockfishThinking || boardHandler.promotionCtrl.isActive() || puzzleControllerState.isAnalysisModeActive
         },
         on: { click: () => controller.loadAndStartPuzzle() }
       }, 'Next Puzzle'),
-      h('button.button.puzzle-button', { // Restart
+      h('button.button.puzzle-button', { 
         attrs: {
           disabled: !isPuzzleActive || puzzleControllerState.isStockfishThinking || boardHandler.promotionCtrl.isActive() || puzzleControllerState.isAnalysisModeActive
         },
         on: { click: () => controller.handleRestartPuzzle() }
       }, 'Restart'),
-      h('button.button.puzzle-button', { // Analysis
+      h('button.button.puzzle-button', { 
         class: { 'active-analysis': puzzleControllerState.isAnalysisModeActive },
         attrs: {
           disabled: !canActivateAnalysis || puzzleControllerState.isStockfishThinking || boardHandler.promotionCtrl.isActive()
         },
         on: { click: () => controller.handleToggleAnalysisMode() }
       }, puzzleControllerState.isAnalysisModeActive ? 'End Analysis' : 'Analysis'),
-      h('button.button.puzzle-button', { // Set FEN
+      h('button.button.puzzle-button', { 
         attrs: {
           disabled: puzzleControllerState.isStockfishThinking || boardHandler.promotionCtrl.isActive()
         },

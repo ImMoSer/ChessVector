@@ -20,9 +20,9 @@
   --color-accent-info: #0072b1;
   --color-accent-special: #b72fc6;
 
-  --left-panel-width: 240px;
+  --left-panel-width: 400px;
   --initial-center-panel-width: 480px;
-  --right-panel-width: 280px;
+  --right-panel-width: 400px;
   --resize-handle-visual-size: 16px;
   --resize-handle-clickable-size: 24px;
   --page-vertical-padding: 10px;
@@ -375,4 +375,3 @@ body.board-resizing {
   background-color: #005f92; /* Немного темнее для ховера */
   border-color: #005f92;
 }
-

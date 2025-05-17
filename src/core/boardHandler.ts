@@ -1,36 +1,37 @@
 // src/core/boardHandler.ts
 
 import type {
-  Key,
+  Key, 
   Dests,
   Color as ChessgroundColor,
 } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
+import type { CustomDrawShape } from './chessboard.service'; 
 
 import type {
   Role as ChessopsRole,
   Color as ChessopsColor,
   Outcome as ChessopsOutcome,
   Piece as ChessopsPiece,
-  Square as ChessopsSquare,
-  Move as ChessopsMove, // Явно импортируем общий тип Move
-  // NormalMove, // <--- Удалено, так как не используется напрямую
+  Square as ChessopsSquare, 
+  Move as ChessopsMove,
 } from 'chessops/types';
-import { isNormal } from 'chessops/types'; // <--- Импортируем тайпгард isNormal
+import type { Setup as ChessopsSetup } from 'chessops'; 
+import { isNormal } from 'chessops/types'; 
 
 import { Chess } from 'chessops/chess';
 import { parseFen, makeFen } from 'chessops/fen';
 import { makeSan } from 'chessops/san';
-import { parseSquare, makeUci, parseUci } from 'chessops/util';
+import { parseSquare, makeUci, parseUci, makeSquare as chessopsMakeSquare } from 'chessops/util'; 
 import { chessgroundDests } from 'chessops/compat';
 
 import type { ChessboardService } from './chessboard.service';
-import type { CustomDrawShape } from './chessboard.service';
 
 import { PromotionCtrl } from '../features/common/promotion/promotionCtrl';
 import type { PromotingState } from '../features/common/promotion/promotionCtrl';
 import logger from '../utils/logger';
 import { SoundService } from './sound.service';
+import { PgnService, type PgnNode } from './pgn.service';
 
 export type GameEndReason =
   | 'checkmate'
@@ -60,25 +61,23 @@ export interface AttemptMoveResult {
   outcome?: GameEndOutcome;
   promotionStarted?: boolean;
   promotionCompleted?: boolean;
+  isIllegal?: boolean; 
 }
 
 export class BoardHandler {
   private chessboardService: ChessboardService;
   public promotionCtrl: PromotionCtrl;
   private requestRedraw: () => void;
+  public pgnService: typeof PgnService;
 
-  private chessPosition: Chess;
-  public currentFen: string;
-  public boardTurnColor: ChessgroundColor;
-  public possibleMoves: Dests;
-  public moveHistory: Array<{
-    uci: string;
-    san: string;
-    fenBefore: string;
-    fenAfter: string;
-  }> = [];
+
+  private chessPosition!: Chess;
+  public currentFen!: string;
+  public boardTurnColor!: ChessgroundColor;
+  public possibleMoves!: Dests;
 
   private humanPlayerColorInternal: ChessgroundColor = 'white';
+  private isAnalysisActiveInternal: boolean = false;
 
   constructor(
     chessboardService: ChessboardService,
@@ -87,49 +86,115 @@ export class BoardHandler {
     this.chessboardService = chessboardService;
     this.requestRedraw = requestRedraw;
     this.promotionCtrl = new PromotionCtrl(this.requestRedraw);
+    this.pgnService = PgnService; 
 
-    this.chessPosition = Chess.default();
-    this.currentFen = makeFen(this.chessPosition.toSetup());
-    this.boardTurnColor = this.chessPosition.turn;
-    this.possibleMoves = chessgroundDests(this.chessPosition);
-    logger.info(`[BoardHandler] Initialized with FEN: ${this.currentFen}`);
+    this._syncInternalStateWithPgnService();
+    logger.info(`[BoardHandler] Initialized. Current FEN from PgnService: ${this.currentFen}`);
   }
 
-  private _updateBoardState(): void {
+  private _syncInternalStateWithPgnService(): void {
+    const navigatedFen = this.pgnService.getCurrentNavigatedFen();
+    try {
+      const setup: ChessopsSetup = parseFen(navigatedFen).unwrap();
+      this.chessPosition = Chess.fromSetup(setup).unwrap();
+      this._updateBoardStateInternal(); 
+    } catch (e: any) {
+      logger.error(`[BoardHandler] Error syncing internal state with PGN FEN ${navigatedFen}:`, e.message, e);
+      const defaultSetup: ChessopsSetup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+      this.chessPosition = Chess.fromSetup(defaultSetup).unwrap();
+      this._updateBoardStateInternal();
+    }
+  }
+
+  private _updateBoardStateInternal(): void {
     this.currentFen = makeFen(this.chessPosition.toSetup());
     this.boardTurnColor = this.chessPosition.turn;
     this.possibleMoves = chessgroundDests(this.chessPosition);
+    logger.debug(`[BoardHandler _updateBoardStateInternal] FEN: ${this.currentFen}, Turn: ${this.boardTurnColor}, PossibleMoves count: ${this.possibleMoves.size}`);
+  }
+
+  private _updateChessgroundSettings(): void {
+    if (!this.chessboardService.ground) {
+      logger.warn('[BoardHandler _updateChessgroundSettings] Chessground not initialized. Skipping update.');
+      return;
+    }
+    
+    const gameStatus = this.getGameStatus(); 
+
+    // ИСПРАВЛЕНИЕ: Свойство 'check' в Config ожидает boolean или Color, а не Key.
+    // Если gameStatus.isCheck === true, передаем true, чтобы chessground
+    // подсветил короля текущего turnColor (который мы также устанавливаем).
+    const checkHighlight: boolean | ChessgroundColor | undefined = gameStatus.isCheck ? true : undefined;
+
+    const newConfig: Partial<import('chessground/config').Config> = {
+        fen: this.currentFen.split(' ')[0],
+        turnColor: this.boardTurnColor, 
+        movable: {
+            free: false, 
+            color: gameStatus.isGameOver && !this.isAnalysisActiveInternal ? undefined : this.boardTurnColor,
+            dests: this.possibleMoves,
+            showDests: true,
+        },
+        check: checkHighlight, 
+    };
+    
+    if (this.isAnalysisActiveInternal) {
+        logger.debug(`[BoardHandler _updateChessgroundSettings] Analysis ON. Turn: ${this.boardTurnColor}. Dests based on this turn.`);
+    } else {
+        logger.debug(`[BoardHandler _updateChessgroundSettings] Analysis OFF. Turn: ${this.boardTurnColor}. Dests based on this turn.`);
+    }
+
+    this.chessboardService.ground.set(newConfig);
+    logger.debug(`[BoardHandler _updateChessgroundSettings] Chessground updated. FEN: ${newConfig.fen}, Turn: ${newConfig.turnColor}, MovableColor: ${newConfig.movable?.color}, Dests count: ${newConfig.movable?.dests?.size}, Check: ${newConfig.check}`);
+  }
+
+
+  public setAnalysisMode(isActive: boolean): void {
+    this.isAnalysisActiveInternal = isActive;
+    logger.info(`[BoardHandler] setAnalysisMode called with: ${isActive}`);
+    
+    this._syncInternalStateWithPgnService(); 
+    this._updateChessgroundSettings();
+    
+    this.requestRedraw(); 
+  }
+
+  public isAnalysisMode(): boolean {
+    return this.isAnalysisActiveInternal;
   }
 
   public setupPosition(
     fen: string,
     humanPlayerColor?: ChessgroundColor,
-    resetHistory: boolean = true,
+    resetPgnHistory: boolean = true,
   ): boolean {
+    if (this.isAnalysisActiveInternal && resetPgnHistory) {
+        this.setAnalysisMode(false); 
+    }
+
     try {
-      const setup = parseFen(fen).unwrap();
-      this.chessPosition = Chess.fromSetup(setup).unwrap();
-      if (resetHistory) {
-        this.moveHistory = [];
+      if (resetPgnHistory) {
+        this.pgnService.reset(fen);
       }
-      this._updateBoardState();
+      this._syncInternalStateWithPgnService(); 
+
       if (humanPlayerColor) {
         this.humanPlayerColorInternal = humanPlayerColor;
-        this.setOrientation(humanPlayerColor);
+        this.setOrientation(humanPlayerColor); 
       }
-      this.chessboardService.setFen(this.currentFen.split(' ')[0]);
-      logger.info(`[BoardHandler] Position setup with FEN: ${fen}`);
-      this.requestRedraw();
+      
+      this._updateChessgroundSettings(); 
+      logger.info(`[BoardHandler] Position setup with FEN: ${fen}. PGN reset: ${resetPgnHistory}`);
+      this.requestRedraw(); 
       return true;
     } catch (e: any) {
-      logger.error(
-        '[BoardHandler] Failed to setup position from FEN:',
-        fen,
-        e.message,
-      );
-      this.chessPosition = Chess.default(); 
-      this._updateBoardState();
-      this.chessboardService.setFen(this.currentFen.split(' ')[0]);
+      logger.error('[BoardHandler] Failed to setup position from FEN:', fen, e.message);
+      const defaultFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      if (resetPgnHistory) {
+        this.pgnService.reset(defaultFen);
+      }
+      this._syncInternalStateWithPgnService();
+      this._updateChessgroundSettings();
       this.requestRedraw();
       return false;
     }
@@ -137,7 +202,7 @@ export class BoardHandler {
 
   public setOrientation(color: ChessgroundColor): void {
     this.humanPlayerColorInternal = color;
-    this.chessboardService.setOrientation(color);
+    this.chessboardService.setOrientation(color); 
     logger.debug(`[BoardHandler] Orientation set to: ${color}`);
   }
 
@@ -145,57 +210,40 @@ export class BoardHandler {
     orig: Key,
     dest: Key,
   ): Promise<AttemptMoveResult> {
-    const gameStatus = this.getGameStatus();
-    if (gameStatus.isGameOver) {
-      logger.warn('[BoardHandler] Attempted move in a game over state.');
-      return { success: false };
+    const gameStatusBeforeMove = this.getGameStatus(); 
+    if (gameStatusBeforeMove.isGameOver && !this.isAnalysisActiveInternal) {
+      logger.warn('[BoardHandler] Attempted move in a game over state (not in analysis mode).');
+      this.chessboardService.setFen(this.currentFen.split(' ')[0]); 
+      this._updateChessgroundSettings(); 
+      return { success: false, isIllegal: true };
     }
 
     const fromSq = parseSquare(orig);
     const toSq = parseSquare(dest);
 
     if (fromSq === undefined || toSq === undefined) {
-      logger.warn(
-        `[BoardHandler] Invalid square in user move: ${orig} or ${dest}`,
-      );
-      return { success: false };
+      logger.warn(`[BoardHandler] Invalid square in user move: ${orig} or ${dest}`);
+      return { success: false, isIllegal: true };
     }
 
-    const promotionCheck = this._isPromotionAttempt(orig, dest);
+    const promotionCheck = this._isPromotionAttempt(orig, dest); 
     if (promotionCheck.isPromotion && promotionCheck.pieceColor) {
-      logger.info(`[BoardHandler] Promotion attempt detected: ${orig}-${dest}`);
       return new Promise<AttemptMoveResult>((resolve) => {
         this.promotionCtrl.start(
           orig,
           dest,
-          promotionCheck.pieceColor as ChessgroundColor,
+          promotionCheck.pieceColor as ChessgroundColor, 
           (selectedRole: ChessopsRole | null) => {
             if (!selectedRole) {
               logger.info('[BoardHandler] Promotion cancelled by user.');
-              this.chessboardService.setFen(this.currentFen.split(' ')[0]); 
+              this._updateChessgroundSettings(); 
               this.requestRedraw();
-              resolve({
-                success: false,
-                promotionStarted: true,
-                promotionCompleted: false,
-              });
+              resolve({ success: false, promotionStarted: true, promotionCompleted: false, isIllegal: true });
               return;
             }
-            const uciMoveWithPromotion = makeUci({
-              from: fromSq,
-              to: toSq,
-              promotion: selectedRole,
-            });
-            logger.info(
-              `[BoardHandler] Promotion selected: ${selectedRole}. Completing move: ${uciMoveWithPromotion}`,
-            );
+            const uciMoveWithPromotion = makeUci({ from: fromSq, to: toSq, promotion: selectedRole });
             const result = this._applyAndProcessUciMove(uciMoveWithPromotion);
-            resolve({
-              ...result,
-              promotionStarted: true,
-              promotionCompleted: result.success,
-              uciMove: uciMoveWithPromotion,
-            });
+            resolve({ ...result, promotionStarted: true, promotionCompleted: result.success, uciMove: uciMoveWithPromotion });
           },
         );
       });
@@ -207,9 +255,10 @@ export class BoardHandler {
   }
 
   public applySystemMove(uciMove: string): AttemptMoveResult {
-    if (this.getGameStatus().isGameOver) {
-      logger.warn('[BoardHandler] Attempted system move in a game over state.');
-      return { success: false };
+    const gameStatus = this.getGameStatus();
+    if (gameStatus.isGameOver && !this.isAnalysisActiveInternal) {
+      logger.warn('[BoardHandler] Attempted system move in a game over state (not in analysis mode).');
+      return { success: false, isIllegal: true };
     }
     logger.info(`[BoardHandler] Applying system move: ${uciMove}`);
     return this._applyAndProcessUciMove(uciMove);
@@ -218,127 +267,76 @@ export class BoardHandler {
   private _applyAndProcessUciMove(
     uciMove: string,
   ): Omit<AttemptMoveResult, 'promotionStarted' | 'promotionCompleted'> {
-    const move: ChessopsMove | undefined = parseUci(uciMove); 
+    
+    const move: ChessopsMove | undefined = parseUci(uciMove);
     if (!move) {
       logger.warn(`[BoardHandler] Invalid UCI move format: ${uciMove}`);
-      this.chessboardService.setFen(
-        makeFen(this.chessPosition.toSetup()).split(' ')[0],
-      );
-      this.requestRedraw();
-      return { success: false };
+      this._updateChessgroundSettings(); 
+      return { success: false, isIllegal: true };
+    }
+
+    const positionToTest = this.chessPosition.clone(); 
+    const fenBeforeAttempt = makeFen(positionToTest.toSetup());
+
+    if (!positionToTest.isLegal(move)) {
+      const pieceTryingToMove = isNormal(move) ? positionToTest.board.get(move.from) : null;
+      logger.warn(`[BoardHandler] Illegal move by chessops: ${uciMove} on FEN ${fenBeforeAttempt}. Turn in FEN: ${positionToTest.turn}. Piece: ${pieceTryingToMove?.color}${pieceTryingToMove?.role}.`);
+      this._updateChessgroundSettings(); 
+      return { success: false, uciMove, isIllegal: true };
     }
 
     let san: string;
-    const tempPosForSan = this.chessPosition.clone();
     try {
-      san = makeSan(tempPosForSan, move);
+      san = makeSan(positionToTest, move); 
     } catch (e: any) {
-      logger.warn(
-        `[BoardHandler] SAN generation failed for move ${uciMove} on FEN: ${this.currentFen}. Error: ${e.message}. Assuming move is illegal.`,
-      );
-      this.chessboardService.setFen(
-        makeFen(this.chessPosition.toSetup()).split(' ')[0],
-      );
-      this.requestRedraw();
-      return { success: false, uciMove };
+      logger.warn(`[BoardHandler] SAN generation failed for legal move ${uciMove} (UCI) on FEN ${fenBeforeAttempt}. Error: ${e.message}.`);
+      san = uciMove; 
     }
 
-    const fenBefore = this.currentFen;
-    
-    const destSquare: ChessopsSquare = move.to; 
-    let pieceOnDestBefore: ChessopsPiece | undefined = this.chessPosition.board.get(destSquare);
-    
-    try {
-      this.chessPosition.play(move);
-    } catch (e: any) {
-      logger.error(
-        `[BoardHandler] Move ${uciMove} (SAN: ${san}) considered illegal by chessops.play() on FEN: ${fenBefore}. Error: ${e.message}`,
-      );
-      const setupBefore = parseFen(fenBefore).unwrap();
-      this.chessPosition = Chess.fromSetup(setupBefore).unwrap();
-      this._updateBoardState(); 
-      this.chessboardService.setFen(this.currentFen.split(' ')[0]);
-      this.requestRedraw();
-      return { success: false, uciMove };
+    const destSquare: ChessopsSquare = move.to;
+    const pieceOnDestBefore: ChessopsPiece | undefined = positionToTest.board.get(destSquare); 
+
+    positionToTest.play(move); 
+
+    this.chessPosition = positionToTest;
+    this._updateBoardStateInternal(); 
+
+    const isAtEndOfPgnMainline = this.pgnService.getCurrentPlyNavigated() === this.pgnService.getTotalPliesInMainline();
+    if (!this.isAnalysisActiveInternal || (this.isAnalysisActiveInternal && isAtEndOfPgnMainline)) {
+        this.pgnService.addMove(fenBeforeAttempt, san, uciMove, this.currentFen);
+    } else if (this.isAnalysisActiveInternal && !isAtEndOfPgnMainline) {
+        logger.info(`[BoardHandler] Analysis mode: Move ${uciMove} (SAN: ${san}) made on board. Not added to PGN mainline as PGN navigator is at ply ${this.pgnService.getCurrentPlyNavigated()} of ${this.pgnService.getTotalPliesInMainline()}.`);
     }
 
-    this._updateBoardState(); 
-    this.moveHistory.push({ uci: uciMove, san, fenBefore, fenAfter: this.currentFen });
-    this.chessboardService.setFen(this.currentFen.split(' ')[0]);
-
-    // --- Sound Playback ---
     const gameStatusAfterMove = this.getGameStatus();
 
-    if (isNormal(move) && move.promotion) { 
-      SoundService.playSound('promote');
-    } else if (pieceOnDestBefore && isNormal(move)) { 
-      SoundService.playSound('capture');
-    } else {
-      SoundService.playSound('move');
-    }
+    if (isNormal(move) && move.promotion) SoundService.playSound('promote');
+    else if (pieceOnDestBefore && isNormal(move)) SoundService.playSound('capture');
+    else SoundService.playSound('move');
+    if (gameStatusAfterMove.isCheck) SoundService.playSound('check');
+    if (gameStatusAfterMove.isGameOver && gameStatusAfterMove.outcome?.reason === 'stalemate' && !this.isAnalysisActiveInternal) SoundService.playSound('stalemate');
 
-    if (gameStatusAfterMove.isCheck) {
-      SoundService.playSound('check');
+    if (gameStatusAfterMove.isGameOver && gameStatusAfterMove.outcome && !this.isAnalysisActiveInternal) {
+        if (gameStatusAfterMove.outcome.winner === 'white') this.pgnService.setGameResult("1-0");
+        else if (gameStatusAfterMove.outcome.winner === 'black') this.pgnService.setGameResult("0-1");
+        else this.pgnService.setGameResult("1/2-1/2");
     }
-
-    if (gameStatusAfterMove.isGameOver && gameStatusAfterMove.outcome?.reason === 'stalemate') {
-      SoundService.playSound('stalemate');
-    }
-    // --- End Sound Playback ---
-
-    this.requestRedraw();
-    logger.debug(
-      `[BoardHandler] Move ${uciMove} (SAN: ${san}) applied. New FEN: ${this.currentFen}. Outcome: ${JSON.stringify(gameStatusAfterMove.outcome)}`,
-    );
-    return { success: true, newFen: this.currentFen, outcome: gameStatusAfterMove.outcome, uciMove };
+    
+    this._updateChessgroundSettings(); 
+    
+    this.requestRedraw(); 
+    logger.debug(`[BoardHandler] Move ${uciMove} (SAN: ${san}) applied. New FEN: ${this.currentFen}. Outcome: ${JSON.stringify(gameStatusAfterMove.outcome)}`);
+    return { success: true, newFen: this.currentFen, outcome: gameStatusAfterMove.outcome, uciMove, isIllegal: false };
   }
+
 
   public getFen(): string {
     return this.currentFen;
   }
 
-  public getPgn(): string {
-    const initialFen =
-      this.moveHistory.length > 0
-        ? this.moveHistory[0].fenBefore
-        : this.currentFen;
-    let pgnString = `[FEN "${initialFen}"]\n`;
-
-    let moveCounter = Math.floor(
-      this.chessPosition.fullmoves - this.moveHistory.length / 2,
-    );
-    if (initialFen.includes(' b ')) {
-      if (this.moveHistory.length > 0) {
-        pgnString += `${moveCounter}... ${this.moveHistory[0].san} `;
-        for (let i = 1; i < this.moveHistory.length; i++) {
-          if (i % 2 === 1) {
-            moveCounter++;
-            pgnString += `${moveCounter}. ${this.moveHistory[i].san} `;
-          } else {
-            pgnString += `${this.moveHistory[i].san} `;
-          }
-        }
-      }
-    } else {
-      for (let i = 0; i < this.moveHistory.length; i++) {
-        if (i % 2 === 0) {
-          moveCounter++;
-          pgnString += `${moveCounter}. ${this.moveHistory[i].san} `;
-        } else {
-          pgnString += `${this.moveHistory[i].san} `;
-        }
-      }
-    }
-
-    const gameStatus = this.getGameStatus();
-    if (gameStatus.isGameOver && gameStatus.outcome) {
-      if (gameStatus.outcome.winner === 'white') pgnString += '1-0';
-      else if (gameStatus.outcome.winner === 'black') pgnString += '0-1';
-      else pgnString += '1/2-1/2';
-    } else {
-      pgnString += '*';
-    }
-    return pgnString.trim();
+  public getPgn(options?: import('./pgn.service').PgnStringOptions): string {
+    const showResult = this.getGameStatus().isGameOver && !this.isAnalysisActiveInternal;
+    return this.pgnService.getCurrentPgnString({...options, showResult });
   }
 
   public getPossibleMoves(): Dests {
@@ -353,136 +351,201 @@ export class BoardHandler {
     return this.humanPlayerColorInternal;
   }
 
-  public getGameStatus(): GameStatus {
-    const outcomeDetails: ChessopsOutcome | undefined =
-      this.chessPosition.outcome();
-    const isGameOver = !!outcomeDetails;
+  public getGameStatus(): GameStatus { 
+    const outcomeDetails: ChessopsOutcome | undefined = this.chessPosition.outcome();
+    let isGameOver = !!outcomeDetails; 
     let gameEndOutcome: GameEndOutcome | undefined;
     let gameEndReason: GameEndReason | undefined;
 
     if (outcomeDetails) {
-      if (outcomeDetails.winner) {
-        if (this.chessPosition.isCheckmate()) {
-          gameEndReason = 'checkmate';
+        if (outcomeDetails.winner) {
+            gameEndReason = 'checkmate';
         } else {
-          gameEndReason = 'checkmate'; 
+            if (this.chessPosition.isStalemate()) gameEndReason = 'stalemate';
+            else if (this.chessPosition.isInsufficientMaterial()) gameEndReason = 'insufficient_material';
+            else gameEndReason = 'draw'; 
         }
-      } else {
-        if (this.chessPosition.isStalemate()) {
-          gameEndReason = 'stalemate';
-        } else if (this.chessPosition.isInsufficientMaterial()) {
-          gameEndReason = 'insufficient_material';
-        } else {
-          gameEndReason = 'draw';
+        gameEndOutcome = {
+            winner: outcomeDetails.winner,
+            reason: gameEndReason,
+        };
+    }
+
+    if (!isGameOver) {
+        const fenHistory = this.pgnService.getFenHistoryForRepetition();
+        const currentBoardFenOnly = this.currentFen.split(' ')[0]; 
+        
+        let repetitionCount = 0;
+        for (const fenPart of fenHistory) { 
+            if (fenPart === currentBoardFenOnly) {
+                repetitionCount++;
+            }
         }
-      }
-      gameEndOutcome = {
-        winner: outcomeDetails.winner,
-        reason: gameEndReason,
-      };
+        if (repetitionCount >= 3) {
+            isGameOver = true;
+            gameEndReason = 'draw'; 
+            gameEndOutcome = { winner: undefined, reason: gameEndReason };
+            logger.info(`[BoardHandler] Threefold repetition detected (count based on PGN history + current board: ${repetitionCount}). Game is a draw.`);
+        }
+    }
+
+    if (!isGameOver) {
+        if (this.chessPosition.halfmoves >= 100) { 
+            isGameOver = true;
+            gameEndReason = 'draw'; 
+            gameEndOutcome = { winner: undefined, reason: gameEndReason };
+            logger.info(`[BoardHandler] 50-move rule detected (halfmoves: ${this.chessPosition.halfmoves}). Game is a draw.`);
+        }
     }
 
     const isCheck = this.chessPosition.isCheck();
-
-    return {
-      isGameOver,
-      outcome: gameEndOutcome,
-      isCheck,
-      turn: this.chessPosition.turn,
-    };
+    return { isGameOver, outcome: gameEndOutcome, isCheck, turn: this.chessPosition.turn };
   }
 
-  public isMoveLegal(uciMove: string): boolean {
+  public isMoveLegal(uciMove: string): boolean { 
     const move = parseUci(uciMove);
     if (!move) return false;
     return this.chessPosition.isLegal(move);
   }
 
-  public getPromotionState(): PromotingState | null {
-    return this.promotionCtrl?.promoting || null;
-  }
-
+  public getPromotionState(): PromotingState | null { return this.promotionCtrl?.promoting || null; }
+  
   public drawArrow(orig: Key, dest: Key, brush: string = 'green'): void {
-    const currentShapesFromGround: DrawShape[] =
-      this.chessboardService.ground?.state.drawable.shapes || [];
+    if (!this.chessboardService.ground) return;
+    const newShapeToAdd: CustomDrawShape = { orig, dest, brush };
 
-    const validExistingShapes: CustomDrawShape[] = currentShapesFromGround
-      .filter((shape) => typeof shape.brush === 'string' && shape.brush.length > 0)
-      .map((shape) => ({
-        orig: shape.orig,
-        dest: shape.dest,
-        brush: shape.brush as string, 
-        ...(shape.modifiers && { modifiers: shape.modifiers }),
-        ...(shape.piece && { piece: shape.piece }),
-        ...(shape.customSvg && { customSvg: shape.customSvg }),
-        ...(shape.label && { label: shape.label }),
-      }));
+    const currentBoardShapes: DrawShape[] = this.chessboardService.ground.state.drawable.shapes || [];
 
-    const newArrowShape: CustomDrawShape = { orig, dest, brush };
-    this.chessboardService.drawShapes([...validExistingShapes, newArrowShape]);
+    const shapesToKeepAndSet: CustomDrawShape[] = [];
+    for (const s of currentBoardShapes) {
+        if (s.orig === orig && s.dest === dest) {
+            continue;
+        }
+        if (s.brush !== undefined) {
+            shapesToKeepAndSet.push(s as CustomDrawShape); 
+        }
+    }
+
+    const finalShapesList: CustomDrawShape[] = [...shapesToKeepAndSet, newShapeToAdd];
+    this.chessboardService.drawShapes(finalShapesList);
+    logger.debug(`[BoardHandler] Drawing arrow from ${orig} to ${dest} with brush ${brush}`);
   }
 
   public drawCircle(key: Key, brush: string = 'green'): void {
-    const currentShapesFromGround: DrawShape[] =
-      this.chessboardService.ground?.state.drawable.shapes || [];
+    if (!this.chessboardService.ground) return;
+    const newShapeToAdd: CustomDrawShape = { orig: key, brush };
 
-    const validExistingShapes: CustomDrawShape[] = currentShapesFromGround
-      .filter((shape) => typeof shape.brush === 'string' && shape.brush.length > 0)
-      .map((shape) => ({
-        orig: shape.orig,
-        dest: shape.dest,
-        brush: shape.brush as string, 
-        ...(shape.modifiers && { modifiers: shape.modifiers }),
-        ...(shape.piece && { piece: shape.piece }),
-        ...(shape.customSvg && { customSvg: shape.customSvg }),
-        ...(shape.label && { label: shape.label }),
-      }));
+    const currentBoardShapes: DrawShape[] = this.chessboardService.ground.state.drawable.shapes || [];
 
-    const newCircleShape: CustomDrawShape = { orig: key, brush }; 
-    this.chessboardService.drawShapes([...validExistingShapes, newCircleShape]);
+    const shapesToKeepAndSet: CustomDrawShape[] = [];
+    for (const s of currentBoardShapes) {
+        if (s.orig === key && s.dest === undefined) { 
+            continue;
+        }
+        if (s.brush !== undefined) {
+            shapesToKeepAndSet.push(s as CustomDrawShape);
+        }
+    }
+    
+    const finalShapesList: CustomDrawShape[] = [...shapesToKeepAndSet, newShapeToAdd];
+    this.chessboardService.drawShapes(finalShapesList);
+    logger.debug(`[BoardHandler] Drawing circle on ${key} with brush ${brush}`);
   }
 
-  public clearAllDrawings(): void {
-    this.chessboardService.clearShapes();
+  public clearAllDrawings(): void { 
+    this.chessboardService.clearShapes(); 
+    logger.debug(`[BoardHandler] All drawings cleared.`);
   }
 
-  private _isPromotionAttempt(
-    orig: Key,
-    dest: Key,
-  ): { isPromotion: boolean; pieceColor?: ChessopsColor } {
+  private _isPromotionAttempt(orig: Key, dest: Key): { isPromotion: boolean; pieceColor?: ChessopsColor } {
     const fromSq = parseSquare(orig);
-    if (fromSq === undefined) return { isPromotion: false };
+    if (fromSq === undefined || !this.chessPosition) return { isPromotion: false };
 
     const piece = this.chessPosition.board.get(fromSq);
-    if (!piece || piece.role !== 'pawn') return { isPromotion: false };
-
-    const destRankChar = dest.charAt(1); 
-    if (piece.color === 'white' && destRankChar === '8') {
-      return { isPromotion: true, pieceColor: 'white' };
+    if (!piece || piece.role !== 'pawn') {
+      return { isPromotion: false };
     }
-    if (piece.color === 'black' && destRankChar === '1') {
-      return { isPromotion: true, pieceColor: 'black' };
+
+    const toRankChar = dest.charAt(1); 
+    const isPromotionRank = (piece.color === 'white' && toRankChar === '8') || (piece.color === 'black' && toRankChar === '1');
+
+    if (isPromotionRank) {
+      return { isPromotion: true, pieceColor: piece.color };
     }
     return { isPromotion: false };
   }
 
+
   public undoLastMove(): boolean {
-    if (this.moveHistory.length === 0) {
-      logger.warn('[BoardHandler] No moves in history to undo.');
-      return false;
+    if (this.isAnalysisActiveInternal) {
+        logger.info("[BoardHandler] Undo called while analysis mode is active. This will undo the last move in PGN, board will sync.");
     }
-    const lastMoveRecord = this.moveHistory.pop(); 
-    if (lastMoveRecord) {
-      const setup = parseFen(lastMoveRecord.fenBefore).unwrap();
-      this.chessPosition = Chess.fromSetup(setup).unwrap();
-      this._updateBoardState(); 
-      this.chessboardService.setFen(this.currentFen.split(' ')[0]);
-      logger.info(
-        `[BoardHandler] Undid move. Restored FEN: ${this.currentFen}`,
-      );
+    const undonePgnNode = this.pgnService.undoLastMainlineMove();
+    if (undonePgnNode) {
+      this._syncInternalStateWithPgnService(); 
+      this.pgnService.setGameResult('*'); 
+      this._updateChessgroundSettings();
+      logger.info(`[BoardHandler] Undid move ${undonePgnNode.san}. Current FEN on board: ${this.currentFen}`);
       this.requestRedraw();
       return true;
     }
+    logger.warn('[BoardHandler] No moves in PGN history to undo.');
     return false;
+  }
+
+  public getLastPgnMoveNode(): PgnNode | null { return this.pgnService.getLastMove(); }
+
+  public handleNavigatePgnToPly(ply: number): boolean {
+    const success = this.pgnService.navigateToPly(ply);
+    if (success) {
+      this._syncInternalStateWithPgnService(); 
+      this._updateChessgroundSettings(); 
+      this.requestRedraw();
+    }
+    return success;
+  }
+
+  public handleNavigatePgnBackward(): boolean {
+    const success = this.pgnService.navigateBackward();
+    if (success) {
+      this._syncInternalStateWithPgnService();
+      this._updateChessgroundSettings();
+      this.requestRedraw();
+    }
+    return success;
+  }
+
+  public handleNavigatePgnForward(): boolean {
+    const success = this.pgnService.navigateForward();
+    if (success) {
+      this._syncInternalStateWithPgnService();
+      this._updateChessgroundSettings();
+      this.requestRedraw();
+    }
+    return success;
+  }
+
+  public handleNavigatePgnToStart(): boolean {
+    this.pgnService.navigateToStart(); 
+    this._syncInternalStateWithPgnService();
+    this._updateChessgroundSettings();
+    this.requestRedraw();
+    return true; 
+  }
+
+  public handleNavigatePgnToEnd(): boolean {
+    this.pgnService.navigateToEnd(); 
+    this._syncInternalStateWithPgnService();
+    this._updateChessgroundSettings();
+    this.requestRedraw();
+    return true; 
+  }
+
+  public canPgnNavigateBackward(): boolean {
+    return this.pgnService.canNavigateBackward();
+  }
+
+  public canPgnNavigateForward(): boolean {
+    return this.pgnService.canNavigateForward();
   }
 }

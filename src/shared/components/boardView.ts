@@ -7,12 +7,11 @@ import type { Key, Dests, Color as ChessgroundColor, MoveMetadata } from 'chessg
 import logger from '../../utils/logger';
 
 export class BoardView {
-    public container: HTMLElement; 
+    public container: HTMLElement;
     private boardHandler: BoardHandler;
     private chessboardService: ChessboardService;
     private onUserMoveCallback: (orig: Key, dest: Key, metadata?: MoveMetadata) => Promise<void>;
 
-    // Привязанный обработчик для кастомного события
     private boundHandleAppPanelResize: () => void;
 
     constructor(
@@ -26,15 +25,12 @@ export class BoardView {
         this.chessboardService = chessboardService;
         this.onUserMoveCallback = onUserMove;
 
-        this.boundHandleAppPanelResize = this._handleAppPanelResize.bind(this); // Привязываем обработчик
-        window.addEventListener('centerPanelResized', this.boundHandleAppPanelResize); // Слушаем кастомное событие
+        this.boundHandleAppPanelResize = this._handleAppPanelResize.bind(this);
+        window.addEventListener('centerPanelResized', this.boundHandleAppPanelResize);
 
         this.initBoard();
     }
 
-    /**
-     * Обработчик кастомного события 'centerPanelResized'.
-     */
     private _handleAppPanelResize(): void {
         logger.debug('[BoardView] Received centerPanelResized event. Notifying chessground.');
         this.notifyResize();
@@ -54,13 +50,13 @@ export class BoardView {
              logger.info('[BoardView] Ground already initialized for this container. Skipping re-init.');
         } else if (this.chessboardService.ground) {
             logger.warn('[BoardView] ChessboardService has ground, but for different container. Destroying and re-initializing.');
-            this.chessboardService.destroy();
+            this.chessboardService.destroy(); // Destroy old instance if container changed
             this.chessboardService.init(this.container, this._getBoardConfig());
         } else {
              this.chessboardService.init(this.container, this._getBoardConfig());
         }
-        
-        this.updateView(); 
+
+        this.updateView(); // Initial view update
         logger.info('[BoardView] Board initialized/verified and view updated.');
     }
 
@@ -68,45 +64,46 @@ export class BoardView {
         const initialFen = this.boardHandler.getFen().split(' ')[0];
         const initialTurnColor = this.boardHandler.getBoardTurnColor();
         const initialOrientation = this.boardHandler.getHumanPlayerColor() || 'white';
+        const isAnalysis = this.boardHandler.isAnalysisMode(); // Get analysis mode state
 
         return {
             fen: initialFen,
             orientation: initialOrientation,
-            turnColor: initialTurnColor,
+            turnColor: isAnalysis ? undefined : initialTurnColor, // Turn color might be irrelevant in free analysis
             movable: {
-                free: false, 
-                color: this.getMovableColor(),
-                dests: this.getMovableDests(),
+                free: isAnalysis, // Free movement if analysis mode is active
+                color: isAnalysis ? 'both' : this.boardHandler.getBoardTurnColor(),
+                dests: isAnalysis ? new Map() : this.boardHandler.getPossibleMoves(),
                 events: {
                     after: (orig: Key, dest: Key, metadata: MoveMetadata) => {
                         logger.debug(`[BoardView] User move on board: ${orig}-${dest}. Calling onUserMoveCallback.`);
                         this.onUserMoveCallback(orig, dest, metadata)
                             .catch(error => {
                                 logger.error('[BoardView] Error in onUserMoveCallback:', error);
-                                this.updateView(); 
+                                this.updateView(); // Re-sync view on error
                             });
                     },
                 },
-                showDests: true, 
+                showDests: true,
             },
             premovable: {
-                enabled: false, 
+                enabled: false, // Keep premoves disabled for now
             },
             highlight: {
-                lastMove: true, 
-                check: true,    
+                lastMove: true,
+                check: true,
             },
             animation: {
                 enabled: true,
-                duration: 200, 
+                duration: 200,
             },
             events: {
-                select: (key: Key) => { 
+                select: (key: Key) => {
                     logger.debug(`[BoardView] Square selected by user: ${key}`);
                 },
             },
             drawable: {
-                enabled: true, 
+                enabled: true,
             }
         };
     }
@@ -116,21 +113,22 @@ export class BoardView {
             logger.warn('[BoardView] updateView called but ground is not initialized in ChessboardService.');
             if (this.container && this.container.isConnected) {
                 logger.warn('[BoardView] Attempting to re-initialize board as container exists and ground is missing.');
-                this.initBoard(); 
+                this.initBoard();
             }
             return;
         }
 
         const gameStatus: GameStatus = this.boardHandler.getGameStatus();
-        const currentFen = this.boardHandler.getFen().split(' ')[0]; 
+        const currentFen = this.boardHandler.getFen().split(' ')[0]; // Only piece placement for board
         const turnColor = this.boardHandler.getBoardTurnColor();
         const orientation = this.boardHandler.getHumanPlayerColor() || this.chessboardService.ground.state.orientation;
-        const dests = this.getMovableDests();
-        const movableColor = this.getMovableColor();
+        const isAnalysis = this.boardHandler.isAnalysisMode();
 
         let lastMoveUciArray: [Key, Key] | undefined = undefined;
-        if (this.boardHandler.moveHistory.length > 0) {
-            const lastUci = this.boardHandler.moveHistory[this.boardHandler.moveHistory.length - 1].uci;
+        const lastPgnNode = this.boardHandler.getLastPgnMoveNode();
+
+        if (lastPgnNode && lastPgnNode.uci) {
+            const lastUci = lastPgnNode.uci;
             if (typeof lastUci === 'string' && lastUci.length >= 4) {
                 const orig = lastUci.substring(0, 2) as Key;
                 const dest = lastUci.substring(2, 4) as Key;
@@ -138,39 +136,27 @@ export class BoardView {
             }
         }
 
+        // Update the board configuration based on current state
         this.chessboardService.ground.set({
             fen: currentFen,
-            turnColor: turnColor,
+            turnColor: isAnalysis ? undefined : turnColor, // In analysis, turn might not be strictly enforced by ground
             orientation: orientation,
             movable: {
-                ...this.chessboardService.ground.state.movable, 
-                color: movableColor,
-                dests: dests,
+                // Ensure these are consistent with what BoardHandler.setAnalysisMode sets
+                free: isAnalysis,
+                color: isAnalysis ? 'both' : (gameStatus.isGameOver ? undefined : turnColor),
+                dests: isAnalysis ? new Map() : (gameStatus.isGameOver ? new Map() : this.boardHandler.getPossibleMoves()),
+                showDests: true, // Always show dests if movable
             },
-            check: gameStatus.isCheck ? gameStatus.turn : undefined, 
+            check: (gameStatus.isCheck && !isAnalysis) ? gameStatus.turn : undefined, // Show check only if not in analysis or if desired
             lastMove: lastMoveUciArray,
         });
     }
 
-    private getMovableColor(): ChessgroundColor | 'both' | undefined {
-        if (this.boardHandler.promotionCtrl.isActive()) {
-            return undefined; 
-        }
-        const gameStatus: GameStatus = this.boardHandler.getGameStatus();
-        if (gameStatus.isGameOver) {
-            return undefined; 
-        }
-        const currentTurn = this.boardHandler.getBoardTurnColor();
-        return currentTurn;
-    }
+    // getMovableColor and getMovableDests are no longer needed here,
+    // as the logic is now part of _getBoardConfig and updateView,
+    // driven by boardHandler.isAnalysisMode()
 
-    private getMovableDests(): Dests {
-        if (this.boardHandler.promotionCtrl.isActive() || this.boardHandler.getGameStatus().isGameOver) {
-            return new Map<Key, Key[]>(); 
-        }
-        return this.boardHandler.getPossibleMoves();
-    }
-    
     public drawShapes(shapes: CustomDrawShape[]): void {
         if (this.chessboardService.ground) {
             this.chessboardService.drawShapes(shapes);
@@ -188,7 +174,7 @@ export class BoardView {
     }
 
     public destroy(): void {
-        window.removeEventListener('centerPanelResized', this.boundHandleAppPanelResize); // Отписываемся от события
+        window.removeEventListener('centerPanelResized', this.boundHandleAppPanelResize);
         logger.info('[BoardView] Destroyed, removed centerPanelResized listener.');
     }
 }

@@ -53,11 +53,6 @@ export class StockfishService {
 
   private pendingAnalysisRequest: PendingAnalysisRequest | null = null;
 
-  // Захардкоженные опции UCI - больше не используются для установки при readyok,
-  // но оставлены на случай, если понадобятся для других целей или отладки.
-  private readonly UCI_THREADS = 1;
-  private readonly UCI_HASH_MB = 32;
-
   constructor() {
     this.initPromise = new Promise<void>((resolve, reject) => {
       this.resolveInitPromise = resolve;
@@ -181,9 +176,6 @@ export class StockfishService {
     } else if (message === 'readyok') {
       this.isReady = true;
       logger.info('[StockfishService] Engine is ready (readyok received).');
-      // ОПЦИИ Threads и Hash БОЛЬШЕ НЕ УСТАНАВЛИВАЮТСЯ ЗДЕСЬ
-      // this.sendCommand(`setoption name Threads value ${this.UCI_THREADS}`);
-      // this.sendCommand(`setoption name Hash value ${this.UCI_HASH_MB}`);
 
       if (this.resolveInitPromise && typeof this.resolveInitPromise === 'function') {
         try {
