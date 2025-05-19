@@ -6,19 +6,18 @@ import type { WebhookService } from './core/webhook.service';
 import { BoardHandler } from './core/boardHandler';
 import { PgnService } from './core/pgn.service';
 import { AnalysisService } from './core/analysis.service';
+import { AnalysisController } from './features/analysis/analysisController';
 import { t, subscribeToLangChange, getCurrentLang } from './core/i18n.service';
 
-// Import FinishHim controller and view
 import { FinishHimController } from './features/finishHim/finishHimController';
-// AnalysisTestController and PuzzleController are no longer directly loaded by page navigation here
 
-export type AppPage = 'finishHim'; // Only 'finishHim' is active for now
+export type AppPage = 'finishHim';
 
 export interface AppServices {
   chessboardService: ChessboardService;
   stockfishService: StockfishService;
   webhookService: WebhookService;
-  analysisService?: AnalysisService;
+  analysisService: AnalysisService;
   logger: typeof logger;
 }
 
@@ -28,7 +27,6 @@ interface AppControllerState {
   isPortraitMode: boolean;
 }
 
-// ActivePageController will now primarily be FinishHimController or null
 type ActivePageController = FinishHimController | null;
 
 const BOARD_MAX_VH = 94;
@@ -41,11 +39,15 @@ export class AppController {
   private services: AppServices;
   private requestGlobalRedraw: () => void;
   private userPreferredBoardSizeVh: number;
-  private activeAnalysisService: AnalysisService | null = null;
+  
+  // AnalysisController будет создаваться в loadPageController
+  private analysisControllerInstance: AnalysisController | null = null; 
+  private analysisServiceInstance: AnalysisService; 
+
   private unsubscribeFromLangChange: (() => void) | null = null;
 
   constructor(
-    globalServices: {
+    globalServices: { 
       chessboardService: ChessboardService;
       stockfishService: StockfishService;
       webhookService: WebhookService;
@@ -53,7 +55,12 @@ export class AppController {
     },
     requestGlobalRedraw: () => void
   ) {
-    this.services = globalServices;
+    this.analysisServiceInstance = new AnalysisService(globalServices.stockfishService);
+
+    this.services = {
+        ...globalServices,
+        analysisService: this.analysisServiceInstance, 
+    };
     this.requestGlobalRedraw = requestGlobalRedraw;
 
     const savedVhPreference = localStorage.getItem('userPreferredBoardSizeVh');
@@ -61,10 +68,14 @@ export class AppController {
     this.userPreferredBoardSizeVh = Math.max(BOARD_MIN_VH, Math.min(BOARD_MAX_VH, this.userPreferredBoardSizeVh));
 
     this.state = {
-      currentPage: 'finishHim', // Default page is now 'finishHim'
+      currentPage: 'finishHim',
       isNavExpanded: false,
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
     };
+
+    // AnalysisController больше не создается здесь.
+    // Он будет создан в loadPageController.
+    // this.analysisControllerInstance = new AnalysisController(...) 
 
     this.unsubscribeFromLangChange = subscribeToLangChange(() => {
       logger.info('[AppController] Language changed, requesting global redraw.');
@@ -119,13 +130,13 @@ export class AppController {
     } else {
       const actualLeftPanelWidth = document.getElementById('left-panel')?.offsetParent !== null ? leftPanelWidthPx : 0;
       const actualRightPanelWidth = document.getElementById('right-panel')?.offsetParent !== null ? rightPanelWidthPx : 0;
-      let numberOfGaps = 0; // Gaps relevant to center panel based on visible side panels
+      let numberOfGaps = 0;
       if (actualLeftPanelWidth > 0) numberOfGaps++;
       if (actualRightPanelWidth > 0) numberOfGaps++;
       
       const totalSidePanelsWidth = actualLeftPanelWidth + actualRightPanelWidth;
       const totalGapsWidth = numberOfGaps * panelGapPx;
-      const outerPagePadding = 2 * panelGapPx; // Assuming page-content-wrapper has panelGapPx on left/right
+      const outerPagePadding = 2 * panelGapPx;
 
       availableWidthForCenterPx = viewportWidthPx - totalSidePanelsWidth - totalGapsWidth - outerPagePadding;
     }
@@ -164,10 +175,11 @@ export class AppController {
       this.activePageController.destroy();
       logger.info('[AppController] Previous page controller destroyed.');
     }
-    if (this.activeAnalysisService) {
-        this.activeAnalysisService.destroy();
-        this.activeAnalysisService = null;
-        logger.info('[AppController] Previous AnalysisService destroyed.');
+    
+    if (this.analysisControllerInstance && typeof this.analysisControllerInstance.destroy === 'function') {
+        this.analysisControllerInstance.destroy();
+        this.analysisControllerInstance = null; // Сбрасываем экземпляр
+        logger.info('[AppController] Previous AnalysisController instance destroyed.');
     }
 
     this.state.currentPage = page;
@@ -186,23 +198,29 @@ export class AppController {
         this.services.chessboardService,
         this.requestGlobalRedraw
     );
-
-    const analysisServiceForPage = new AnalysisService(
-        this.services.stockfishService,
-        boardHandlerForPage,
-        PgnService
+    
+    // Создаем AnalysisController здесь, после создания boardHandlerForPage
+    this.analysisControllerInstance = new AnalysisController(
+        this.services.analysisService,
+        boardHandlerForPage, 
+        PgnService,
+        this.requestGlobalRedraw
     );
-    this.activeAnalysisService = analysisServiceForPage;
-    this.services.analysisService = analysisServiceForPage;
 
     switch (page) {
       case 'finishHim':
+        // Убедимся, что analysisControllerInstance не null перед передачей
+        if (!this.analysisControllerInstance) {
+            logger.error("[AppController] Critical: analysisControllerInstance is null before creating FinishHimController.");
+            // Можно добавить обработку ошибки, например, не создавать FinishHimController
+            return;
+        }
         this.activePageController = new FinishHimController(
           this.services.chessboardService,
-          boardHandlerForPage,
+          boardHandlerForPage, 
           this.services.webhookService,
           this.services.stockfishService,
-          analysisServiceForPage,
+          this.analysisControllerInstance, // Передаем созданный экземпляр
           this.requestGlobalRedraw
         );
         if (typeof this.activePageController.initializeGame === 'function') {
@@ -212,20 +230,12 @@ export class AppController {
         }
         break;
       default:
-        // This case should ideally not be reached if AppPage type is correctly restricted
         logger.error(`[AppController] Unknown page: ${page}. Cannot load controller. Defaulting to 'finishHim'.`);
-        this.state.currentPage = 'finishHim'; // Fallback to a valid page
-        if (this.activeAnalysisService) {
-            this.activeAnalysisService.destroy();
-            this.activeAnalysisService = null;
-            this.services.analysisService = undefined;
-        }
-        // Recursively call to load the default page controller
+        this.state.currentPage = 'finishHim';
         this.loadPageController('finishHim');
-        return; // Important to return to avoid double logging or redraw requests
+        return; 
     }
     logger.info(`[AppController] Loaded controller for page: ${page}`, this.activePageController);
-    // Initial redraw for the new page is typically handled by the page controller's init or by navigateTo
     this.requestGlobalRedraw();
   }
 
@@ -261,10 +271,13 @@ export class AppController {
         this.activePageController.destroy();
         logger.info('[AppController] Active page controller destroyed during AppController destroy.');
     }
-    if (this.activeAnalysisService) {
-        this.activeAnalysisService.destroy();
-        this.activeAnalysisService = null;
-        logger.info('[AppController] Active AnalysisService destroyed during AppController destroy.');
+    if (this.analysisControllerInstance && typeof this.analysisControllerInstance.destroy === 'function') {
+        this.analysisControllerInstance.destroy();
+        logger.info('[AppController] AnalysisController instance destroyed during AppController destroy.');
+    }
+     if (this.analysisServiceInstance && typeof this.analysisServiceInstance.destroy === 'function') {
+        this.analysisServiceInstance.destroy();
+        logger.info('[AppController] AnalysisService instance destroyed during AppController destroy.');
     }
   }
 }

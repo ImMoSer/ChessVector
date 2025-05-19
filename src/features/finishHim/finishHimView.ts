@@ -1,4 +1,4 @@
-// src/features/finishHim/FinishHimView.ts
+// src/features/finishHim/finishHimView.ts
 import { h } from 'snabbdom';
 import type { VNode, Hooks } from 'snabbdom';
 import type { Key } from 'chessground/types';
@@ -7,8 +7,8 @@ import { FINISH_HIM_PUZZLE_TYPES } from './finishHim.types';
 import { BoardView } from '../../shared/components/boardView';
 import logger from '../../utils/logger';
 import { renderPromotionDialog } from '../common/promotion/promotionView';
-import type { EvaluatedLineWithSan } from '../../core/analysis.service';
-import type { Color as ChessopsColor } from 'chessops/types';
+import { renderAnalysisLinesView } from '../analysis/analysisView'; // Импортируем новую view для анализа
+// EvaluatedLineWithSan и Color больше не нужны здесь напрямую для рендеринга анализа
 import { t } from '../../core/i18n.service';
 
 let boardViewInstance: BoardView | null = null;
@@ -49,78 +49,16 @@ function renderCategoryButtons(controller: FinishHimController): VNode {
   ]);
 }
 
-function renderAnalysisLinesForFinishHim(controller: FinishHimController): VNode {
-  const analysisState = controller.state.analysisUiState;
-
-  if (!analysisState || !analysisState.isActive) {
-    return h('div.analysis-lines-container.empty', { style: { marginTop: '15px', padding: '10px', borderTop: '1px solid var(--color-border)' } }, [
-      h('p.no-analysis-data', { style: { fontStyle: 'italic', color: 'var(--color-text-muted)'}}, t('analysis.inactive'))
-    ]);
-  }
-  if (analysisState.isLoading) {
-    return h('div.analysis-lines-container.loading', { style: { marginTop: '15px', padding: '10px', borderTop: '1px solid var(--color-border)' } }, [
-      h('p.analysis-loading', { style: { fontWeight: 'bold' } }, t('analysis.loading'))
-    ]);
-  }
-  if (!analysisState.lines || analysisState.lines.length === 0) {
-    return h('div.analysis-lines-container.no-data', { style: { marginTop: '15px', padding: '10px', borderTop: '1px solid var(--color-border)' } }, [
-      h('p.no-analysis-data', { style: { fontStyle: 'italic', color: 'var(--color-text-muted)'}}, t('analysis.noData'))
-    ]);
-  }
-
-  const formatSanLine = (
-      pvSan: string[], initialFullMoveNumber: number, initialTurn: ChessopsColor,
-      lineIndexForLog: number // Keep for potential debugging if uciMoveForClick is used
-    ): VNode[] => {
-    const elements: VNode[] = [];
-    let currentMoveNumber = initialFullMoveNumber;
-    let currentTurn = initialTurn;
-    pvSan.forEach((sanMove, moveIndex) => {
-        const uciMoveForClick = controller.state.analysisUiState?.lines?.[lineIndexForLog]?.pvUci[moveIndex];
-        if (currentTurn === 'white') elements.push(h('span.move-number', `${currentMoveNumber}. `));
-        else if (moveIndex === 0) elements.push(h('span.move-number', `${currentMoveNumber}... `));
-        
-        elements.push(h('span.pv-move', {
-            style: { 
-                cursor: uciMoveForClick && controller.boardHandler.isBoardConfiguredForAnalysis() ? 'pointer' : 'default', 
-                textDecoration: uciMoveForClick && controller.boardHandler.isBoardConfiguredForAnalysis() ? 'underline' : 'none', 
-                color: uciMoveForClick && controller.boardHandler.isBoardConfiguredForAnalysis() ? 'var(--color-text-link)' : 'inherit', 
-                marginRight: '5px' 
-            },
-            on: { 
-                click: () => { 
-                    if (uciMoveForClick && controller.boardHandler.isBoardConfiguredForAnalysis()) {
-                        controller.handlePlayAnalysisMove(uciMoveForClick);
-                    }
-                } 
-            }
-        }, sanMove));
-        if (currentTurn === 'black') currentMoveNumber++;
-        currentTurn = currentTurn === 'white' ? 'black' : 'white';
-    });
-    return elements;
-  };
-
-  return h('div.analysis-lines-container', { style: { marginTop: '15px', fontFamily: 'monospace', fontSize: '0.9em', borderTop: '1px solid var(--color-border)', paddingTop: '10px' } }, [
-    h('h4.analysis-title', { style: { margin: '0 0 10px 0', color: 'var(--color-text-muted)' } }, t('analysis.linesTitle')),
-    h('ul.analysis-list', { style: { listStyle: 'none', padding: '0', margin: '0' } },
-      analysisState.lines.map((line: EvaluatedLineWithSan, lineIndex: number) => {
-        const scoreValueDisplay = line.score.type === 'cp' ? (line.score.value / 100).toFixed(2) : t('analysis.mateIn', { value: line.score.value });
-        const formattedPvNodes = formatSanLine(line.pvSan, line.initialFullMoveNumber, line.initialTurn, lineIndex);
-        return h('li.analysis-line-item', { style: { marginBottom: '8px', paddingBottom: '8px', borderBottom: lineIndex < (analysisState.lines || []).length - 1 ? '1px dashed var(--color-border-hover)' : 'none'}}, [
-          h('div.line-info', `${t('analysis.depthPrefix')} ${line.depth}, ${t('analysis.scorePrefix')} ${scoreValueDisplay}`),
-          h('div.line-pv', [t('analysis.pvPrefix') + ' ', ...formattedPvNodes])
-        ]);
-      })
-    )
-  ]);
-}
-
+// Старая функция renderAnalysisLinesForFinishHim больше не нужна,
+// так как ее заменяет renderAnalysisLinesView из analysisView.ts
 
 export function renderFinishHimUI(controller: FinishHimController): FinishHimPageViewLayout {
   const fhState = controller.state;
   const boardHandler = controller.boardHandler;
   const isBoardConfiguredForAnalysis = boardHandler.isBoardConfiguredForAnalysis();
+  
+  // Получаем состояние анализа от FinishHimController, который берет его из AnalysisController
+  const analysisStateForView = controller.getAnalysisStateForUI();
 
   let promotionDialogVNode: VNode | null = null;
   if (controller.chessboardService.ground) {
@@ -205,13 +143,13 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
           disabled: fhState.isStockfishThinking || boardHandler.promotionCtrl.isActive() || isBoardConfiguredForAnalysis
         },
         on: { click: () => controller.loadAndStartFinishHimPuzzle() }
-      }, t('puzzle.button.next')), // ИЗМЕНЕНО: Используем ключ "Next Puzzle"
+      }, t('puzzle.button.next')),
       h('button.button.finish-him-button', {
         attrs: {
           disabled: !fhState.activePuzzle || fhState.isStockfishThinking || boardHandler.promotionCtrl.isActive() || isBoardConfiguredForAnalysis
         },
         on: { click: () => controller.handleRestartTask() }
-      }, t('puzzle.button.restartTask')), // ИЗМЕНЕНО: Используем ключ "Restart Task" из puzzle.button
+      }, t('puzzle.button.restartTask')),
       h('button.button.finish-him-button', {
         attrs: {
           disabled: fhState.isStockfishThinking || boardHandler.promotionCtrl.isActive()
@@ -226,7 +164,11 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
         on: { click: () => controller.handleToggleAnalysisMode() }
       }, isBoardConfiguredForAnalysis ? t('puzzle.button.finishAnalysis') : t('puzzle.button.analysis')),
     ]),
-    renderAnalysisLinesForFinishHim(controller)
+    // Используем новую функцию renderAnalysisLinesView
+    renderAnalysisLinesView(
+        analysisStateForView, // Передаем состояние анализа
+        (uciMove: string) => controller.handlePlayAnalysisMove(uciMove) // Передаем колбэк
+    )
   ]);
 
   return {

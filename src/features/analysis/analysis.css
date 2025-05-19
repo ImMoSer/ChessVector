@@ -1,0 +1,98 @@
+/* src/features/analysis/analysis.css */
+
+.analysis-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* Расстояние между плашками */
+  padding-top: 10px; /* Отступ сверху, если нужно отделить от других элементов */
+  font-family: monospace, "Courier New", Courier; /* Моноширинный шрифт для вариантов */
+  font-size: 0.9em;
+}
+
+.analysis-line-lozenge {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.1s ease-out, box-shadow 0.15s ease-in-out;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.analysis-line-lozenge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+
+.analysis-line-lozenge.best-line {
+  background-color: #d4edda; /* Светло-зеленый фон */
+  border-color: #c3e6cb;
+  color: #155724; /* Темно-зеленый текст */
+}
+.analysis-line-lozenge.best-line:hover {
+  background-color: #c3e6cb;
+}
+
+.analysis-line-lozenge.second-line {
+  background-color: #fff3cd; /* Светло-желтый фон */
+  border-color: #ffeeba;
+  color: #856404; /* Темно-желтый/коричневый текст */
+}
+.analysis-line-lozenge.second-line:hover {
+  background-color: #ffeeba;
+}
+
+.analysis-line-lozenge.third-line {
+  background-color: #f8d7da; /* Светло-красный фон */
+  border-color: #f5c6cb;
+  color: #721c24; /* Темно-красный текст */
+}
+.analysis-line-lozenge.third-line:hover {
+  background-color: #f5c6cb;
+}
+
+.analysis-line-lozenge.other-line {
+  background-color: #e2e3e5; /* Нейтральный серый фон для остальных линий */
+  border-color: #d6d8db;
+  color: #383d41;
+}
+.analysis-line-lozenge.other-line:hover {
+  background-color: #d6d8db;
+}
+
+.analysis-score {
+  font-weight: bold;
+  margin-right: 10px;
+  min-width: 45px; /* Чтобы оценки были примерно на одном уровне */
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.analysis-pv-san {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1;
+}
+
+/* Стили для отдельных ходов в PV, если они будут кликабельными внутри плашки */
+.analysis-pv-san .pv-move-segment {
+  /* Можно добавить стили, если нужно, чтобы каждый ход был отдельно интерактивным */
+  /* Например, text-decoration: underline; */
+}
+.analysis-pv-san .pv-move-segment:not(:last-child) {
+  margin-right: 4px;
+}
+
+/* Стили для состояния загрузки или отсутствия данных, если они будут внутри .analysis-view-container */
+.analysis-view-container .loading-message,
+.analysis-view-container .no-data-message,
+.analysis-view-container .inactive-message {
+  padding: 10px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-style: italic;
+  background-color: var(--color-bg-tertiary);
+  border-radius: 4px;
+}
