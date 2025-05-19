@@ -1,0 +1,164 @@
+{
+  "app": {
+    "title": "ChessApp"
+  },
+  "nav": {
+    "finishHim": "FinishHim"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "na": "N/A",
+    "panel": {
+      "leftNotLoaded": "Left panel not loaded",
+      "centerNotLoaded": "Center panel not loaded",
+      "rightNotLoaded": "Right panel not loaded"
+    },
+    "loadingController": "Loading page controller..."
+  },
+  "errorPage": {
+    "invalidController": "Error: Invalid controller for page {pageName}",
+    "unknownPage": "Error: Unknown page {pageName}"
+  },
+  "puzzle": {
+    "details": {
+      "title": "Puzzle Details",
+      "idLabel": "Puzzle ID:",
+      "ratingLabel": "Rating:",
+      "levelPiecesLabel": "Level (Pieces):"
+    },
+    "loadPrompt": "Load a puzzle to see details.",
+    "pgn": {
+      "title": "Game Notation (PGN)",
+      "placeholder": "PGN will appear here...",
+      "variationsLabel": "Variations:"
+    },
+    "button": {
+      "next": "Next Puzzle",
+      "restart": "Restart",
+      "analysis": "Analysis",
+      "finishAnalysis": "Finish Analysis",
+      "setFen": "Set FEN",
+      "restartTask": "Restart Task"
+    },
+    "feedback": {
+      "loadPrompt": "Load a puzzle to start.",
+      "loading": "Loading puzzle...",
+      "loaded": "Puzzle {puzzleId}. You play as {color}.",
+      "systemMove": "System move...",
+      "yourTurn": "Your turn.",
+      "correctMove": "Correct!",
+      "incorrectMove": "Incorrect. Expected move {expectedMove}. Try again.",
+      "solvedContinue": "Puzzle solved! You can continue playing.",
+      "loadFailed": "Failed to load puzzle.",
+      "notYourTurn": "Not your turn. Move undone.",
+      "stockfishThinking": "Stockfish is thinking...",
+      "stockfishError": "Stockfish error. Your turn.",
+      "stockfishNoMove": "Stockfish found no move. Your turn.",
+      "stockfishGetMoveError": "Error getting move from Stockfish. Your turn.",
+      "fenSetStockfishTurn": "FEN set. Stockfish to move.",
+      "fenSetYourTurn": "FEN set. Your turn.",
+      "noActivePuzzleRestart": "No active puzzle to restart. Load a puzzle first.",
+      "finishPromotionBeforeAnalysis": "Finish promotion before toggling analysis.",
+      "analysisModeActive": "Analysis mode active. Make moves or use PGN navigation.",
+      "yourTurnPlayout": "Your turn (playout).",
+      "systemMovePlayout": "System move (playout)...",
+      "yourTurnPlayoutVariation": "Your turn (playout from variation).",
+      "systemMovePlayoutVariation": "System move (playout from variation)...",
+      "analysisInactiveForPlayMove": "Analysis is not active to play this move.",
+      "gameOver": "Game over.",
+      "yourTurnDirectSolve": "Your turn (direct solution?).",
+      "systemMoveDirectSolve": "System move (direct solution?).",
+      "systemResponse": "System responds: {move}",
+      "systemFirstMove": "System's first move: {move}",
+      "puzzleDataError": "Error in puzzle data. System move failed.",
+      "selectPromotion": "Select a piece for promotion.",
+      "stockfishThinkingWait": "Stockfish is thinking, please wait...",
+      "analysisMoveMade": "Move {san} made. FEN: {fen}",
+      "promotionCancelled": "Promotion cancelled.",
+      "illegalMoveAnalysis": "Illegal move in analysis mode.",
+      "moveErrorAnalysis": "Move error in analysis mode.",
+      "invalidMove": "Invalid move.",
+      "moveProcessingError": "Move processing error.",
+      "enterFenPrompt": "Enter FEN:",
+      "restarted": "Puzzle {puzzleId} restarted. You play as {color}."
+    },
+    "colors": {
+      "white": "White",
+      "black": "Black"
+    },
+    "gameOver": {
+      "checkmateWinner": "Checkmate! {winner} won ({reason}).",
+      "stalemate": "Stalemate! Draw.",
+      "insufficientMaterial": "Draw (insufficient material).",
+      "draw": "Draw (repetition, 50-move rule, or agreement).",
+      "drawReason": "Draw ({reason}).",
+      "reasons": {
+        "checkmate": "checkmate",
+        "unknown": "unknown reason"
+      }
+    }
+  },
+  "analysis": {
+    "settings": "Analysis Settings",
+    "results": "Analysis Results",
+    "inactive": "Analysis not active.",
+    "loading": "Analyzing...",
+    "noData": "No analysis data to display.",
+    "linesTitle": "Analysis Lines:",
+    "depthPrefix": "Depth:",
+    "scorePrefix": "Score:",
+    "mateIn": "mate in {value}",
+    "pvPrefix": "PV:",
+    "timeout": "timeout"
+  },
+  "pgn": {
+    "nav": {
+      "start": "|◀ Start",
+      "prev": "◀ Prev",
+      "next": "Next ▶",
+      "end": "End ▶|"
+    }
+  },
+  "finishHim": {
+    "pageTitle": "FinishHim Mode",
+    "categories": {
+      "title": "Endgame Categories"
+    },
+    "puzzleTypes": {
+      "endgame": "General Endgame",
+      "advancedPawn": "Advanced Pawn",
+      "rookEndgame": "Rook Endgame",
+      "bishopEndgame": "Bishop Endgame",
+      "knightEndgame": "Knight Endgame",
+      "queenEndgame": "Queen Endgame",
+      "queenRookEndgame": "Queen & Rook Endgame",
+      "pawnEndgame": "Pawn Endgame",
+      "zugzwang": "Zugzwang"
+    },
+    "button": {
+      "restartTask": "Restart Task" 
+    },
+    "currentTask": {
+      "title": "Current Task"
+    },
+    "feedback": {
+      "selectCategory": "Select a category.",
+      "selectCategoryAndStart": "Select a category and press 'Next Puzzle'.",
+      "categorySelected": "Category selected: {category}. Press 'Next Puzzle'.",
+      "loaded": "Task {puzzleId} ({category}) loaded. You play as {color}.",
+      "systemSetupMove": "System setting up task...",
+      "yourTurn": "Your turn.",
+      "moveMadeChecking": "Move made, checking...",
+      "analysisDeactivated": "Analysis deactivated. Switched to game mode.",
+      "taskComplete": "Task Complete!",
+      "taskFailed": "Task Failed.",
+      "systemToMovePlayout": "System to move (playout).",
+      "yourTurnPlayout": "Your turn (playout).",
+      "taskResumed": "Task resumed.",
+      "waitForSetup": "Please wait for task setup or start a new task.",
+      "noTaskToRestart": "No active task to restart. Load a new one.",
+      "restarted": "Task {puzzleId} ({category}) restarted. You play as {color}."
+    }
+  }
+}

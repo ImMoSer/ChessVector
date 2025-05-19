@@ -1,10 +1,13 @@
 // src/core/webhook.service.ts
 import logger from '../utils/logger';
 
+// Расширенный интерфейс для payload
 export interface PuzzleRequestPayload {
+  event?: string; // Добавлено поле event
   lichess_id: string;
   pieceCount?: number;
   rating?: number;
+  puzzleType?: string; // Добавлено поле puzzleType
 }
 
 export interface PuzzleDataFromWebhook {
@@ -16,11 +19,10 @@ export interface PuzzleDataFromWebhook {
   PieceCount?: string;
 }
 
+// AppPuzzle остается таким же, так как он описывает данные *ответа* от вебхука
 export interface AppPuzzle extends PuzzleDataFromWebhook {
 }
 
-// Чтение URL вебхука из переменных окружения Vite
-// Убедитесь, что в вашем файле .env есть переменная VITE_WEBHOOK_PUZZLE_FEN
 const PUZZLE_FEN_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_PUZZLE_FEN as string;
 
 if (!PUZZLE_FEN_WEBHOOK_URL) {
@@ -31,35 +33,32 @@ if (!PUZZLE_FEN_WEBHOOK_URL) {
   // throw new Error('Critical Configuration Error: VITE_WEBHOOK_PUZZLE_FEN is not defined.');
 }
 
-
 export class WebhookService {
   private puzzleWebhookUrl: string;
 
   constructor() {
-    // Используем URL из переменной окружения
     this.puzzleWebhookUrl = PUZZLE_FEN_WEBHOOK_URL;
     if (this.puzzleWebhookUrl) {
         logger.info(`[WebhookService] Initialized with URL from VITE_WEBHOOK_PUZZLE_FEN: ${this.puzzleWebhookUrl}`);
     } else {
-        // Это сообщение будет показано, если проверка выше была закомментирована и приложение продолжило работу
         logger.error(`[WebhookService] Initialization failed: Webhook URL is undefined. Check VITE_WEBHOOK_PUZZLE_FEN.`);
     }
   }
 
-  public async fetchPuzzle(): Promise<AppPuzzle | null> {
+  /**
+   * Fetches a puzzle from the webhook using the provided payload.
+   * @param payload - The data to send in the request body.
+   * @returns A promise that resolves to AppPuzzle or null.
+   */
+  public async fetchPuzzle(payload: PuzzleRequestPayload): Promise<AppPuzzle | null> {
     if (!this.puzzleWebhookUrl) {
         logger.error("[WebhookService] Cannot fetch puzzle: Webhook URL is not configured.");
         return null;
     }
 
-    const hardcodedPayload: PuzzleRequestPayload = {
-      lichess_id: "valid_all",
-      pieceCount: 10,
-      rating: 1800
-    };
-
+    // Больше не используем hardcodedPayload, используем переданный payload
     logger.info(`[WebhookService] Sending POST request to: ${this.puzzleWebhookUrl}`);
-    logger.debug('[WebhookService] Request payload (hardcoded):', hardcodedPayload);
+    logger.debug('[WebhookService] Request payload:', payload);
 
     try {
       const response = await fetch(this.puzzleWebhookUrl, {
@@ -68,7 +67,7 @@ export class WebhookService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify(hardcodedPayload),
+        body: JSON.stringify(payload), // Используем переданный payload
       });
 
       logger.info(`[WebhookService] Response status: ${response.status}`);
@@ -114,31 +113,24 @@ export class WebhookService {
   }
 }
 
-// --- Пример использования (раскомментируйте для проверки) ---
-// async function testFetchPuzzle() {
-//   // const logger = { // Простой логгер для примера
-//   //  info: console.log,
-//   //  warn: console.warn,
-//   //  error: console.error,
-//   //  debug: console.log,
-//   // };
-
-//   // Перед созданием экземпляра WebhookService убедитесь, что VITE_WEBHOOK_PUZZLE_FEN доступна.
-//   if (!import.meta.env.VITE_WEBHOOK_PUZZLE_FEN) {
-//      logger.error("VITE_WEBHOOK_PUZZLE_FEN is not set. Aborting testFetchPuzzle.");
-//      return;
-//   }
+// --- Пример использования (для PuzzleController, теперь он должен передавать payload) ---
+// async function testFetchPuzzleInPuzzleController() {
 //   const webhookService = new WebhookService();
-
-//   logger.info('--- Starting testFetchPuzzle ---');
-//   const puzzle = await webhookService.fetchPuzzle();
+//   const examplePayloadForPuzzleMode: PuzzleRequestPayload = {
+//     lichess_id: "valid_all", // или другое значение по умолчанию для старого режима
+//     pieceCount: 10,
+//     rating: 1800
+//     // event и puzzleType могут отсутствовать для старого режима,
+//     // или вебхук должен их игнорировать, если они нерелевантны
+//   };
+//   logger.info('--- Starting testFetchPuzzle (PuzzleController context) ---');
+//   const puzzle = await webhookService.fetchPuzzle(examplePayloadForPuzzleMode);
 
 //   if (puzzle) {
 //     logger.info('--- Puzzle received: ---', puzzle);
 //   } else {
 //     logger.warn('--- Failed to receive puzzle. ---');
 //   }
-//   logger.info('--- testFetchPuzzle finished ---');
+//   logger.info('--- testFetchPuzzle (PuzzleController context) finished ---');
 // }
-
-// testFetchPuzzle();
+// testFetchPuzzleInPuzzleController();
