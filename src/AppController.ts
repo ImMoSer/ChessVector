@@ -7,9 +7,9 @@ import { BoardHandler } from './core/boardHandler';
 import { PgnService } from './core/pgn.service';
 import { AnalysisService } from './core/analysis.service';
 import { AnalysisController } from './features/analysis/analysisController';
-import { t, subscribeToLangChange, getCurrentLang } from './core/i18n.service';
-
+import { subscribeToLangChange, getCurrentLang } from './core/i18n.service';
 import { FinishHimController } from './features/finishHim/finishHimController';
+
 
 export type AppPage = 'finishHim';
 

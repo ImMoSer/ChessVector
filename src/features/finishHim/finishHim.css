@@ -1,0 +1,144 @@
+/* src/features/finishHim/finishHim.css */
+
+/* Стили для левой панели в режиме Finish Him */
+.finish-him-left-panel {
+  padding: 10px;
+  font-size: 0.9em;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box; /* Добавлено для консистентности */
+}
+
+/* Блок для фидбека пользователю */
+#finish-him-feedback {
+  text-align: center;
+  margin-bottom: 15px;
+  font-size: 1.2em;
+  flex-shrink: 0;
+  min-height: 2.5em;
+  /* order: -1; задан инлайн в finishHimView.ts */
+  background-color: var(--color-bg-primary);
+  border-radius: var(--panel-border-radius);
+  padding: 10px;
+  border: 1px solid var(--color-border);
+}
+
+#finish-him-feedback p {
+  font-weight: bold;
+  /* Цвет текста (gameOverMessage или обычный) задается инлайн в finishHimView.ts */
+  margin: 0;
+  padding: 5px 0;
+}
+
+/* Секция выбора категорий */
+.finish-him-categories {
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.finish-him-categories h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+/* Группа кнопок категорий (вертикальная) */
+.finish-him-categories .button-group.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Стили для кнопок категорий */
+.finish-him-categories .button.category-button {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 0.95em;
+  margin: 0; /* Убедимся, что нет внешних отступов */
+  box-sizing: border-box;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.3;
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border-hover);
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-default);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.finish-him-categories .button.category-button:hover:not(:disabled) {
+  background-color: var(--color-border-hover);
+  border-color: var(--color-accent-primary);
+  color: var(--color-text-default);
+}
+
+.finish-him-categories .button.category-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.finish-him-categories .button.category-button.active {
+  background-color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+  color: var(--color-text-on-accent);
+  font-weight: bold;
+}
+.finish-him-categories .button.category-button.active:hover:not(:disabled) {
+  background-color: #a56e17; /* Более темный var(--color-accent-primary) */
+  border-color: #a56e17;
+}
+
+
+/* Информация о текущей задаче */
+.current-task-info {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: var(--color-bg-primary);
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.current-task-info h4 {
+  margin: 0 0 10px 0;
+  padding-bottom: 8px;
+  color: var(--color-text-muted);
+  font-size: 1.1em;
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.current-task-info p {
+  margin: 8px 0; /* Немного увеличен вертикальный отступ */
+  font-size: 1.05em; /* Увеличен размер шрифта (эффективно ~0.945em от базового) */
+  color: var(--color-text-default);
+  line-height: 1.5;
+  font-weight: 500; /* Сделаем текст полужирным, чтобы он был более читаемым и выразительным */
+}
+
+/* Эти классы пока не используются в finishHimView.ts, но если будут, стили готовы */
+.current-task-info p .info-label {
+  font-weight: 600; /* Если метки будут отдельными, они могут быть еще жирнее */
+  color: var(--color-text-muted);
+  margin-right: 5px;
+}
+
+.current-task-info p .info-value {
+  color: var(--color-text-default);
+  /* font-weight: normal; Если метки жирные, значения могут быть обычными */
+}
+

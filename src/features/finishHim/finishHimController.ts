@@ -5,8 +5,13 @@ import type { WebhookService, AppPuzzle, PuzzleRequestPayload } from '../../core
 import type { StockfishService } from '../../core/stockfish.service';
 import { BoardHandler } from '../../core/boardHandler';
 import type { GameStatus, GameEndOutcome, AttemptMoveResult } from '../../core/boardHandler';
-import type { AnalysisController } from '../analysis/analysisController'; // Изменен импорт
-import type { AnalysisStateForUI } from '../../core/analysis.service'; // Тип все еще нужен для состояния
+import type {
+  AnalysisController,
+  GameControlCallbacks,
+  GameControlState,
+  AnalysisPanelState // Используем AnalysisPanelState для получения данных
+} from '../analysis/analysisController';
+import type { AnalysisStateForUI } from '../../core/analysis.service'; // Этот тип определяет, что мы ВОЗВРАЩАЕМ
 import logger from '../../utils/logger';
 import { SoundService } from '../../core/sound.service';
 import { t } from '../../core/i18n.service';
@@ -25,20 +30,19 @@ interface FinishHimControllerState {
   isUserTurnContext: boolean;
   feedbackMessage: string;
   isInPlayoutMode: boolean;
-  isStockfishThinking: boolean; // Теперь относится к Stockfish в режиме игры, а не анализа
+  isStockfishThinking: boolean;
   gameOverMessage: string | null;
   currentPgnString: string;
-  // analysisUiState больше не хранится здесь напрямую, получаем от AnalysisController
   currentTaskPieceCount: number;
+  isGameEffectivelyActive: boolean;
 }
 
 export class FinishHimController {
   public state: FinishHimControllerState;
   public boardHandler: BoardHandler;
-  private analysisController: AnalysisController; // Замена analysisService
+  public analysisController: AnalysisController;
   private webhookService: WebhookService;
   private stockfishService: StockfishService;
-  // private unsubscribeFromAnalysis: (() => void) | null = null; // Больше не нужно
 
   private defaultUserRating = 1500;
   private defaultUserPieceCount = 10;
@@ -48,11 +52,11 @@ export class FinishHimController {
     boardHandler: BoardHandler,
     webhookService: WebhookService,
     stockfishService: StockfishService,
-    analysisController: AnalysisController, // Принимаем AnalysisController
+    analysisController: AnalysisController,
     public requestRedraw: () => void,
   ) {
     this.boardHandler = boardHandler;
-    this.analysisController = analysisController; // Сохраняем AnalysisController
+    this.analysisController = analysisController;
     this.webhookService = webhookService;
     this.stockfishService = stockfishService;
 
@@ -70,25 +74,71 @@ export class FinishHimController {
       gameOverMessage: null,
       currentPgnString: "",
       currentTaskPieceCount: 0,
+      isGameEffectivelyActive: false,
     };
-    logger.info('[FinishHimController] Initialized with AnalysisController.');
 
-    this.boardHandler.onMoveMade(() => this._updatePgnDisplay());
-    this.boardHandler.onPgnNavigated(() => this._updatePgnDisplay());
+    this._registerGameCallbacksWithAnalysisController();
 
-    // Подписка на AnalysisService удалена. AppController будет вызывать requestRedraw,
-    // а FinishHimController будет получать актуальное состояние анализа через getAnalysisStateForUI()
-    // перед передачей во View.
+    this.boardHandler.onMoveMade(() => {
+        this._updatePgnDisplay();
+        this._updateAnalysisControllerGameState();
+    });
+    this.boardHandler.onPgnNavigated(() => {
+        this._updatePgnDisplay();
+        this._updateAnalysisControllerGameState();
+    });
+
+    logger.info('[FinishHimController] Initialized.');
   }
 
-  // Новый метод для получения состояния анализа для View
+  private _registerGameCallbacksWithAnalysisController(): void {
+    const gameCallbacks: GameControlCallbacks = {
+      onNextTaskRequested: () => this.loadAndStartFinishHimPuzzle(),
+      onRestartTaskRequested: () => this.handleRestartTask(),
+      onSetFenRequested: () => this.handleSetFen(),
+      onStopGameRequested: () => this._stopCurrentGameActivity(),
+    };
+    this.analysisController.setGameControlCallbacks(gameCallbacks);
+  }
+
+  private _updateAnalysisControllerGameState(): void {
+    const gameState: GameControlState = {
+      canRestartTask: !!this.state.activePuzzle,
+      canLoadNextTask: true,
+      isGameActive: this.state.isGameEffectivelyActive,
+    };
+    this.analysisController.updateGameControlState(gameState);
+  }
+
+  private _stopCurrentGameActivity(calledFromAnalysis: boolean = true): void {
+    logger.info(`[FinishHimController] Stopping current game activity. Called from analysis: ${calledFromAnalysis}`);
+    this.state.isStockfishThinking = false;
+    this.state.isInPlayoutMode = false;
+    this.state.isUserTurnContext = false;
+    this.state.isGameEffectivelyActive = false;
+
+    if (this.state.gameOverMessage === null && calledFromAnalysis) {
+        this.state.feedbackMessage = t('finishHim.feedback.gameStoppedForAnalysis');
+    }
+    this._updateAnalysisControllerGameState();
+    this.requestRedraw();
+  }
+
   public getAnalysisStateForUI(): AnalysisStateForUI {
-    return this.analysisController.getAnalysisStateForUI();
+    const panelState: AnalysisPanelState = this.analysisController.getPanelState();
+    return {
+      isActive: panelState.isAnalysisActive,
+      isLoading: panelState.isAnalysisLoading,
+      lines: panelState.analysisLines,
+      currentFenAnalyzed: panelState.currentFenAnalyzed,
+    };
   }
 
   public initializeGame(): void {
     this.state.feedbackMessage = t('finishHim.feedback.selectCategoryAndStart');
+    this.state.isGameEffectivelyActive = false;
     this._updatePgnDisplay();
+    this._updateAnalysisControllerGameState();
     this.requestRedraw();
   }
 
@@ -131,6 +181,8 @@ export class FinishHimController {
   private checkAndSetGameOver(): boolean {
     if (this.boardHandler.isBoardConfiguredForAnalysis()) {
         this.state.gameOverMessage = null;
+        this.state.isGameEffectivelyActive = false;
+        this._updateAnalysisControllerGameState();
         return false;
     }
 
@@ -140,8 +192,9 @@ export class FinishHimController {
       this.state.feedbackMessage = this.state.gameOverMessage || t('puzzle.feedback.gameOver');
       this.state.isUserTurnContext = false;
       this.state.isStockfishThinking = false;
+      this.state.isGameEffectivelyActive = false;
       logger.info(`[FinishHimController] Game over detected. Message: ${this.state.gameOverMessage}`);
-      
+
       if (this.state.activePuzzle && gameStatus.outcome?.reason !== 'stalemate') {
         const humanColor = this.boardHandler.getHumanPlayerColor();
         if (gameStatus.outcome?.winner && humanColor) {
@@ -155,6 +208,7 @@ export class FinishHimController {
         }
       }
       this._updatePgnDisplay();
+      this._updateAnalysisControllerGameState();
       this.requestRedraw();
       return true;
     }
@@ -174,9 +228,6 @@ export class FinishHimController {
 
   public async loadAndStartFinishHimPuzzle(puzzleToLoad?: AppPuzzle): Promise<void> {
     if (this.boardHandler.promotionCtrl.isActive()) this.boardHandler.promotionCtrl.cancel();
-    if (this.analysisController.getAnalysisStateForUI().isActive) { // Проверяем через AnalysisController
-        this.analysisController.stopAnalysis(); // Останавливаем анализ, если он был активен
-    }
 
     this.state.activePuzzle = null;
     this.state.interactiveSetupMoves = [];
@@ -188,6 +239,7 @@ export class FinishHimController {
     this.state.gameOverMessage = null;
     this.state.currentPgnString = "";
     this.state.currentTaskPieceCount = 0;
+    this.state.isGameEffectivelyActive = true;
     this.requestRedraw();
 
     let puzzleDataToProcess: AppPuzzle | null = puzzleToLoad || null;
@@ -206,7 +258,6 @@ export class FinishHimController {
         logger.info(`[FinishHimController] Starting FinishHim puzzle from provided data: ${puzzleToLoad?.PuzzleId}`);
     }
 
-
     if (puzzleDataToProcess) {
       this.state.activePuzzle = puzzleDataToProcess;
       this.state.interactiveSetupMoves = puzzleDataToProcess.Moves ? puzzleDataToProcess.Moves.split(' ') : [];
@@ -219,11 +270,11 @@ export class FinishHimController {
 
       const playerColorName = t(this.boardHandler.getHumanPlayerColor() === 'white' ? 'puzzle.colors.white' : 'puzzle.colors.black');
       const categoryName = t(`finishHim.puzzleTypes.${this.state.activePuzzleType}`);
-      this.state.feedbackMessage = puzzleToLoad 
+      this.state.feedbackMessage = puzzleToLoad
         ? t('finishHim.feedback.restarted', { puzzleId: puzzleDataToProcess.PuzzleId, color: playerColorName, category: categoryName })
         : t('finishHim.feedback.loaded', { puzzleId: puzzleDataToProcess.PuzzleId, color: playerColorName, category: categoryName });
 
-
+      this.state.isGameEffectivelyActive = true;
       if (this.checkAndSetGameOver()) return;
 
       const initialTurnColorInPuzzle = this.boardHandler.getBoardTurnColor();
@@ -249,13 +300,15 @@ export class FinishHimController {
     } else {
       logger.error("[FinishHimController] Failed to load FinishHim puzzle.");
       this.state.feedbackMessage = t('puzzle.feedback.loadFailed');
+      this.state.isGameEffectivelyActive = false;
     }
     this._updatePgnDisplay();
+    this._updateAnalysisControllerGameState();
     this.requestRedraw();
   }
 
   private _playNextInteractiveSetupMoveSystem(isContinuation: boolean = false): void {
-    if (this.state.gameOverMessage || this.boardHandler.promotionCtrl.isActive() || this.analysisController.getAnalysisStateForUI().isActive) return;
+    if (this.state.gameOverMessage || this.boardHandler.promotionCtrl.isActive() || this.analysisController.getPanelState().isAnalysisActive) return;
 
     if (!this.state.activePuzzle || this.state.currentInteractiveSetupMoveIndex >= this.state.interactiveSetupMoves.length) {
       if (this.state.activePuzzle) {
@@ -295,12 +348,13 @@ export class FinishHimController {
   }
 
   private _enterPlayoutMode(): void {
-    if (this.state.isInPlayoutMode) {
+    if (this.state.isInPlayoutMode && this.state.isGameEffectivelyActive) {
         logger.debug("[FinishHimController] Already in playout mode. Ensuring turn context is correct.");
     } else {
         logger.info("[FinishHimController] Entering playout mode.");
         SoundService.playSound('puzzle_playout_start');
         this.state.isInPlayoutMode = true;
+        this.state.isGameEffectivelyActive = true;
     }
 
     const currentBoardTurn = this.boardHandler.getBoardTurnColor();
@@ -315,12 +369,12 @@ export class FinishHimController {
         if (!this.state.gameOverMessage) this.state.feedbackMessage = t('finishHim.feedback.systemToMovePlayout');
         this.triggerStockfishMoveInPlayoutIfNeeded();
     }
+    this._updateAnalysisControllerGameState();
     this.requestRedraw();
   }
 
-
   private async triggerStockfishMoveInPlayoutIfNeeded(): Promise<void> {
-    if (this.state.gameOverMessage || this.boardHandler.promotionCtrl.isActive() || this.analysisController.getAnalysisStateForUI().isActive || !this.state.isInPlayoutMode) {
+    if (this.state.gameOverMessage || this.boardHandler.promotionCtrl.isActive() || this.analysisController.getPanelState().isAnalysisActive || !this.state.isInPlayoutMode || !this.state.isGameEffectivelyActive) {
       return;
     }
     const currentBoardTurn = this.boardHandler.getBoardTurnColor();
@@ -336,8 +390,8 @@ export class FinishHimController {
         const stockfishMoveUci = await this.stockfishService.getBestMoveOnly(this.boardHandler.getFen(), { depth: 12 });
         this.state.isStockfishThinking = false;
 
-        if (this.state.gameOverMessage || !this.state.isInPlayoutMode || this.analysisController.getAnalysisStateForUI().isActive) { // Добавлена проверка на активный анализ
-            logger.info("[FinishHimController] State changed (game over, not playout, or analysis active) during Stockfish thinking, aborting move application.");
+        if (this.state.gameOverMessage || !this.state.isInPlayoutMode || !this.state.isGameEffectivelyActive || this.analysisController.getPanelState().isAnalysisActive) {
+            logger.info("[FinishHimController] State changed during Stockfish thinking, aborting move application.");
             return;
         }
 
@@ -370,7 +424,7 @@ export class FinishHimController {
         }
       }
       this.requestRedraw();
-    } else if (currentBoardTurn === humanColor && !this.state.isUserTurnContext && this.state.isInPlayoutMode) {
+    } else if (currentBoardTurn === humanColor && !this.state.isUserTurnContext && this.state.isInPlayoutMode && this.state.isGameEffectivelyActive) {
         logger.debug("[FinishHimController triggerStockfishMoveInPlayoutIfNeeded] Aligning isUserTurnContext to true as it's human's FEN turn in playout.");
         this.state.isUserTurnContext = true;
         if (!this.state.gameOverMessage) this.state.feedbackMessage = t('finishHim.feedback.yourTurnPlayout');
@@ -379,7 +433,7 @@ export class FinishHimController {
   }
 
   public async handleUserMove(orig: Key, dest: Key): Promise<void> {
-    const analysisIsActive = this.analysisController.getAnalysisStateForUI().isActive;
+    const analysisIsActive = this.analysisController.getPanelState().isAnalysisActive;
 
     if (this.state.gameOverMessage && !analysisIsActive) {
         logger.warn("[FinishHimController handleUserMove] Move ignored: game over and not in analysis config.");
@@ -406,7 +460,7 @@ export class FinishHimController {
 
     const moveResult: AttemptMoveResult = await this.boardHandler.attemptUserMove(orig, dest);
 
-    if (analysisIsActive) { // Если анализ активен, BoardHandler уже обновил PGN, и AnalysisController подхватит
+    if (analysisIsActive) {
         logger.info(`[FinishHimController] User move in analysis mode: ${orig}-${dest}. Result: ${JSON.stringify(moveResult)}`);
         if (moveResult.success && moveResult.uciMove) {
             this.state.feedbackMessage = t('puzzle.feedback.analysisMoveMade', { san: moveResult.sanMove || moveResult.uciMove, fen: this.boardHandler.getFen() });
@@ -418,13 +472,10 @@ export class FinishHimController {
         } else {
             this.state.feedbackMessage = t('puzzle.feedback.moveErrorAnalysis');
         }
-        // PGN и состояние анализа обновятся через события BoardHandler -> AnalysisController -> requestGlobalRedraw
-        // this._updatePgnDisplay(); // Не обязательно здесь, т.к. onMoveMade сработает
-        this.requestRedraw(); // Для немедленного обновления feedbackMessage
+        this.requestRedraw();
         return;
     }
 
-    // Логика для интерактивного режима или режима доигрывания (когда анализ НЕ активен)
     if (moveResult.success && moveResult.uciMove) {
       this.state.currentTaskPieceCount = this.countPiecesFromFen(this.boardHandler.getFen());
       this._updatePgnDisplay();
@@ -492,9 +543,6 @@ export class FinishHimController {
 
   public handleRestartTask(): void {
     if (this.boardHandler.promotionCtrl.isActive()) this.boardHandler.promotionCtrl.cancel();
-    if (this.analysisController.getAnalysisStateForUI().isActive) {
-        this.analysisController.stopAnalysis();
-    }
 
     if (this.state.activePuzzle) {
       logger.info(`[FinishHimController] Restarting current task: ${this.state.activePuzzle.PuzzleId}`);
@@ -509,9 +557,6 @@ export class FinishHimController {
 
   public handleSetFen(): void {
     if (this.boardHandler.promotionCtrl.isActive()) this.boardHandler.promotionCtrl.cancel();
-    if (this.analysisController.getAnalysisStateForUI().isActive) {
-        this.analysisController.stopAnalysis();
-    }
 
     const fen = prompt(t('puzzle.feedback.enterFenPrompt'), this.boardHandler.getFen());
     if (fen) {
@@ -521,14 +566,15 @@ export class FinishHimController {
       this.state.currentTaskPieceCount = this.countPiecesFromFen(fen);
       this.state.isStockfishThinking = false;
       this.state.gameOverMessage = null;
-      this.state.isInPlayoutMode = false; 
+      this.state.isInPlayoutMode = false;
+      this.state.isGameEffectivelyActive = true;
 
       const humanPlayerColorBasedOnTurn = fen.includes(' w ') ? 'white' : 'black';
       this.boardHandler.setupPosition(fen, humanPlayerColorBasedOnTurn, true);
       this._updatePgnDisplay();
 
       if (this.checkAndSetGameOver()) return;
-      
+
       this._enterPlayoutMode();
       this.requestRedraw();
     }
@@ -541,44 +587,40 @@ export class FinishHimController {
       this.requestRedraw();
       return;
     }
-
-    // Передаем текущий путь PGN в AnalysisController, если начинаем анализ
-    const currentPgnPath = this.boardHandler.pgnService.getCurrentPath();
-    this.analysisController.toggleAnalysis(currentPgnPath); 
-    
-    // Обновляем feedbackMessage на основе нового состояния анализа
-    const analysisState = this.analysisController.getAnalysisStateForUI();
-    if (analysisState.isActive) {
+    this.analysisController.toggleAnalysisEngine();
+    const analysisState = this.analysisController.getPanelState();
+    if (analysisState.isAnalysisActive) {
         this.state.feedbackMessage = t('puzzle.feedback.analysisModeActive');
-        this.state.isStockfishThinking = false; // Stockfish управляется AnalysisController
-        this.state.isUserTurnContext = true;    // В режиме анализа пользователь всегда может ходить
+        this.state.isGameEffectivelyActive = false;
     } else {
-        // Логика восстановления состояния игры после выключения анализа
-        if (!this.checkAndSetGameOver()) {
-            if (this.state.isInPlayoutMode) {
-                const currentBoardTurn = this.boardHandler.getBoardTurnColor();
-                const humanColor = this.boardHandler.getHumanPlayerColor();
-                this.state.isUserTurnContext = currentBoardTurn === humanColor;
-                this.state.feedbackMessage = this.state.isUserTurnContext ? t('finishHim.feedback.yourTurnPlayout') : t('finishHim.feedback.systemToMovePlayout');
-                if (!this.state.isUserTurnContext) this.triggerStockfishMoveInPlayoutIfNeeded();
-            } else if (this.state.activePuzzle && this.state.currentInteractiveSetupMoveIndex < this.state.interactiveSetupMoves.length) {
-                const currentBoardTurn = this.boardHandler.getBoardTurnColor();
-                const humanColor = this.boardHandler.getHumanPlayerColor();
-                this.state.isUserTurnContext = currentBoardTurn === humanColor;
-                this.state.feedbackMessage = this.state.isUserTurnContext ? t('puzzle.feedback.yourTurn') : t('puzzle.feedback.systemMove');
-                if (!this.state.isUserTurnContext) this._playNextInteractiveSetupMoveSystem(true);
+        if (!this.state.gameOverMessage) {
+            if (this.state.activePuzzle) {
+                 this.state.isGameEffectivelyActive = true;
+                if (this.state.currentInteractiveSetupMoveIndex < this.state.interactiveSetupMoves.length) {
+                    this.state.isInPlayoutMode = false;
+                    const currentBoardTurn = this.boardHandler.getBoardTurnColor();
+                    const humanColor = this.boardHandler.getHumanPlayerColor();
+                    this.state.isUserTurnContext = currentBoardTurn === humanColor;
+                    this.state.feedbackMessage = this.state.isUserTurnContext ? t('puzzle.feedback.yourTurn') : t('puzzle.feedback.systemMove');
+                    if (!this.state.isUserTurnContext) this._playNextInteractiveSetupMoveSystem(true);
+                } else {
+                    this._enterPlayoutMode();
+                }
             } else {
-                this._enterPlayoutMode(); // Если не было активной игры, входим в доигрывание
+                this._enterPlayoutMode();
             }
+        } else {
+            this.state.isGameEffectivelyActive = false;
+            this.state.feedbackMessage = this.state.gameOverMessage;
         }
     }
     this._updatePgnDisplay();
+    this._updateAnalysisControllerGameState();
     this.requestRedraw();
   }
 
-
   public handlePlayAnalysisMove(uciMove: string): void {
-    if (!this.analysisController.getAnalysisStateForUI().isActive) {
+    if (!this.analysisController.getPanelState().isAnalysisActive) {
       logger.warn('[FinishHimController] handlePlayAnalysisMove called, but analysis is not active.');
       this.state.feedbackMessage = t('puzzle.feedback.analysisInactiveForPlayMove');
       this.requestRedraw();
@@ -586,7 +628,6 @@ export class FinishHimController {
     }
     logger.info(`[FinishHimController] User requested to play analysis move via AnalysisController: ${uciMove}`);
     this.analysisController.playMoveFromAnalysisLine(uciMove);
-    // Обновление UI и PGN произойдет через коллбэки от BoardHandler -> AnalysisController -> requestGlobalRedraw
   }
 
   public handlePgnNavToStart(): void { if (this.boardHandler.handleNavigatePgnToStart()) { this._updatePgnDisplay(); this.requestRedraw(); } }
@@ -598,11 +639,5 @@ export class FinishHimController {
 
   public destroy(): void {
     logger.info('[FinishHimController] Destroying FinishHimController instance.');
-    // Отписка от AnalysisService больше не нужна
-    // if (this.unsubscribeFromAnalysis) {
-    //   this.unsubscribeFromAnalysis();
-    //   this.unsubscribeFromAnalysis = null;
-    // }
-    // AnalysisController уничтожается в AppController
   }
 }

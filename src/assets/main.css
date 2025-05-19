@@ -1,0 +1,331 @@
+/* src/assets/main.css */
+
+:root {
+  --header-height: 5vh;
+  --color-bg-primary: #161512;
+  --color-bg-secondary: #262421;
+  --color-bg-tertiary: #33312e;
+  --color-text-default: #eaeaea;
+  --color-text-muted: #a0a0a0;
+  --color-text-on-accent: #ffffff;
+  --color-text-error: #ffcdd2;
+  --color-text-link: var(--color-accent-info);
+  --color-border: #33312e;
+  --color-border-hover: #4d4a47;
+  --color-accent-primary: #bf811d;
+  --color-accent-secondary: #907bff;
+  --color-accent-success: #629924;
+  --color-accent-warning: #e46a09;
+  --color-accent-error: #cc3432;
+  --color-accent-info: #0072b1;
+  --color-accent-special: #b72fc6;
+
+  /* Размеры для альбомного режима */
+  --panel-width: 300px;
+  --calculated-board-size-vh: 70vh; /* JS будет обновлять это для альбомного режима */
+
+  /* Общие отступы */
+  --page-vertical-padding: 10px;
+  --panel-gap: 10px;
+  --panel-border-radius: 8px;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-default);
+  height: 100vh;
+  overflow: hidden; /* Предотвращаем прокрутку на body, управляется ниже */
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+#app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Занимает всю высоту окна просмотра */
+}
+
+#app-header {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-default);
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--header-height);
+  padding: 0 15px;
+  border-bottom: 1px solid var(--color-border);
+  z-index: 1000; /* Хедер всегда сверху */
+  flex-shrink: 0; /* Хедер не должен сжиматься */
+}
+
+.nav-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.app-title {
+  font-size: 1.2em;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-right: 20px;
+}
+
+.nav-toggle-button {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1.5em;
+  padding: 5px;
+  line-height: 1;
+  display: none; /* Показывается только в портретном режиме через медиа-запрос */
+  margin-left: auto;
+}
+
+.nav-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.nav-links li {
+  margin-left: 5px;
+}
+.nav-links li:first-child {
+  margin-left: 0;
+}
+
+.nav-links li a {
+  display: block;
+  padding: 8px 12px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  border-radius: 4px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav-links li a:hover,
+.nav-links li a.active {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-default);
+}
+
+/* Контейнер для основного контента страницы */
+#page-content-wrapper {
+  flex-grow: 1; /* Занимает все оставшееся пространство по высоте */
+  display: flex;
+  /* В альбомном режиме: центрирует .three-column-layout */
+  /* В портретном режиме: flex-direction: column и overflow-y: auto */
+  justify-content: center;
+  align-items: flex-start; /* По умолчанию контент прижат к верху */
+  overflow: hidden; /* Прокрутка управляется в портретном режиме */
+  padding-top: var(--page-vertical-padding);
+  padding-bottom: var(--page-vertical-padding);
+  padding-left: var(--panel-gap);
+  padding-right: var(--panel-gap);
+}
+
+/* --- Стили для альбомной ориентации (по умолчанию) --- */
+.three-column-layout {
+  display: flex;
+  flex-direction: row; /* Панели в ряд */
+  width: 100%;
+  height: 100%; /* Растягивается на всю высоту #page-content-wrapper */
+  align-items: flex-start; /* Вертикальное выравнивание панелей по центру */
+  justify-content: center; /* Горизонтальное выравнивание группы панелей по центру */
+  gap: var(--panel-gap);
+}
+
+#left-panel,
+#right-panel {
+  background-color: var(--color-bg-secondary);
+  padding: 15px;
+  overflow-y: auto; /* Внутренняя прокрутка для боковых панелей */
+  flex-shrink: 0;
+  box-shadow: 0 0 10px rgba(0,0,0,0.2);
+  border-radius: var(--panel-border-radius);
+  display: flex;
+  flex-direction: column;
+  width: var(--panel-width); /* Фиксированная ширина для боковых панелей */
+  height: var(--calculated-board-size-vh); /* Высота равна высоте доски */
+}
+
+#center-panel-resizable-wrapper { /* Обертка для доски */
+  width: var(--calculated-board-size-vh); /* Ширина равна высоте (квадратная доска) */
+  height: var(--calculated-board-size-vh); /* Управляется JS */
+  min-width: 0; /* Позволяет сжиматься */
+  flex-shrink: 0; /* Не сжимается при недостатке места */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative; /* Для позиционирования хендла ресайза */
+  border-radius: var(--panel-border-radius);
+  overflow: hidden; /* Обрезает содержимое доски, если оно больше */
+}
+
+#center-panel { /* Непосредственно контейнер доски */
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.resize-handle-center {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  cursor: nwse-resize;
+  z-index: 50;
+  /* Можно добавить фон для видимости, если нужно */
+  /* background-color: rgba(255,255,255,0.1); */
+  /* border-top-left-radius: 50%; */
+}
+
+body.board-resizing {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  cursor: nwse-resize !important;
+}
+body.board-resizing * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+#board-wrapper { /* Внутренняя обертка, если нужна для chessground */
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#board-container { /* Сам элемент, куда инициализируется chessground */
+    width: 100%;
+    height: 100%;
+}
+
+
+/* --- Стили для портретной ориентации --- */
+@media (orientation: portrait) {
+  #page-content-wrapper {
+    flex-direction: column; /* Элементы внутри (т.е. .three-column-layout) идут друг под другом */
+    align-items: center;    /* Центрирует .three-column-layout по горизонтали */
+    justify-content: flex-start; /* Прижимает .three-column-layout к верху */
+    overflow-y: auto;      /* Включает вертикальную прокрутку для всего содержимого, если оно не помещается */
+    /* padding-left и padding-right остаются от базовых стилей #page-content-wrapper */
+  }
+
+  .three-column-layout {
+    flex-direction: column; /* Панели внутри этого блока идут друг под другом */
+    align-items: center;    /* Центрирует дочерние панели (доску, левую, правую) */
+    height: auto;           /* Высота определяется содержимым, что позволяет ему быть больше родителя */
+    width: 100%;            /* Занимает всю ширину родителя (#page-content-wrapper) */
+    /* gap: var(--panel-gap); уже есть у базового .three-column-layout */
+  }
+
+  #center-panel-resizable-wrapper { /* Обертка для доски */
+    order: 1; /* Доска первая */
+    width: 100vw !important;  /* Доска на всю ширину окна просмотра */
+    height: 100vw !important; /* Доска квадратная, высота равна ширине */
+    flex-shrink: 0; /* Доска не должна сжиматься */
+    border-radius: 0; /* Убираем скругление для полноэкранных элементов */
+    /* Компенсируем padding родителя, чтобы занять всю ширину */
+    margin-left: calc(-1 * var(--panel-gap));
+    margin-right: calc(-1 * var(--panel-gap));
+  }
+  /* Если #page-content-wrapper не имеет горизонтальных padding в портретном режиме,
+     то margin-left/right выше не нужны. Если имеет, то они нужны.
+     Пока оставляем, предполагая, что padding на #page-content-wrapper глобальный.
+  */
+
+
+  #right-panel { /* Панель анализа (например) */
+    order: 2; /* Вторая после доски */
+    width: 100vw; /* На всю ширину */
+    height: auto; /* Высота по контенту */
+    min-height: 200px; /* Примерная минимальная высота, чтобы панель была видна */
+    padding: 15px;
+    box-shadow: none;
+    border-radius: 0;
+    flex-shrink: 0;
+    margin-left: calc(-1 * var(--panel-gap));
+    margin-right: calc(-1 * var(--panel-gap));
+    background-color: var(--color-bg-secondary); /* Явно задаем фон, т.к. он мог быть только у #left-panel, #right-panel */
+    display: flex; /* Чтобы flex-direction: column работало */
+    flex-direction: column; /* Чтобы внутренние элементы располагались вертикально */
+    overflow-y: visible; /* Внутренней прокрутки нет, скроллится #page-content-wrapper */
+  }
+
+  #left-panel { /* Панель информации/категорий (например) */
+    order: 3; /* Третья */
+    width: 100vw; /* На всю ширину */
+    height: auto;
+    min-height: 150px; /* Примерная минимальная высота */
+    padding: 15px;
+    box-shadow: none;
+    border-radius: 0;
+    flex-shrink: 0;
+    margin-left: calc(-1 * var(--panel-gap));
+    margin-right: calc(-1 * var(--panel-gap));
+    background-color: var(--color-bg-secondary);
+    display: flex;
+    flex-direction: column;
+    overflow-y: visible;
+  }
+
+  .resize-handle-center {
+    display: none; /* Скрываем хендл ресайза в портретном режиме */
+  }
+
+  /* Мобильная навигация */
+  .nav-toggle-button {
+    display: block; /* Показываем кнопку "гамбургер" */
+  }
+  .nav-links {
+    display: none; /* Ссылки по умолчанию скрыты */
+    position: absolute;
+    top: var(--header-height); /* Появляются под хедером */
+    left: 0;
+    width: 100%;
+    background-color: var(--color-bg-secondary);
+    flex-direction: column; /* Ссылки идут друг под другом */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    padding: 5px 0;
+  }
+  #app-header.menu-open .nav-links {
+    display: flex; /* Показываем ссылки, если меню открыто */
+  }
+  .nav-links li {
+      margin-left: 0;
+      width: 100%;
+  }
+  .nav-links li a {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-border);
+  }
+   .nav-links li:last-child a {
+       border-bottom: none; /* У последней ссылки нет нижнего бордера */
+   }
+}
+

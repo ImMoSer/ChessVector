@@ -7,8 +7,7 @@ import { FINISH_HIM_PUZZLE_TYPES } from './finishHim.types';
 import { BoardView } from '../../shared/components/boardView';
 import logger from '../../utils/logger';
 import { renderPromotionDialog } from '../common/promotion/promotionView';
-import { renderAnalysisLinesView } from '../analysis/analysisView'; // Импортируем новую view для анализа
-// EvaluatedLineWithSan и Color больше не нужны здесь напрямую для рендеринга анализа
+import { renderAnalysisPanel } from '../analysis/analysisPanelView';
 import { t } from '../../core/i18n.service';
 
 let boardViewInstance: BoardView | null = null;
@@ -20,20 +19,17 @@ export interface FinishHimPageViewLayout {
 }
 
 function renderCategoryButtons(controller: FinishHimController): VNode {
+  // Инлайновые стили для h3 и кнопок категорий удалены,
+  // они теперь должны быть полностью в finishHim.css
   return h('div.finish-him-categories', [
-    h('h3', { style: { marginTop: '0', marginBottom: '15px', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px' } }, t('finishHim.categories.title')),
+    h('h3', t('finishHim.categories.title')), // Удалены инлайн стили
     h('div.button-group.vertical',
       FINISH_HIM_PUZZLE_TYPES.map(type =>
         h('button.button.category-button', {
           key: type,
           class: { active: controller.state.activePuzzleType === type },
-          style: { 
-            marginBottom: '8px', 
-            width: '100%',
-            backgroundColor: controller.state.activePuzzleType === type ? 'var(--color-accent-primary)' : 'var(--color-bg-tertiary)',
-            color: controller.state.activePuzzleType === type ? 'var(--color-text-on-accent)' : 'var(--color-text-default)',
-            borderColor: controller.state.activePuzzleType === type ? 'var(--color-accent-primary)' : 'var(--color-border-hover)',
-          },
+          // Инлайновые стили для backgroundColor, color, borderColor удалены
+          // и управляются через класс .active в CSS
           on: {
             click: () => {
               logger.debug(`[FinishHimView] Category selected: ${type}`);
@@ -49,16 +45,9 @@ function renderCategoryButtons(controller: FinishHimController): VNode {
   ]);
 }
 
-// Старая функция renderAnalysisLinesForFinishHim больше не нужна,
-// так как ее заменяет renderAnalysisLinesView из analysisView.ts
-
 export function renderFinishHimUI(controller: FinishHimController): FinishHimPageViewLayout {
   const fhState = controller.state;
   const boardHandler = controller.boardHandler;
-  const isBoardConfiguredForAnalysis = boardHandler.isBoardConfiguredForAnalysis();
-  
-  // Получаем состояние анализа от FinishHimController, который берет его из AnalysisController
-  const analysisStateForView = controller.getAnalysisStateForUI();
 
   let promotionDialogVNode: VNode | null = null;
   if (controller.chessboardService.ground) {
@@ -105,70 +94,38 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
     }
   };
 
+  // Инлайновые стили для #board-wrapper и #board-container оставлены,
+  // так как они больше относятся к позиционированию и размеру, чем к внешнему виду.
   const centerContent = h('div#board-wrapper', { key: 'fh-board-wrapper', style: { position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center'}, hook: boardWrapperHook }, [
     h('div#board-container.cg-wrap', { key: 'fh-board-container', style: { width: '100%' }}),
     promotionDialogVNode
   ]);
 
-  const leftContent = h('div.finish-him-left-panel', { style: { padding: '10px', fontSize: '0.9em', lineHeight: '1.6', display: 'flex', flexDirection: 'column', height: '100%' }}, [
-    renderCategoryButtons(controller),
-    fhState.activePuzzle ? h('div.current-task-info', { style: { marginTop: '20px', borderTop: '1px solid var(--color-border)', paddingTop: '10px'}}, [
-        h('h4', {style: {margin: '0 0 5px 0'}}, t('finishHim.currentTask.title')),
-        h('p', {style: {margin: '2px 0'}}, `${t('puzzle.details.idLabel')} ${fhState.activePuzzle.PuzzleId}`),
-        h('p', {style: {margin: '2px 0'}}, `${t('puzzle.details.ratingLabel')} ${fhState.activePuzzle.Rating || t('common.na')}`),
-        h('p', {style: {margin: '2px 0'}}, `${t('puzzle.details.levelPiecesLabel')} ${fhState.currentTaskPieceCount || t('common.na')}`),
-    ]) : null,
-  ]);
-
-  let pgnNavigationControls: VNode | null = null;
-  if (isBoardConfiguredForAnalysis) {
-    pgnNavigationControls = h('div#pgn-navigation-controls.button-group', { style: { display: 'flex', justifyContent: 'space-between', gap: '5px', marginBottom: '10px' }}, [
-        h('button.button.pgn-nav-button', { attrs: { disabled: !controller.canNavigatePgnBackward() || boardHandler.promotionCtrl.isActive() }, on: { click: () => controller.handlePgnNavToStart() }}, t('pgn.nav.start')),
-        h('button.button.pgn-nav-button', { attrs: { disabled: !controller.canNavigatePgnBackward() || boardHandler.promotionCtrl.isActive() }, on: { click: () => controller.handlePgnNavBackward() }}, t('pgn.nav.prev')),
-        h('button.button.pgn-nav-button', { attrs: { disabled: !controller.canNavigatePgnForward(0) || boardHandler.promotionCtrl.isActive() }, on: { click: () => controller.handlePgnNavForward(0) }}, t('pgn.nav.next')),
-        h('button.button.pgn-nav-button', { attrs: { disabled: !controller.canNavigatePgnForward(0) || boardHandler.promotionCtrl.isActive() }, on: { click: () => controller.handlePgnNavToEnd() }}, t('pgn.nav.end')),
-    ]);
-  }
-
-  const rightContent = h('div.finish-him-right-panel', { style: { display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' } }, [
-    h('div#finish-him-feedback', { style: { textAlign: 'center', marginBottom: '15px', fontSize: '1.1em', flexShrink: '0', minHeight: '2.5em' } }, [
+  // Инлайновые стили для .finish-him-left-panel удалены, теперь они будут в finishHim.css
+  const leftContent = h('div.finish-him-left-panel', [
+    h('div#finish-him-feedback', {
+      // Инлайновый стиль для order оставлен, так как он управляет порядком flex-элементов,
+      // что является частью структуры, а не чистого вида.
+      // Остальные инлайновые стили удалены.
+      style: { order: '-1' }
+    }, [
+      // Инлайновый стиль для цвета текста оставлен, так как он динамический.
       h('p', { style: { fontWeight: 'bold', color: fhState.gameOverMessage ? 'var(--color-accent-error)' : 'var(--color-text-default)' } },
         fhState.gameOverMessage || fhState.feedbackMessage
       ),
     ]),
-    pgnNavigationControls,
-    h('div#controls.button-group', { style: { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '10px', marginTop: pgnNavigationControls ? '5px' : 'auto', flexShrink: '0' } }, [
-      h('button.button.finish-him-button.primary-button', {
-        attrs: {
-          disabled: fhState.isStockfishThinking || boardHandler.promotionCtrl.isActive() || isBoardConfiguredForAnalysis
-        },
-        on: { click: () => controller.loadAndStartFinishHimPuzzle() }
-      }, t('puzzle.button.next')),
-      h('button.button.finish-him-button', {
-        attrs: {
-          disabled: !fhState.activePuzzle || fhState.isStockfishThinking || boardHandler.promotionCtrl.isActive() || isBoardConfiguredForAnalysis
-        },
-        on: { click: () => controller.handleRestartTask() }
-      }, t('puzzle.button.restartTask')),
-      h('button.button.finish-him-button', {
-        attrs: {
-          disabled: fhState.isStockfishThinking || boardHandler.promotionCtrl.isActive()
-        },
-        on: { click: () => controller.handleSetFen() }
-      }, t('puzzle.button.setFen')),
-      h('button.button.finish-him-button', {
-        class: { 'active-analysis': isBoardConfiguredForAnalysis },
-        attrs: {
-          disabled: (!fhState.activePuzzle && !fhState.gameOverMessage && !boardHandler.getFen().startsWith('8/8/8/8/8/8/8/8')) || fhState.isStockfishThinking || boardHandler.promotionCtrl.isActive()
-        },
-        on: { click: () => controller.handleToggleAnalysisMode() }
-      }, isBoardConfiguredForAnalysis ? t('puzzle.button.finishAnalysis') : t('puzzle.button.analysis')),
-    ]),
-    // Используем новую функцию renderAnalysisLinesView
-    renderAnalysisLinesView(
-        analysisStateForView, // Передаем состояние анализа
-        (uciMove: string) => controller.handlePlayAnalysisMove(uciMove) // Передаем колбэк
-    )
+    renderCategoryButtons(controller),
+    // Инлайновые стили для .current-task-info и его дочерних элементов удалены.
+    fhState.activePuzzle ? h('div.current-task-info', [
+        h('h4', t('finishHim.currentTask.title')),
+        h('p', `${t('puzzle.details.idLabel')} ${fhState.activePuzzle.PuzzleId}`),
+        h('p', `${t('puzzle.details.ratingLabel')} ${fhState.activePuzzle.Rating || t('common.na')}`),
+    ]) : null,
+  ]);
+
+  // Инлайновый стиль для .finish-him-right-panel оставлен, так как он структурный.
+  const rightContent = h('div.finish-him-right-panel', { style: { display: 'flex', flexDirection: 'column', height: '100%' } }, [
+    renderAnalysisPanel(controller.analysisController)
   ]);
 
   return {

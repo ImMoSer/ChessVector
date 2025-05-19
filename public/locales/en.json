@@ -22,24 +22,17 @@
   },
   "puzzle": {
     "details": {
-      "title": "Puzzle Details",
       "idLabel": "Puzzle ID:",
       "ratingLabel": "Rating:",
       "levelPiecesLabel": "Level (Pieces):"
     },
-    "loadPrompt": "Load a puzzle to see details.",
-    "pgn": {
-      "title": "Game Notation (PGN)",
-      "placeholder": "PGN will appear here...",
-      "variationsLabel": "Variations:"
-    },
     "button": {
       "next": "Next Puzzle",
-      "restart": "Restart",
+      "restartTask": "Restart Task",
       "analysis": "Analysis",
       "finishAnalysis": "Finish Analysis",
       "setFen": "Set FEN",
-      "restartTask": "Restart Task"
+      "resign": "Resign"
     },
     "feedback": {
       "loadPrompt": "Load a puzzle to start.",
@@ -100,24 +93,20 @@
     }
   },
   "analysis": {
-    "settings": "Analysis Settings",
-    "results": "Analysis Results",
     "inactive": "Analysis not active.",
     "loading": "Analyzing...",
     "noData": "No analysis data to display.",
-    "linesTitle": "Analysis Lines:",
-    "depthPrefix": "Depth:",
-    "scorePrefix": "Score:",
-    "mateIn": "mate in {value}",
-    "pvPrefix": "PV:",
-    "timeout": "timeout"
+    "mateInShort": "M{value}",
+    "timeout": "Analysis timed out.",
+    "playFirstMove": "Play first move of this line",
+    "noMoveToPlay": "No move to play"
   },
   "pgn": {
     "nav": {
-      "start": "|◀ Start",
-      "prev": "◀ Prev",
-      "next": "Next ▶",
-      "end": "End ▶|"
+      "start": "Go to start of game",
+      "prev": "Previous move",
+      "next": "Next move",
+      "end": "Go to end of game"
     }
   },
   "finishHim": {
@@ -135,9 +124,6 @@
       "queenRookEndgame": "Queen & Rook Endgame",
       "pawnEndgame": "Pawn Endgame",
       "zugzwang": "Zugzwang"
-    },
-    "button": {
-      "restartTask": "Restart Task" 
     },
     "currentTask": {
       "title": "Current Task"
@@ -158,7 +144,8 @@
       "taskResumed": "Task resumed.",
       "waitForSetup": "Please wait for task setup or start a new task.",
       "noTaskToRestart": "No active task to restart. Load a new one.",
-      "restarted": "Task {puzzleId} ({category}) restarted. You play as {color}."
+      "restarted": "Task {puzzleId} ({category}) restarted. You play as {color}.",
+      "gameStoppedForAnalysis": "Game stopped. Analysis can be started."
     }
   }
 }

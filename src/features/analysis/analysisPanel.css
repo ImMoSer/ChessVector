@@ -1,0 +1,268 @@
+/* src/features/analysis/analysisPanel.css */
+
+#analysis-panel-container {
+  display: flex;
+  flex-direction: column; /* Элементы идут друг под другом: PGN nav, Lines, Main controls */
+  gap: 12px; /* Отступ между основными блоками */
+  padding: 10px;
+  background-color: #262421; /* --color-bg-secondary */
+  border-radius: 8px; /* --panel-border-radius */
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* Общие стили для групп кнопок */
+#analysis-panel-container .button-group {
+  display: flex;
+  gap: 10px;
+}
+
+#analysis-panel-container .button-group.vertical {
+  flex-direction: column;
+}
+
+#analysis-panel-container .button-group.horizontal {
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+/* Базовый стиль для кнопок ВНУТРИ этой панели */
+#analysis-panel-container .button {
+  width: 100%; /* Для кнопок в вертикальной группе */
+  padding: 8px 10px;
+  font-size: 0.9em;
+  margin: 0;
+  box-sizing: border-box;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+  border-radius: 8px; /* --panel-border-radius */
+  border: 1px solid #4d4a47; /* --color-border-hover */
+  background-color: #33312e; /* --color-bg-tertiary */
+  color: #eaeaea; /* --color-text-default */
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#analysis-panel-container .button:hover:not(:disabled) {
+  background-color: #4d4a47; /* --color-border-hover */
+  border-color: #bf811d; /* --color-accent-primary */
+}
+
+#analysis-panel-container .button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #33312e; /* --color-bg-tertiary */
+  border-color: #33312e; /* --color-border */
+  color: #a0a0a0; /* --color-text-muted */
+}
+
+/* Кнопки навигации PGN */
+#pgn-navigation-controls { /* Это button-group.horizontal */
+  margin-bottom: 0; /* Убрал margin-bottom, т.к. есть gap у родителя */
+  gap: 5px;
+}
+
+#pgn-navigation-controls .button.pgn-nav-button {
+  flex-grow: 1;
+  font-size: 0.85em;
+  padding: 6px 8px;
+  /* Стили для :disabled уже покрываются общим правилом */
+}
+
+/* Основные управляющие кнопки в #main-controls */
+#main-controls.button-group.vertical .button {
+   width: 100%;
+}
+
+/* Стилизация конкретных кнопок */
+
+/* Кнопка "Next Puzzle" (имеет класс .primary-button в HTML) */
+#main-controls .button.game-control-button.primary-button {
+  background-color: #629924;
+  border-color: #629924;
+  color: #ffffff; /* --color-text-on-accent */
+}
+#main-controls .button.game-control-button.primary-button:hover:not(:disabled) {
+  background-color: #4f7a1e; /* Darker success */
+  border-color: #4f7a1e;
+}
+
+/* Кнопка "Restart Task" - вторая кнопка в группе #main-controls */
+#main-controls .button.game-control-button:nth-of-type(2) {
+  background-color: #e46a09;
+  border-color: #e46a09;
+  color: #ffffff; /* --color-text-on-accent */
+}
+#main-controls .button.game-control-button:nth-of-type(2):hover:not(:disabled) {
+  background-color: #c75a07; /* Darker warning */
+  border-color: #c75a07;
+}
+
+/* Кнопка "Analysis" / "Finish Analysis" / "Resign" (имеет класс .analysis-toggle-button) */
+#main-controls .button.analysis-toggle-button { /* Базовый стиль для "Analysis" (когда выключен) */
+  background-color: #b72fc6;
+  border-color: #b72fc6;
+  color: #ffffff; /* --color-text-on-accent */
+}
+#main-controls .button.analysis-toggle-button:hover:not(:disabled) {
+  background-color: #93259e; /* Darker special */
+  border-color: #93259e;
+}
+
+#main-controls .button.analysis-toggle-button.active-analysis { /* "Finish Analysis" */
+  background-color: #0072b1;
+  border-color: #0072b1;
+  color: #ffffff; /* --color-text-on-accent */
+}
+#main-controls .button.analysis-toggle-button.active-analysis:hover:not(:disabled) {
+  background-color: #005f92; /* Darker info */
+  border-color: #005f92;
+}
+
+/* Кнопка "Resign" - если analysis-toggle-button также имеет класс resign-button */
+/* Убедитесь, что класс .resign-button добавляется в analysisPanelView.ts, когда это необходимо */
+#main-controls .button.analysis-toggle-button.resign-button {
+  background-color: #cc3432;
+  border-color: #cc3432;
+  color: #ffffff; /* --color-text-on-accent */
+}
+#main-controls .button.analysis-toggle-button.resign-button:hover:not(:disabled) {
+  background-color: #a52a27; /* Darker error */
+  border-color: #a52a27;
+}
+
+/* Кнопка "Set FEN" - четвертая кнопка в группе #main-controls */
+#main-controls .button.game-control-button:nth-of-type(4) {
+  background-color: #907bff;
+  border-color: #907bff;
+  color: #ffffff; /* --color-text-on-accent */
+}
+#main-controls .button.game-control-button:nth-of-type(4):hover:not(:disabled) {
+  background-color: #705ce0; /* Darker secondary */
+  border-color: #705ce0;
+}
+
+
+/* Секция с линиями анализа (цвета кнопок оценки не менялись) */
+.analysis-lines-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: monospace, "Courier New", Courier;
+  font-size: 0.9em;
+  min-height: 95px;
+  height: 120px;
+  overflow-y: auto;
+  border: 1px solid #33312e; /* --color-border */
+  border-radius: 8px; /* --panel-border-radius */
+  padding: 8px;
+  background-color: #161512; /* --color-bg-primary */
+  flex-shrink: 0;
+}
+
+.analysis-line-entry {
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background-color: #33312e; /* --color-bg-tertiary */
+  border: 1px solid #33312e; /* --color-border */
+  overflow: hidden;
+  min-height: 28px;
+}
+
+.analysis-score-button {
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 3px;
+  margin-right: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: #ffffff; /* --color-text-on-accent */
+  min-width: 60px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.analysis-score-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.analysis-score-button.best-line-score {
+  background-color: #629924; /* --color-accent-success */
+  border-color: #629924;
+}
+.analysis-score-button.best-line-score:hover:not(:disabled) {
+  background-color: #4a7d1c;
+}
+
+.analysis-score-button.second-line-score {
+  background-color: #e46a09; /* --color-accent-warning */
+  border-color: #e46a09;
+}
+.analysis-score-button.second-line-score:hover:not(:disabled) {
+  background-color: #c75a07;
+}
+
+.analysis-score-button.third-line-score {
+  background-color: #cc3432; /* --color-accent-error */
+  border-color: #cc3432;
+}
+.analysis-score-button.third-line-score:hover:not(:disabled) {
+  background-color: #a52a27;
+}
+
+.analysis-score-button.other-line-score {
+  background-color: #0072b1; /* --color-accent-info */
+  border-color: #0072b1;
+}
+.analysis-score-button.other-line-score:hover:not(:disabled) {
+  background-color: #005f92;
+}
+
+.analysis-pv-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1;
+  color: #eaeaea; /* --color-text-default */
+}
+
+.analysis-lines-section .loading-message,
+.analysis-lines-section .no-data-message,
+.analysis-lines-section .inactive-message {
+  padding: 10px;
+  text-align: center;
+  color: #a0a0a0; /* --color-text-muted */
+  font-style: italic;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* Контейнер для отображения PGN */
+#pgn-display-container {
+  font-family: monospace, "Courier New", Courier;
+  white-space: pre-wrap;
+  border: 1px solid #33312e; /* --color-border */
+  padding: 10px;
+  background-color: #33312e; /* --color-bg-tertiary */
+  border-radius: 8px; /* --panel-border-radius */
+  overflow-y: auto;
+  flex-grow: 1;
+  min-height: 100px;
+  font-size: 0.9em;
+  color: #eaeaea; /* --color-text-default */
+  margin-top: auto; /* Это прижмет блок PGN к низу, если #analysis-panel-container будет выше, чем сумма высот его детей. */
+                     /* Если #analysis-panel-container имеет overflow-y: auto и фиксированную высоту, то flex-grow:1 на PGN будет лучше */
+}
