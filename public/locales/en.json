@@ -10,12 +10,6 @@
     "message": "Welcome to ChessBoard.fun",
     "loginButton": "Login with Lichess"
   },
-  "lichessCallback": {
-    "processing": "Processing Lichess login...",
-    "success": "Login successful! Redirecting...",
-    "failure": "Lichess login failed.",
-    "unknownError": "An unknown error occurred during login."
-  },
   "common": {
     "loading": "Loading...",
     "error": "Error",
@@ -34,8 +28,7 @@
   "puzzle": {
     "details": {
       "idLabel": "Puzzle ID:",
-      "ratingLabel": "Rating:",
-      "levelPiecesLabel": "Level (Pieces):"
+      "ratingLabel": "Rating:"
     },
     "button": {
       "next": "Next Puzzle",
@@ -123,7 +116,8 @@
   "finishHim": {
     "pageTitle": "FinishHim Mode",
     "categories": {
-      "title": "Endgame Categories"
+      "title": "Categories",
+      "toggleButtonDefault": "Select Category"
     },
     "puzzleTypes": {
       "endgame": "General Endgame",
@@ -166,13 +160,9 @@
     "title": "Player Stats",
     "loading": "Loading stats...",
     "gamesPlayed": "Games Played",
-    "currentPieceCount": "Piece Count",
     "tacticalSectionTitle": "Tactical Phase",
-    "tacticalRating": "Tactical Rating",
-    "tacticalWDL": "Tactics (W/L)",
-    "finishHimSectionTitle": "Playout Phase",
-    "finishHimRating": "Playout Rating",
-    "playoutWDL": "Playout (W/D/L)"
+    "playoutSectionTitle": "Playout Phase",
+    "levelSectionTitle": "Level"
   },
   "auth": {
     "processingLogin": "Processing Login..."

@@ -35,6 +35,12 @@ interface FinishHimControllerState {
   isGameEffectivelyActive: boolean;
   outplayTimerId: number | null;
   outplayTimeRemainingMs: number | null;
+
+  // Новые состояния
+  isCategoriesDropdownOpen: boolean;
+  tacticalRatingDelta: number | null;
+  finishHimRatingDelta: number | null;
+  pieceCountDelta: number | null;
 }
 
 export class FinishHimController {
@@ -84,6 +90,11 @@ export class FinishHimController {
       isGameEffectivelyActive: false,
       outplayTimerId: null,
       outplayTimeRemainingMs: null,
+      // Инициализация новых состояний
+      isCategoriesDropdownOpen: false,
+      tacticalRatingDelta: null,
+      finishHimRatingDelta: null,
+      pieceCountDelta: null,
     };
 
     this._registerGameCallbacksWithAnalysisController();
@@ -128,12 +139,8 @@ export class FinishHimController {
     if (this.state.outplayTimerId) {
       clearTimeout(this.state.outplayTimerId);
       this.state.outplayTimerId = null;
-      // Do not nullify outplayTimeRemainingMs here if we want to show the initial value
-      // It will be reset or nulled when a new game/mode starts or timer truly ends.
       logger.info('[FinishHimController] Outplay timer (timeoutId) cleared.');
     }
-    // If we want the timer display to disappear completely when cleared:
-    // this.state.outplayTimeRemainingMs = null;
   }
 
   private _stopCurrentGameActivity(calledFromAnalysis: boolean = true): void {
@@ -143,7 +150,7 @@ export class FinishHimController {
     this.state.isUserTurnContext = false;
     this.state.isGameEffectivelyActive = false;
     this._clearOutplayTimer();
-    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
+    this.state.outplayTimeRemainingMs = null;
 
     if (this.state.gameOverMessage === null && calledFromAnalysis) {
         this.state.feedbackMessage = t('finishHim.feedback.gameStoppedForAnalysis');
@@ -166,7 +173,13 @@ export class FinishHimController {
     this.state.feedbackMessage = t('finishHim.feedback.selectCategoryAndStart');
     this.state.isGameEffectivelyActive = false;
     this._clearOutplayTimer();
-    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
+    this.state.outplayTimeRemainingMs = null;
+    // Сброс дельт при инициализации
+    this.state.tacticalRatingDelta = null;
+    this.state.finishHimRatingDelta = null;
+    this.state.pieceCountDelta = null;
+    this.state.isCategoriesDropdownOpen = false;
+
     this._updatePgnDisplay();
     this._updateAnalysisControllerGameState();
     this.requestRedraw();
@@ -219,6 +232,7 @@ export class FinishHimController {
 
   private _updateTacticalRating(isWin: boolean): void {
     if (this.state.userStats) {
+      const oldRating = this.state.userStats.tacticalRating;
       if (isWin) {
         this.state.userStats.tacticalRating += 10;
         this.state.userStats.tacticalWins += 1;
@@ -228,6 +242,7 @@ export class FinishHimController {
         this.state.userStats.tacticalLosses += 1;
         logger.debug(`[FinishHimController] Tactical phase LOSS. Rating: ${this.state.userStats.tacticalRating}, Losses: ${this.state.userStats.tacticalLosses}`);
       }
+      this.state.tacticalRatingDelta = this.state.userStats.tacticalRating - oldRating;
     }
   }
 
@@ -245,10 +260,14 @@ export class FinishHimController {
         this.state.userStats.playoutLosses += 1;
         this.state.userStats.currentPieceCount = Math.max(7, this.state.userStats.currentPieceCount - 1);
       } else { // draw
-        this.state.userStats.finishHimRating -= 10;
+        this.state.userStats.finishHimRating -= 10; // Consider no change or smaller penalty for draw
         this.state.userStats.playoutDraws += 1;
+        // Piece count might not change on a draw, or could be a small penalty
       }
-      logger.debug(`[FinishHimController] Playout phase ${outcome}. Rating: ${oldRating} -> ${this.state.userStats.finishHimRating}. PieceCount: ${oldPieceCount} -> ${this.state.userStats.currentPieceCount}`);
+      this.state.finishHimRatingDelta = this.state.userStats.finishHimRating - oldRating;
+      this.state.pieceCountDelta = this.state.userStats.currentPieceCount - oldPieceCount;
+
+      logger.debug(`[FinishHimController] Playout phase ${outcome}. Rating: ${oldRating} -> ${this.state.userStats.finishHimRating} (Δ${this.state.finishHimRatingDelta}). PieceCount: ${oldPieceCount} -> ${this.state.userStats.currentPieceCount} (Δ${this.state.pieceCountDelta})`);
       this._sendStatsToBackend();
     }
   }
@@ -293,7 +312,7 @@ export class FinishHimController {
       this.state.isGameEffectivelyActive = false;
       logger.info(`[FinishHimController] Game over detected. Message: ${this.state.gameOverMessage}`);
       this._clearOutplayTimer();
-      this.state.outplayTimeRemainingMs = null; // Ensure timer display is fully removed
+      this.state.outplayTimeRemainingMs = null;
 
       if (this.state.activePuzzle) {
         if (this.state.isInPlayoutMode) {
@@ -331,8 +350,21 @@ export class FinishHimController {
       logger.info(`[FinishHimController] Active puzzle type set to: ${puzzleType}`);
       const categoryName = t(`finishHim.puzzleTypes.${puzzleType}`);
       this.state.feedbackMessage = t('finishHim.feedback.categorySelected', { category: categoryName });
+      this.state.isCategoriesDropdownOpen = false; // Закрыть выпадающий список после выбора
       this.requestRedraw();
+    } else {
+      // Если кликнули на уже активную категорию, просто закрываем дропдаун (если он был открыт)
+      if (this.state.isCategoriesDropdownOpen) {
+        this.state.isCategoriesDropdownOpen = false;
+        this.requestRedraw();
+      }
     }
+  }
+
+  public toggleCategoriesDropdown(): void {
+    this.state.isCategoriesDropdownOpen = !this.state.isCategoriesDropdownOpen;
+    logger.debug(`[FinishHimController] Categories dropdown toggled. Open: ${this.state.isCategoriesDropdownOpen}`);
+    this.requestRedraw();
   }
 
   public async loadAndStartFinishHimPuzzle(puzzleToLoad?: AppPuzzle): Promise<void> {
@@ -342,7 +374,7 @@ export class FinishHimController {
         this.analysisController.toggleAnalysisEngine();
     }
     this._clearOutplayTimer();
-    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
+    this.state.outplayTimeRemainingMs = null;
 
     this.state.activePuzzle = null;
     this.state.interactiveSetupMoves = [];
@@ -355,6 +387,12 @@ export class FinishHimController {
     this.state.currentPgnString = "";
     this.state.currentTaskPieceCount = 0;
     this.state.isGameEffectivelyActive = true;
+    // Сброс дельт при загрузке новой задачи
+    this.state.tacticalRatingDelta = null;
+    this.state.finishHimRatingDelta = null;
+    this.state.pieceCountDelta = null;
+    this.state.isCategoriesDropdownOpen = false; // Убедиться, что дропдаун закрыт
+
     this.requestRedraw();
 
     let puzzleDataToProcess: AppPuzzle | null = puzzleToLoad || null;
@@ -474,7 +512,6 @@ export class FinishHimController {
   private _tickOutplayTimer(): void {
     if (!this.state.isInPlayoutMode || this.state.gameOverMessage || !this.state.isGameEffectivelyActive || this.analysisController.getPanelState().isAnalysisActive) {
         this._clearOutplayTimer();
-        // If timer is cleared because game is over etc., ensure remaining time is nulled for display
         if (this.state.gameOverMessage || !this.state.isGameEffectivelyActive) {
             this.state.outplayTimeRemainingMs = null;
         }
@@ -485,8 +522,8 @@ export class FinishHimController {
         this.state.outplayTimeRemainingMs -= 1000;
         if (this.state.outplayTimeRemainingMs <= 0) {
             logger.info('[FinishHimController] Outplay time expired.');
-            this._clearOutplayTimer(); // Clears timeoutId
-            this.state.outplayTimeRemainingMs = 0; // Show 00:00
+            this._clearOutplayTimer();
+            this.state.outplayTimeRemainingMs = 0;
             SoundService.playSound('PLAYOUT_TIME_UP');
             this._updateFinishHimRatingAndPieceCount('loss');
             this.state.gameOverMessage = t('finishHim.feedback.timeUp');
@@ -513,9 +550,8 @@ export class FinishHimController {
         this.state.isGameEffectivelyActive = true;
     }
 
-    this._clearOutplayTimer(); // Ensure no old timer is running
-    this.state.outplayTimeRemainingMs = OUTPLAY_TIMER_DURATION_MS; // Set initial time for display
-    // The timer tick will be started by the user's first move in handleUserMove
+    this._clearOutplayTimer();
+    this.state.outplayTimeRemainingMs = OUTPLAY_TIMER_DURATION_MS;
 
     const currentBoardTurn = this.boardHandler.getBoardTurnColor();
     const humanAs = this.boardHandler.getHumanPlayerColor();
@@ -535,9 +571,6 @@ export class FinishHimController {
 
   private async triggerStockfishMoveInPlayoutIfNeeded(): Promise<void> {
     if (this.state.gameOverMessage || this.boardHandler.promotionCtrl.isActive() || this.analysisController.getPanelState().isAnalysisActive || !this.state.isInPlayoutMode || !this.state.isGameEffectivelyActive) {
-      // If timer is running and system move is aborted, timer should continue if it's user's turn next.
-      // If game ends, timer is cleared by checkAndSetGameOver.
-      // If analysis starts, timer is cleared by _stopCurrentGameActivity.
       return;
     }
     const currentBoardTurn = this.boardHandler.getBoardTurnColor();
@@ -565,7 +598,6 @@ export class FinishHimController {
             if (!this.checkAndSetGameOver()) {
               this.state.feedbackMessage = t('finishHim.feedback.yourTurnPlayout');
               this.state.isUserTurnContext = true;
-              // Timer is NOT started here; waits for user's move.
             }
           } else {
             logger.error("[FinishHimController] Stockfish (auto) made an illegal move or FEN update failed:", stockfishMoveUci);
@@ -650,7 +682,6 @@ export class FinishHimController {
 
       if (this.state.isInPlayoutMode) {
         logger.info(`[FinishHimController] User move in playout mode: ${moveResult.uciMove}`);
-        // Start timer ticking if it's the first user move in this playout session
         if (this.state.outplayTimeRemainingMs !== null && this.state.outplayTimerId === null) {
             logger.info('[FinishHimController] Starting outplay timer tick after user move.');
             this.state.outplayTimerId = window.setTimeout(() => this._tickOutplayTimer(), 1000);
@@ -727,7 +758,12 @@ export class FinishHimController {
         this.analysisController.toggleAnalysisEngine();
     }
     this._clearOutplayTimer();
-    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
+    this.state.outplayTimeRemainingMs = null;
+    // Сброс дельт
+    this.state.tacticalRatingDelta = null;
+    this.state.finishHimRatingDelta = null;
+    this.state.pieceCountDelta = null;
+    this.state.isCategoriesDropdownOpen = false;
 
     if (this.state.activePuzzle) {
       logger.info(`[FinishHimController] Restarting current task: ${this.state.activePuzzle.PuzzleId}`);
@@ -746,7 +782,12 @@ export class FinishHimController {
         this.analysisController.toggleAnalysisEngine();
     }
     this._clearOutplayTimer();
-    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
+    this.state.outplayTimeRemainingMs = null;
+    // Сброс дельт
+    this.state.tacticalRatingDelta = null;
+    this.state.finishHimRatingDelta = null;
+    this.state.pieceCountDelta = null;
+    this.state.isCategoriesDropdownOpen = false;
 
     const fen = prompt(t('puzzle.feedback.enterFenPrompt'), this.boardHandler.getFen());
     if (fen) {
@@ -756,7 +797,7 @@ export class FinishHimController {
       this.state.currentTaskPieceCount = this.countPiecesFromFen(fen);
       this.state.isStockfishThinking = false;
       this.state.gameOverMessage = null;
-      this.state.isInPlayoutMode = false; // Will be set true by _enterPlayoutMode
+      this.state.isInPlayoutMode = false;
       this.state.isGameEffectivelyActive = true;
 
       const humanPlayerColorBasedOnTurn = fen.includes(' w ') ? 'white' : 'black';
@@ -766,7 +807,7 @@ export class FinishHimController {
       if (this.checkAndSetGameOver()) return;
 
       logger.info("[FinishHimController handleSetFen] FEN set manually. Entering playout mode directly.");
-      this._enterPlayoutMode(); // This will set isInPlayoutMode and initialize timer display
+      this._enterPlayoutMode();
       this.requestRedraw();
     }
   }
@@ -777,6 +818,6 @@ export class FinishHimController {
         this.analysisController.toggleAnalysisEngine();
     }
     this._clearOutplayTimer();
-    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
+    this.state.outplayTimeRemainingMs = null;
   }
 }

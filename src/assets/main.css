@@ -1,7 +1,7 @@
 /* src/assets/main.css */
 
 :root {
-  --header-height: 5vh;
+  --header-height: 5.5vh;
   --color-bg-primary: #161512;
   --color-bg-secondary: #262421;
   --color-bg-tertiary: #33312e;
@@ -109,29 +109,40 @@ html, body {
 
 .nav-links li a {
   display: block;
-  padding: 8px 12px;
+  padding: 5px 10px;
   color: var(--color-text-muted);
   text-decoration: none;
   white-space: nowrap;
-  border-radius: 4px;
+  border-radius: 5px;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.nav-links li a:hover,
-.nav-links li a.active {
-  background-color: var(--color-accent-primary);
-  color: var(--color-text-default);
+/* Стили для обычных ссылок меню при наведении и для активных ссылок */
+.nav-links li a:hover:not(.logout-link), /* Исключаем logout-link из этого правила hover */
+.nav-links li a.active:not(.logout-link) { /* Исключаем logout-link из этого правила active */
+  background-color: var(--color-accent-warning); /* Новый цвет #E46A09 */
+  color: var(--color-text-on-accent); /* Белый текст для контраста */
 }
+
+/* Стили для кнопки Logout */
+.nav-links li a.logout-link {
+  background-color: var(--color-accent-error); /* Цвет #CC3432 */
+  color: var(--color-text-on-accent); /* Белый текст для контраста */
+}
+
+.nav-links li a.logout-link:hover {
+  background-color: #a52a27; /* Более темный оттенок красного при наведении */
+  color: var(--color-text-on-accent);
+}
+
 
 /* Контейнер для основного контента страницы */
 #page-content-wrapper {
   flex-grow: 1; /* Занимает все оставшееся пространство по высоте */
   display: flex;
-  /* В альбомном режиме: центрирует .three-column-layout */
-  /* В портретном режиме: flex-direction: column и overflow-y: auto */
   justify-content: center;
-  align-items: flex-start; /* По умолчанию контент прижат к верху */
-  overflow: hidden; /* Прокрутка управляется в портретном режиме */
+  align-items: flex-start; 
+  overflow: hidden; 
   padding-top: var(--page-vertical-padding);
   padding-bottom: var(--page-vertical-padding);
   padding-left: var(--panel-gap);
@@ -141,11 +152,11 @@ html, body {
 /* --- Стили для альбомной ориентации (по умолчанию) --- */
 .three-column-layout {
   display: flex;
-  flex-direction: row; /* Панели в ряд */
+  flex-direction: row; 
   width: 100%;
-  height: 100%; /* Растягивается на всю высоту #page-content-wrapper */
-  align-items: flex-start; /* Вертикальное выравнивание панелей по центру */
-  justify-content: center; /* Горизонтальное выравнивание группы панелей по центру */
+  height: 100%; 
+  align-items: flex-start; 
+  justify-content: center; 
   gap: var(--panel-gap);
 }
 
@@ -153,30 +164,30 @@ html, body {
 #right-panel {
   background-color: var(--color-bg-secondary);
   padding: 15px;
-  overflow-y: auto; /* Внутренняя прокрутка для боковых панелей */
+  overflow-y: auto; 
   flex-shrink: 0;
   box-shadow: 0 0 10px rgba(0,0,0,0.2);
   border-radius: var(--panel-border-radius);
   display: flex;
   flex-direction: column;
-  width: var(--panel-width); /* Фиксированная ширина для боковых панелей */
-  height: var(--calculated-board-size-vh); /* Высота равна высоте доски */
+  width: var(--panel-width); 
+  height: var(--calculated-board-size-vh); 
 }
 
-#center-panel-resizable-wrapper { /* Обертка для доски */
-  width: var(--calculated-board-size-vh); /* Ширина равна высоте (квадратная доска) */
-  height: var(--calculated-board-size-vh); /* Управляется JS */
-  min-width: 0; /* Позволяет сжиматься */
-  flex-shrink: 0; /* Не сжимается при недостатке места */
+#center-panel-resizable-wrapper { 
+  width: var(--calculated-board-size-vh); 
+  height: var(--calculated-board-size-vh); 
+  min-width: 0; 
+  flex-shrink: 0; 
   display: flex;
   justify-content: center;
   align-items: center;
-  position: relative; /* Для позиционирования хендла ресайза */
+  position: relative; 
   border-radius: var(--panel-border-radius);
-  overflow: hidden; /* Обрезает содержимое доски, если оно больше */
+  overflow: hidden; 
 }
 
-#center-panel { /* Непосредственно контейнер доски */
+#center-panel { 
   width: 100%;
   height: 100%;
   display: flex;
@@ -192,9 +203,6 @@ html, body {
   height: 24px;
   cursor: nwse-resize;
   z-index: 50;
-  /* Можно добавить фон для видимости, если нужно */
-  /* background-color: rgba(255,255,255,0.1); */
-  /* border-top-left-radius: 50%; */
 }
 
 body.board-resizing {
@@ -211,7 +219,7 @@ body.board-resizing * {
   -ms-user-select: none;
 }
 
-#board-wrapper { /* Внутренняя обертка, если нужна для chessground */
+#board-wrapper { 
     width: 100%;
     height: 100%;
     display: flex;
@@ -219,7 +227,7 @@ body.board-resizing * {
     align-items: center;
 }
 
-#board-container { /* Сам элемент, куда инициализируется chessground */
+#board-container { 
     width: 100%;
     height: 100%;
 }
@@ -228,59 +236,51 @@ body.board-resizing * {
 /* --- Стили для портретной ориентации --- */
 @media (orientation: portrait) {
   #page-content-wrapper {
-    flex-direction: column; /* Элементы внутри (т.е. .three-column-layout) идут друг под другом */
-    align-items: center;    /* Центрирует .three-column-layout по горизонтали */
-    justify-content: flex-start; /* Прижимает .three-column-layout к верху */
-    overflow-y: auto;      /* Включает вертикальную прокрутку для всего содержимого, если оно не помещается */
-    /* padding-left и padding-right остаются от базовых стилей #page-content-wrapper */
+    flex-direction: column; 
+    align-items: center;    
+    justify-content: flex-start; 
+    overflow-y: auto;      
   }
 
   .three-column-layout {
-    flex-direction: column; /* Панели внутри этого блока идут друг под другом */
-    align-items: center;    /* Центрирует дочерние панели (доску, левую, правую) */
-    height: auto;           /* Высота определяется содержимым, что позволяет ему быть больше родителя */
-    width: 100%;            /* Занимает всю ширину родителя (#page-content-wrapper) */
-    /* gap: var(--panel-gap); уже есть у базового .three-column-layout */
+    flex-direction: column; 
+    align-items: center;    
+    height: auto;           
+    width: 100%;            
   }
 
-  #center-panel-resizable-wrapper { /* Обертка для доски */
-    order: 1; /* Доска первая */
-    width: 100vw !important;  /* Доска на всю ширину окна просмотра */
-    height: 100vw !important; /* Доска квадратная, высота равна ширине */
-    flex-shrink: 0; /* Доска не должна сжиматься */
-    border-radius: 0; /* Убираем скругление для полноэкранных элементов */
-    /* Компенсируем padding родителя, чтобы занять всю ширину */
+  #center-panel-resizable-wrapper { 
+    order: 1; 
+    width: 100vw !important;  
+    height: 100vw !important; 
+    flex-shrink: 0; 
+    border-radius: 0; 
     margin-left: calc(-1 * var(--panel-gap));
     margin-right: calc(-1 * var(--panel-gap));
   }
-  /* Если #page-content-wrapper не имеет горизонтальных padding в портретном режиме,
-     то margin-left/right выше не нужны. Если имеет, то они нужны.
-     Пока оставляем, предполагая, что padding на #page-content-wrapper глобальный.
-  */
 
-
-  #right-panel { /* Панель анализа (например) */
-    order: 2; /* Вторая после доски */
-    width: 100vw; /* На всю ширину */
-    height: auto; /* Высота по контенту */
-    min-height: 200px; /* Примерная минимальная высота, чтобы панель была видна */
+  #right-panel { 
+    order: 2; 
+    width: 100vw; 
+    height: auto; 
+    min-height: 200px; 
     padding: 15px;
     box-shadow: none;
     border-radius: 0;
     flex-shrink: 0;
     margin-left: calc(-1 * var(--panel-gap));
     margin-right: calc(-1 * var(--panel-gap));
-    background-color: var(--color-bg-secondary); /* Явно задаем фон, т.к. он мог быть только у #left-panel, #right-panel */
-    display: flex; /* Чтобы flex-direction: column работало */
-    flex-direction: column; /* Чтобы внутренние элементы располагались вертикально */
-    overflow-y: visible; /* Внутренней прокрутки нет, скроллится #page-content-wrapper */
+    background-color: var(--color-bg-secondary); 
+    display: flex; 
+    flex-direction: column; 
+    overflow-y: visible; 
   }
 
-  #left-panel { /* Панель информации/категорий (например) */
-    order: 3; /* Третья */
-    width: 100vw; /* На всю ширину */
+  #left-panel { 
+    order: 3; 
+    width: 100vw; 
     height: auto;
-    min-height: 150px; /* Примерная минимальная высота */
+    min-height: 150px; 
     padding: 15px;
     box-shadow: none;
     border-radius: 0;
@@ -294,26 +294,26 @@ body.board-resizing * {
   }
 
   .resize-handle-center {
-    display: none; /* Скрываем хендл ресайза в портретном режиме */
+    display: none; 
   }
 
   /* Мобильная навигация */
   .nav-toggle-button {
-    display: block; /* Показываем кнопку "гамбургер" */
+    display: block; 
   }
   .nav-links {
-    display: none; /* Ссылки по умолчанию скрыты */
+    display: none; 
     position: absolute;
-    top: var(--header-height); /* Появляются под хедером */
+    top: var(--header-height); 
     left: 0;
     width: 100%;
     background-color: var(--color-bg-secondary);
-    flex-direction: column; /* Ссылки идут друг под другом */
+    flex-direction: column; 
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     padding: 5px 0;
   }
   #app-header.menu-open .nav-links {
-    display: flex; /* Показываем ссылки, если меню открыто */
+    display: flex; 
   }
   .nav-links li {
       margin-left: 0;
@@ -325,7 +325,6 @@ body.board-resizing * {
       border-bottom: 1px solid var(--color-border);
   }
    .nav-links li:last-child a {
-       border-bottom: none; /* У последней ссылки нет нижнего бордера */
+       border-bottom: none; 
    }
 }
-

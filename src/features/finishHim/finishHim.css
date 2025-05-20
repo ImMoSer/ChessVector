@@ -9,7 +9,7 @@
   flex-direction: column;
   height: 100%;
   box-sizing: border-box;
-  gap: 15px; /* Добавлен отступ между основными блоками в левой панели */
+  gap: 15px;
 }
 
 /* Блок для фидбека пользователю */
@@ -22,7 +22,6 @@
   border-radius: var(--panel-border-radius);
   padding: 10px;
   border: 1px solid var(--color-border);
-  /* order: '1' из finishHimView.ts будет применен */
 }
 
 #finish-him-feedback p {
@@ -31,56 +30,35 @@
   padding: 5px 0;
 }
 
-/* Секция выбора категорий */
-.finish-him-categories {
+/* ---- Стили для выпадающего меню категорий ---- */
+.finish-him-categories-dropdown-container {
+  position: relative; /* Для позиционирования выпадающего списка */
   flex-shrink: 0;
-  /* order: '2' (или '3' если таймер был бы здесь) из finishHimView.ts будет применен */
+  z-index: 100; /* Убедимся, что контейнер (и его выпадающий список) выше других элементов */
 }
 
-.finish-him-categories h3 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  color: var(--color-text-muted);
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 8px;
-  font-size: 1.1em;
-  font-weight: 600;
-}
-
-.finish-him-categories .button-group.vertical {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.finish-him-categories .button.category-button {
+.category-toggle-button {
   width: 100%;
-  padding: 8px 10px;
-  font-size: 0.9em;
-  margin: 0;
-  box-sizing: border-box;
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.3;
+  padding: 10px 12px;
+  font-size: 1em;
+  font-weight: 600;
+  text-align: left;
+  background-color: #262421;
+  color: var(--color-text-on-accent);
+  border: 1px solid var(--color-border);
   border-radius: var(--panel-border-radius);
-  border: 1px solid var(--color-border-hover);
-  background-color: var(--color-bg-tertiary);
-  color: var(--color-text-default);
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-  text-align: center;
-  white-space: nowrap;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.finish-him-categories .button.category-button:hover:not(:disabled) {
-  background-color: var(--color-border-hover);
-  border-color: var(--color-accent-primary);
-  color: var(--color-text-default);
+.category-toggle-button:hover:not(:disabled) {
+  background-color: #E46A09; /* Darker accent-secondary */
+  border-color: #E46A09;
 }
-
-.finish-him-categories .button.category-button:disabled {
+.category-toggle-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   background-color: var(--color-bg-tertiary);
@@ -88,110 +66,182 @@
   color: var(--color-text-muted);
 }
 
-.finish-him-categories .button.category-button.active {
+.dropdown-arrow {
+  margin-left: 8px;
+  font-size: 0.8em;
+}
+
+.categories-dropdown-list {
+  position: absolute;
+  top: calc(100% + 5px); /* Появляется под кнопкой с небольшим отступом */
+  left: 0;
+  right: 0;
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-hover);
+  border-radius: var(--panel-border-radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  z-index: 101; /* Выше чем .finish-him-categories-dropdown-container, если нужно, но обычно z-index родителя достаточен*/
+  /* Удалены max-height и overflow-y: auto */
+  display: flex;
+  flex-direction: column;
+  gap: 1px; /* Небольшой разделитель между элементами */
+}
+
+.category-dropdown-item {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 0.95em;
+  text-align: left;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-default);
+  border: none;
+  border-bottom: 1px solid var(--color-border); /* Разделитель */
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.category-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.category-dropdown-item:hover:not(:disabled) {
+  background-color: var(--color-border-hover);
+  color: var(--color-text-default);
+}
+
+.category-dropdown-item.active {
   background-color: var(--color-accent-primary);
-  border-color: var(--color-accent-primary);
   color: var(--color-text-on-accent);
   font-weight: bold;
 }
-.finish-him-categories .button.category-button.active:hover:not(:disabled) {
-  background-color: #a56e17;
-  border-color: #a56e17;
+.category-dropdown-item.active:hover:not(:disabled) {
+  background-color: #a56e17; /* Darker accent-primary */
 }
 
-/* ---- Стили для блока статистики пользователя ---- */
+.category-dropdown-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+}
+
+
+/* ---- Стили для обновленного блока статистики пользователя ---- */
 .user-stats-container {
   padding: 12px;
-  background-color: var(--color-bg-tertiary);
+  background-color: var(--color-bg-secondary); /* Чуть темнее основного фона панели */
   border-radius: var(--panel-border-radius);
   border: 1px solid var(--color-border);
   flex-shrink: 0;
-  /* order: '3' (или '4') из finishHimView.ts будет применен */
+  /* z-index: 1; Убедимся, что статистика ниже выпадающего списка */
 }
 
-.user-stats-container h4 {
+.user-stats-main-title {
   margin: 0 0 12px 0;
   padding-bottom: 8px;
   color: var(--color-text-muted);
   font-size: 1.1em;
   font-weight: 600;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border-hover);
   text-align: center;
 }
 
-.user-stats-container p {
+.user-stats-container p { /* Для сообщения "Loading stats..." */
     margin: 5px 0;
     text-align: center;
     font-style: italic;
     color: var(--color-text-muted);
 }
 
-.stats-grid {
+.games-played-info {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #629924;
+  text-align: center;
+  margin-bottom: 12px;
+  padding: 6px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: 4px;
+}
+
+.stats-overview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px 12px;
+  grid-template-columns: 1fr; /* Каждый блок статистики занимает всю ширину */
+  gap: 10px;
 }
 
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 4px 0;
-  font-size: 0.95em;
+.stat-block {
+  background-color: var(--color-bg-tertiary);
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
 }
 
-.stat-item.full-width-stat {
-  grid-column: 1 / -1;
-  margin-top: 8px;
-}
-.stat-item.full-width-stat:first-child {
-    margin-top: 0;
-}
-
-.stat-label {
-  font-weight: 500;
-  color: var(--color-text-muted);
-  margin-bottom: 2px;
-  font-size: 0.9em;
-}
-
-.stat-value {
-  font-weight: 600;
-  color: var(--color-text-default);
-  font-size: 1.05em;
-}
-
-.stat-section-title {
-  font-size: 1em;
+.stat-block-title {
+  font-size: 1.2em;
   font-weight: bold;
   color: var(--color-accent-secondary);
-  margin: 5px 0 2px 0;
-  padding-bottom: 3px;
+  margin: 0 0 8px 0;
+  text-align: center;
   border-bottom: 1px dashed var(--color-border-hover);
-  text-align: left;
+  padding-bottom: 5px;
 }
 
-/* ---- Стили для правой панели и оверлея таймера ---- */
+.stat-block-values {
+  display: flex;
+  justify-content: space-around; /* Распределяет значение и дельту по краям */
+  align-items: center;
+  font-size: 1.2em; /* Увеличим основной шрифт для значений */
+}
+
+.current-value {
+  font-weight: bold;
+  color: var(--color-text-default);
+}
+
+.value-delta {
+  font-weight: bold;
+  font-size: 1.5em; /* Дельта чуть меньше основного значения */
+  margin-left: 8px; /* Отступ от основного значения */
+}
+
+.positive-delta {
+  color: var(--color-accent-success);
+  /* background-color: rgba(98, 153, 36, 0.15); */
+}
+
+.negative-delta {
+  color: var(--color-accent-error);
+  /* background-color: rgba(204, 52, 50, 0.15); */
+}
+
+
+/* ---- Старые стили категорий, если они еще где-то используются или для справки ---- */
+/* .finish-him-categories h3 { ... } */
+/* .finish-him-categories .button-group.vertical { ... } */
+/* .finish-him-categories .button.category-button { ... } */
+/* Убедитесь, что старые стили для .finish-him-categories и его дочерних .button.category-button удалены или закомментированы, если они больше не нужны. */
+
+
+/* ---- Стили для правой панели и оверлея таймера (без изменений) ---- */
 .finish-him-right-panel {
-  position: relative; /* Необходимо для абсолютного позиционирования дочерних элементов */
-  /* display: flex; flex-direction: column; height: 100%; уже есть из finishHimView.ts */
+  position: relative;
 }
 
 .timer-value-overlay {
   position: absolute;
-  top: 0px; /* Оставляем отступ сверху */
-  left: 0;   /* Начинается от левого края родителя */
-  width: 100%; /* Занимает всю ширину родителя */
-  box-sizing: border-box; /* padding и border включаются в width */
-  background-color: #161512;
+  top: 0px;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  background-color: var(--color-bg-primary); /* Изменено для соответствия общему фону */
   color: var(--color-accent-warning);
   border-radius: var(--panel-border-radius);
   font-family: monospace, "Courier New", Courier;
   font-size: 2em;
   font-weight: bold;
-  text-align: center; /* Текст по центру */
+  text-align: center;
   border: 1px solid var(--color-accent-warning);
   box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-  z-index: 10;
+  z-index: 10; /* Ниже чем дропдаун категорий */
   pointer-events: none;
+  padding: 4px 0; /* Небольшой вертикальный паддинг */
 }

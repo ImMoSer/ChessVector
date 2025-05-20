@@ -4,6 +4,7 @@ import type { VNode, Hooks } from 'snabbdom';
 import type { Key } from 'chessground/types';
 import type { FinishHimController } from './finishHimController';
 import { FINISH_HIM_PUZZLE_TYPES } from './finishHim.types';
+// Отдельный импорт типа FinishHimPuzzleType удален, так как он не используется напрямую в этом файле
 import { BoardView } from '../../shared/components/boardView';
 import logger from '../../utils/logger';
 import { renderPromotionDialog } from '../common/promotion/promotionView';
@@ -27,83 +28,103 @@ function formatTime(ms: number | null): string {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function renderCategoryButtons(controller: FinishHimController): VNode {
-  return h('div.finish-him-categories', [
-    h('h3', t('finishHim.categories.title')),
-    h('div.button-group.vertical',
-      FINISH_HIM_PUZZLE_TYPES.map(type =>
-        h('button.button.category-button', {
-          key: type,
-          class: { active: controller.state.activePuzzleType === type },
-          on: {
-            click: () => {
-              logger.debug(`[FinishHimView] Category selected: ${type}`);
-              controller.setActivePuzzleType(type);
+// Обновленная функция для рендеринга выпадающего меню категорий
+function renderCategoryDropdown(controller: FinishHimController): VNode {
+  const fhState = controller.state;
+  const activeCategoryName = t(`finishHim.puzzleTypes.${fhState.activePuzzleType}`);
+  const commonButtonDisabled = (controller.analysisController.getPanelState().isAnalysisActive && controller.analysisController.getPanelState().isAnalysisLoading) ||
+                               fhState.isStockfishThinking ||
+                               controller.boardHandler.promotionCtrl.isActive();
+
+  return h('div.finish-him-categories-dropdown-container', [
+    h('button.button.category-toggle-button', {
+      on: { click: () => controller.toggleCategoriesDropdown() },
+      attrs: {
+        disabled: commonButtonDisabled
+      }
+    }, [
+      activeCategoryName,
+      h('span.dropdown-arrow', fhState.isCategoriesDropdownOpen ? '▲' : '▼')
+    ]),
+    fhState.isCategoriesDropdownOpen
+      ? h('div.categories-dropdown-list', FINISH_HIM_PUZZLE_TYPES.map(type =>
+          h('button.button.category-dropdown-item', {
+            key: type,
+            class: { active: fhState.activePuzzleType === type },
+            on: {
+              click: () => {
+                logger.debug(`[FinishHimView] Category selected from dropdown: ${type}`);
+                controller.setActivePuzzleType(type); // setActivePuzzleType теперь также закрывает дропдаун
+              }
+            },
+            attrs: {
+              disabled: commonButtonDisabled // Кнопки в дропдауне также должны быть недоступны
             }
-          },
-          attrs: {
-            disabled: (controller.analysisController.getPanelState().isAnalysisActive && controller.analysisController.getPanelState().isAnalysisLoading) ||
-                      controller.state.isStockfishThinking ||
-                      controller.boardHandler.promotionCtrl.isActive()
-          }
-        }, t(`finishHim.puzzleTypes.${type}`))
-      )
-    )
+          }, t(`finishHim.puzzleTypes.${type}`))
+        ))
+      : null
   ]);
 }
 
-function renderUserStats(stats: FinishHimStats | null): VNode | null {
+
+// Обновленная функция для рендеринга статистики пользователя
+function renderUserStats(controller: FinishHimController): VNode | null {
+  const stats: FinishHimStats | null = controller.state.userStats; // Явно указываем тип
+  const { tacticalRatingDelta, finishHimRatingDelta, pieceCountDelta } = controller.state;
+
   if (!stats) {
     return h('div.user-stats-container', [
-        h('h4', t('stats.title')),
+        h('h4.user-stats-main-title', t('stats.title')),
         h('p', t('stats.loading'))
     ]);
   }
 
-  const tacticalWDL = `${stats.tacticalWins}W / ${stats.tacticalLosses}L`;
-  const playoutWDL = `${stats.playoutWins}W / ${stats.playoutDraws}D / ${stats.playoutLosses}L`;
+  const renderDelta = (delta: number | null): VNode | null => {
+    if (delta === null || delta === 0) return null;
+    const sign = delta > 0 ? '+' : '';
+    return h('span.value-delta', {
+      class: {
+        'positive-delta': delta > 0,
+        'negative-delta': delta < 0,
+      }
+    }, `${sign}${delta}`);
+  };
 
   return h('div.user-stats-container', [
-    h('h4', t('stats.title')),
-    h('div.stats-grid', [
-      h('div.stat-item', [
-        h('span.stat-label', `${t('stats.gamesPlayed')}:`),
-        h('span.stat-value', String(stats.gamesPlayed))
+    h('h4.user-stats-main-title', t('stats.title')),
+    h('div.games-played-info', `${t('stats.gamesPlayed')}: ${stats.gamesPlayed}`),
+    h('div.stats-overview-grid', [
+      // Tactical Phase Block
+      h('div.stat-block', [
+        h('h5.stat-block-title', t('stats.tacticalSectionTitle')),
+        h('div.stat-block-values', [
+          h('span.current-value', String(stats.tacticalRating)),
+          renderDelta(tacticalRatingDelta)
+        ])
       ]),
-      h('div.stat-item', [
-        h('span.stat-label', `${t('stats.currentPieceCount')}:`),
-        h('span.stat-value', String(stats.currentPieceCount))
+      // Playout Phase Block
+      h('div.stat-block', [
+        h('h5.stat-block-title', t('stats.playoutSectionTitle')),
+        h('div.stat-block-values', [
+          h('span.current-value', String(stats.finishHimRating)),
+          renderDelta(finishHimRatingDelta)
+        ])
       ]),
-      h('div.stat-item.full-width-stat', [
-        h('h5.stat-section-title', t('stats.tacticalSectionTitle'))
-      ]),
-      h('div.stat-item', [
-        h('span.stat-label', `${t('stats.tacticalRating')}:`),
-        h('span.stat-value', String(stats.tacticalRating))
-      ]),
-      h('div.stat-item', [
-        h('span.stat-label', `${t('stats.tacticalWDL')}:`),
-        h('span.stat-value', tacticalWDL)
-      ]),
-      h('div.stat-item.full-width-stat', [
-        h('h5.stat-section-title', t('stats.finishHimSectionTitle'))
-      ]),
-      h('div.stat-item', [
-        h('span.stat-label', `${t('stats.finishHimRating')}:`),
-        h('span.stat-value', String(stats.finishHimRating))
-      ]),
-      h('div.stat-item', [
-        h('span.stat-label', `${t('stats.playoutWDL')}:`),
-        h('span.stat-value', playoutWDL)
+      // Level Block
+      h('div.stat-block', [
+        h('h5.stat-block-title', t('stats.levelSectionTitle')),
+        h('div.stat-block-values', [
+          h('span.current-value', String(stats.currentPieceCount)),
+          renderDelta(pieceCountDelta)
+        ])
       ]),
     ])
   ]);
 }
 
-// Updated renderPlayoutTimer to only show the time value
+
 function renderPlayoutTimerValue(controller: FinishHimController): VNode | null {
     if (controller.state.isInPlayoutMode && controller.state.outplayTimeRemainingMs !== null && controller.state.isGameEffectivelyActive) {
-        // Removed the container and label, just returning the timer value span
         return h('span.timer-value-overlay', formatTime(controller.state.outplayTimeRemainingMs));
     }
     return null;
@@ -181,10 +202,9 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
     promotionDialogVNode
   ]);
 
+  // Обновленный порядок и вызовы рендеринга для левой панели
   const leftPanelContent = h('div.finish-him-left-panel', [
-    h('div#finish-him-feedback', {
-      style: { order: '1' } // Feedback first
-    }, [
+    h('div#finish-him-feedback', {}, [ // Первый элемент - фидбек
       h('p', {
         style: {
           fontWeight: 'bold',
@@ -194,19 +214,17 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
         fhState.gameOverMessage || fhState.feedbackMessage
       ),
     ]),
-    // Timer is removed from left panel
-    renderCategoryButtons(controller), // Categories will have order '2' (after feedback)
-    renderUserStats(fhState.userStats) // Stats will have order '3'
+    renderCategoryDropdown(controller), // Второй элемент - выпадающее меню категорий
+    renderUserStats(controller) // Третий элемент - статистика
   ]);
 
-  // Right panel now includes the timer overlay
   const timerOverlayVNode = renderPlayoutTimerValue(controller);
 
-  const rightPanelContent = h('div.finish-him-right-panel', { // This container needs position: relative for the overlay
+  const rightPanelContent = h('div.finish-him-right-panel', {
     style: { display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }
   }, [
-    renderAnalysisPanel(controller.analysisController), // Analysis panel itself
-    timerOverlayVNode // Timer will be positioned absolutely within this relative container
+    renderAnalysisPanel(controller.analysisController),
+    timerOverlayVNode
   ]);
 
   return {

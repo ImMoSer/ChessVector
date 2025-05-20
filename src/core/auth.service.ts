@@ -69,7 +69,7 @@ const REDIRECT_URI = import.meta.env.VITE_LICHESS_REDIRECT_URI || `${window.loca
 const USER_SESSION_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_USER_SESSION as string;
 
 const TOKEN_URL = `${LICHESS_HOST}/api/token`;
-const SCOPES = ['email:read', 'preference:read', 'board:play'];
+const SCOPES = [ 'preference:read'];
 
 class AuthServiceController {
   private oauthClient: OAuth2AuthCodePKCE;

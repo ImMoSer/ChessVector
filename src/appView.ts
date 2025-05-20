@@ -78,10 +78,10 @@ export function renderAppUI(controller: AppController): VNode {
   let pageContentVNode: VNode | FinishHimPageViewLayout;
 
   // Global loading indicator for authentication processing
-  if (appState.isLoadingAuth && appState.currentPage !== 'welcome') { 
-    pageContentVNode = h('div.global-loader-container', [ 
+  if (appState.isLoadingAuth && appState.currentPage !== 'welcome') {
+    pageContentVNode = h('div.global-loader-container', [
         h('h2', t('auth.processingLogin', {defaultValue: "Processing Login..."})),
-        h('div.loading-spinner') 
+        h('div.loading-spinner')
     ]);
   } else if (activePageController) {
     switch (appState.currentPage) {
@@ -102,7 +102,7 @@ export function renderAppUI(controller: AppController): VNode {
       // 'challenge' case removed
       default:
         // This should not be reached if AppPage in AppController is 'welcome' | 'finishHim'
-        const exhaustiveCheck: never = appState.currentPage; 
+        const exhaustiveCheck: never = appState.currentPage;
         pageContentVNode = h('p', t('errorPage.unknownPage', { pageName: exhaustiveCheck }));
         logger.error(`[appView] Reached default case in page switch with page: ${exhaustiveCheck}`);
     }
@@ -168,18 +168,19 @@ export function renderAppUI(controller: AppController): VNode {
             ),
             isAuthenticated ? h('li', [
               h('a', {
-                props: { href: '#' }, 
+                class: { 'logout-link': true }, // <--- ДОБАВЛЕН КЛАСС ЗДЕСЬ
+                props: { href: '#' },
                 on: {
                   click: async (e: Event) => {
                     e.preventDefault();
                     logger.info('[appView] Logout button clicked.');
                     await controller.services.authService.logout();
-                    if (appState.isNavExpanded) controller.toggleNav(); 
+                    if (appState.isNavExpanded) controller.toggleNav();
                   }
                 }
               }, t('nav.logout'))
             ]) : null
-          ].filter(Boolean) as VNode[] 
+          ].filter(Boolean) as VNode[]
         )
       ])
     ]),
@@ -197,10 +198,10 @@ export function renderAppUI(controller: AppController): VNode {
                 'portrait-mode-layout': appState.isPortraitMode && !!leftPanelContent && showPanels,
                 'hidden-in-landscape': !leftPanelContent && !appState.isPortraitMode && !showPanels
             }
-        }, [(showPanels && leftPanelContent) ? leftPanelContent : '']), 
+        }, [(showPanels && leftPanelContent) ? leftPanelContent : '']),
 
         h('div#center-panel-resizable-wrapper', {
-            key: 'center-wrapper', 
+            key: 'center-wrapper',
             class: {
                 'portrait-mode-layout': appState.isPortraitMode,
                 'center-full-width-page': !showPanels // Welcome page takes full width
@@ -217,7 +218,7 @@ export function renderAppUI(controller: AppController): VNode {
                 'portrait-mode-layout': appState.isPortraitMode && !!rightPanelContent && showPanels,
                 'hidden-in-landscape': !rightPanelContent && !appState.isPortraitMode && !showPanels
             }
-        }, [(showPanels && rightPanelContent) ? rightPanelContent : '']) 
+        }, [(showPanels && rightPanelContent) ? rightPanelContent : ''])
       ])
     ])
   ]);
