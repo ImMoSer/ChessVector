@@ -1,13 +1,12 @@
 // src/AppEntry.ts
-import { init, propsModule, eventListenersModule, styleModule, classModule } from 'snabbdom';
+import { init, propsModule, eventListenersModule, styleModule, classModule, attributesModule } from 'snabbdom'; // ДОБАВЛЕН attributesModule
 import type { VNode } from 'snabbdom';
 // Import main application styles
 import './assets/main.css'; // Main styles
 import './features/common/promotion/promotion.css'; // Promotion specific styles
-import './features/analysis/analysisPanel.css'; 
-import './features/finishHim/finishHim.css'; 
-import './features/welcome/welcome.css'; 
-// Removed: import './features/auth/lichessCallback.css'; 
+import './features/analysis/analysisPanel.css';
+import './features/finishHim/finishHim.css';
+import './features/welcome/welcome.css';
 
 
 // Import core services
@@ -30,6 +29,7 @@ import './vendor/chessground/chessground.cburnett.css';
 logger.info('[AppEntry] Application starting...');
 
 const patch = init([
+  attributesModule, // <--- ДОБАВЛЕН ЗДЕСЬ
   propsModule,
   eventListenersModule,
   styleModule,
@@ -96,7 +96,7 @@ async function initializeApplication() {
     );
 
     // initializeApp in AppController now handles auth and initial page loading
-    await appController.initializeApp(); 
+    await appController.initializeApp();
     logger.info('[AppEntry] AppController initialization sequence complete.');
 
   } catch (error) {
