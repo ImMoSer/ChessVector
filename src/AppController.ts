@@ -7,14 +7,12 @@ import { BoardHandler } from './core/boardHandler';
 import { PgnService } from './core/pgn.service';
 import { AnalysisService } from './core/analysis.service';
 import { AnalysisController } from './features/analysis/analysisController';
-import { subscribeToLangChange, getCurrentLang } from './core/i18n.service'; // Added t
+import { subscribeToLangChange, getCurrentLang } from './core/i18n.service';
 import { FinishHimController } from './features/finishHim/finishHimController';
 import { WelcomeController } from './features/welcome/welcomeController';
-// LichessCallbackController will be removed
 import { AuthService, type UserSessionProfile, type SubscriptionTier } from './core/auth.service';
 
 
-// AppPage type updated - lichessCallback is no longer a distinct page for routing
 export type AppPage = 'welcome' | 'finishHim';
 
 export interface AppServices {
@@ -31,10 +29,9 @@ interface AppControllerState {
   isNavExpanded: boolean;
   isPortraitMode: boolean;
   currentUser: UserSessionProfile | null;
-  isLoadingAuth: boolean; // To show a global loader during initial auth processing
+  isLoadingAuth: boolean;
 }
 
-// ActivePageController updated
 type ActivePageController = WelcomeController | FinishHimController | null;
 
 const BOARD_MAX_VH = 94;
@@ -78,12 +75,11 @@ export class AppController {
     this.userPreferredBoardSizeVh = savedVhPreference ? parseFloat(savedVhPreference) : DEFAULT_BOARD_VH;
     this.userPreferredBoardSizeVh = Math.max(BOARD_MIN_VH, Math.min(BOARD_MAX_VH, this.userPreferredBoardSizeVh));
 
-    // Initial state, currentPage will be determined after auth handling
     this.state = {
-      currentPage: 'welcome', // Default, will be updated
+      currentPage: 'welcome', // Default, will be updated by initializeApp
       isNavExpanded: false,
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
-      currentUser: null, // Will be set after auth handling
+      currentUser: null,
       isLoadingAuth: true, // Start in loading state for auth
     };
 
@@ -92,79 +88,83 @@ export class AppController {
       this.requestGlobalRedraw();
     });
 
+    // Simplified Auth Subscriber
     this.unsubscribeFromAuthChange = this.authServiceInstance.subscribe(() => {
-        logger.info('[AppController] Auth state changed via subscription.');
-        const authState = this.authServiceInstance.getState();
-        this.state.currentUser = authState.userProfile;
-        this.state.isLoadingAuth = authState.isProcessing; // Reflect auth processing state
+      logger.info('[AppController] Auth state changed via subscription (simplified).');
+      const authState = this.authServiceInstance.getState();
+      
+      const prevUserProfileId = this.state.currentUser?.id;
+      const prevIsLoadingAuth = this.state.isLoadingAuth;
 
-        // If auth is no longer processing, decide navigation
-        if (!authState.isProcessing) {
-            if (!authState.isAuthenticated && this.state.currentPage !== 'welcome') {
-                logger.info('[AppController] User logged out or session expired, redirecting to welcome page.');
-                this.navigateTo('welcome');
-            } else if (authState.isAuthenticated && this.state.currentPage === 'welcome') {
-                logger.info('[AppController] User authenticated, redirecting from welcome to finishHim.');
-                this.navigateTo('finishHim');
-            }
-        }
-        this.requestGlobalRedraw();
+      this.state.currentUser = authState.userProfile;
+      this.state.isLoadingAuth = authState.isProcessing;
+
+      // Redraw if user profile or loading state actually changed
+      if (prevUserProfileId !== authState.userProfile?.id || prevIsLoadingAuth !== authState.isProcessing) {
+          this.requestGlobalRedraw();
+      }
+
+      // Handle logout or session expiration *after* initial app load sequence
+      // initializeApp is responsible for the first page load decision.
+      // This handles subsequent events like user clicking "logout".
+      if (!this._isInitializing && !authState.isProcessing && !authState.isAuthenticated && this.state.currentPage !== 'welcome') {
+          logger.info('[AppController Subscriber] Post-init: User logged out or session expired, navigating to welcome.');
+          // The outer condition already ensures this.state.currentPage is not 'welcome'.
+          // So, the inner check was redundant.
+          this.navigateTo('welcome'); 
+      }
     });
 
     logger.info(`[AppController] Initialized. Current lang: ${getCurrentLang()}`);
   }
 
+  private _isInitializing: boolean = true; // Flag to manage initial load phase
+
   public async initializeApp(): Promise<void> {
+    this._isInitializing = true;
     logger.info(`[AppController] Initializing app & authentication...`);
-    this.setState({ isLoadingAuth: true }); // Ensure loading state is active
+    this.setState({ isLoadingAuth: true });
 
-    // AuthService.handleAuthentication() now processes callbacks and stored sessions
     const authCallbackProcessed = await this.authServiceInstance.handleAuthentication();
-    const currentAuthState = this.authServiceInstance.getState();
-    this.state.currentUser = currentAuthState.userProfile;
-    this.setState({ isLoadingAuth: currentAuthState.isProcessing }); // Update loading state from AuthService
+    // Auth subscriber will update this.state.currentUser and this.state.isLoadingAuth
 
-    let initialPageTarget: AppPage;
+    let finalInitialPageTarget: AppPage;
     const hash = window.location.hash.slice(1) as AppPage;
+    const isAuthenticated = this.authServiceInstance.getIsAuthenticated(); // Use getter after handleAuthentication
 
     if (authCallbackProcessed) {
-        // If a callback was just processed, AuthService would have set isAuthenticated.
-        // Navigate based on the new auth state.
-        initialPageTarget = currentAuthState.isAuthenticated ? 'finishHim' : 'welcome';
-        logger.info(`[AppController] Auth callback processed. New target: ${initialPageTarget}`);
+        finalInitialPageTarget = isAuthenticated ? 'finishHim' : 'welcome';
+        logger.info(`[AppController] Auth callback processed. Determined initial target: ${finalInitialPageTarget}`);
     } else {
-        // No callback, determine page based on current auth state and hash
-        if (currentAuthState.isAuthenticated) {
-            const validPagesAfterAuth: AppPage[] = ['finishHim']; // Only 'finishHim' if authenticated
+        if (isAuthenticated) {
+            const validPagesAfterAuth: AppPage[] = ['finishHim'];
             if (validPagesAfterAuth.includes(hash)) {
-                initialPageTarget = hash;
+                finalInitialPageTarget = hash;
             } else {
-                initialPageTarget = 'finishHim';
+                finalInitialPageTarget = 'finishHim';
             }
         } else {
-            initialPageTarget = 'welcome'; // If not authenticated and no callback, always welcome
+            finalInitialPageTarget = 'welcome';
         }
-        logger.info(`[AppController] No auth callback. Initial target based on stored session/hash: ${initialPageTarget}`);
+        logger.info(`[AppController] No auth callback. Determined initial target based on stored session/hash: ${finalInitialPageTarget}`);
     }
     
-    this.state.currentPage = initialPageTarget;
-    if (window.location.hash.slice(1) !== initialPageTarget) {
-        window.location.hash = initialPageTarget; // Set hash if different
-    }
+    // Navigate to the final determined page.
+    // navigateTo will set this.state.currentPage and call loadPageController.
+    this.navigateTo(finalInitialPageTarget, true);
 
-    logger.info(`[AppController] App initialized. Current page target: ${this.state.currentPage}`);
-    this._calculateAndSetBoardSize();
-    this.loadPageController(this.state.currentPage); // Load controller for the determined page
-
+    logger.info(`[AppController] App initialization sequence complete. Final page: ${this.state.currentPage}`);
+    this._calculateAndSetBoardSize(); // Ensures board size is set after page structure might be decided.
+    
     window.addEventListener('hashchange', this.handleHashChange.bind(this));
-    // Initial redraw will be triggered by loadPageController or auth state changes
+    this._isInitializing = false; // Mark initialization as complete
+    // requestGlobalRedraw is handled by navigateTo
   }
 
   private handleHashChange(): void {
     const newPageFromHash = window.location.hash.slice(1) as AppPage;
     logger.info(`[AppController] Hash changed to: #${newPageFromHash}`);
 
-    // No longer need to check for /login/callback path
     const validPages: AppPage[] = ['welcome', 'finishHim'];
     const isValidAppPage = validPages.includes(newPageFromHash);
 
@@ -174,7 +174,7 @@ export class AppController {
         logger.warn(`[AppController] Invalid page in hash: #${newPageFromHash}. Redirecting to default.`);
         const defaultPage = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
         this.navigateTo(defaultPage);
-    } else if (!newPageFromHash) { // If hash is empty
+    } else if (!newPageFromHash) {
         const defaultPage = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
         if (this.state.currentPage !== defaultPage) {
             this.navigateTo(defaultPage);
@@ -256,74 +256,67 @@ export class AppController {
     const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
     const userTier = this.authServiceInstance.getUserSubscriptionTier();
 
-    logger.info(`[AppController] Attempting navigation to: ${page}. Auth: ${isAuthenticated}, Tier: ${userTier}`);
-
-    // Prevent navigation if auth is currently processing, unless it's an internal redirect post-auth
-    if (this.state.isLoadingAuth && page !== this.state.currentPage) {
-        logger.warn(`[AppController] Navigation to ${page} blocked: authentication is processing.`);
-        // It might be better to queue this navigation or handle it once auth is done.
-        // For now, we simply block to avoid race conditions.
+    logger.info(`[AppController navigateTo] Attempting navigation to: ${page}. Current: ${this.state.currentPage}. Auth: ${isAuthenticated}, Tier: ${userTier}`);
+    
+    // Block navigation if auth is processing, except during the initial call from initializeApp.
+    // The _isInitializing flag helps distinguish this.
+    if (this.state.isLoadingAuth && !this._isInitializing && page !== this.state.currentPage) {
+        logger.warn(`[AppController navigateTo] Navigation to ${page} blocked: authentication is processing, and not initial load.`);
         return;
     }
 
+    let targetPage = page;
     if (page === 'finishHim') {
       if (!isAuthenticated) {
-        logger.warn('[AppController] Access to finishHim denied: not authenticated. Redirecting to welcome.');
-        this.state.currentPage = 'welcome'; // Set state before hash to avoid loop
-        if (updateHash && window.location.hash.slice(1) !== 'welcome') window.location.hash = 'welcome';
-        this.loadPageController('welcome');
-        return;
-      }
-      // Tier check can remain if needed
-      const allowedTiersForFinishHim: SubscriptionTier[] = ['bronze', 'silver', 'gold', 'platinum'];
-      if (!allowedTiersForFinishHim.includes(userTier)) {
-        logger.warn(`[AppController] Access to finishHim denied: tier ${userTier} not allowed. Redirecting to welcome.`);
-        this.state.currentPage = 'welcome';
-        if (updateHash && window.location.hash.slice(1) !== 'welcome') window.location.hash = 'welcome';
-        this.loadPageController('welcome');
-        return;
+        logger.warn('[AppController navigateTo] Access to finishHim denied: not authenticated. Redirecting to welcome.');
+        targetPage = 'welcome';
+      } else {
+        const allowedTiersForFinishHim: SubscriptionTier[] = ['bronze', 'silver', 'gold', 'platinum'];
+        if (!allowedTiersForFinishHim.includes(userTier)) {
+          logger.warn(`[AppController navigateTo] Access to finishHim denied: tier ${userTier} not allowed. Redirecting to welcome.`);
+          targetPage = 'welcome';
+        }
       }
     } else if (page === 'welcome' && isAuthenticated) {
-        logger.info('[AppController] Authenticated user attempting to navigate to welcome. Redirecting to finishHim.');
-        this.state.currentPage = 'finishHim';
-        if (updateHash && window.location.hash.slice(1) !== 'finishHim') window.location.hash = 'finishHim';
-        this.loadPageController('finishHim');
-        return;
+        logger.info('[AppController navigateTo] Authenticated user attempting to navigate to welcome. Redirecting to finishHim.');
+        targetPage = 'finishHim';
     }
 
-
-    if (this.state.currentPage === page && this.activePageController) {
-      logger.info(`[AppController] Already on page: ${page}`);
+    if (this.state.currentPage === targetPage && this.activePageController) {
+      logger.info(`[AppController navigateTo] Already on page: ${targetPage}. Controller exists.`);
       if (this.state.isPortraitMode && this.state.isNavExpanded) {
         this.toggleNav();
+      } else {
+        this.requestGlobalRedraw(); // Ensure UI updates if only sub-state (like nav) changed
       }
-      this.requestGlobalRedraw(); // Ensure UI updates if only state like isNavExpanded changed
+      if (updateHash && window.location.hash.slice(1) !== targetPage) {
+          window.location.hash = targetPage;
+      }
       return;
     }
 
     if (this.activePageController && typeof this.activePageController.destroy === 'function') {
       this.activePageController.destroy();
-      this.activePageController = null; // Clear previous controller
+      this.activePageController = null;
     }
     if (this.analysisControllerInstance && typeof this.analysisControllerInstance.destroy === 'function') {
         this.analysisControllerInstance.destroy();
         this.analysisControllerInstance = null;
     }
 
-    this.state.currentPage = page;
-    if (updateHash && window.location.hash.slice(1) !== page) {
-        window.location.hash = page;
+    this.state.currentPage = targetPage;
+    if (updateHash && window.location.hash.slice(1) !== targetPage) {
+        window.location.hash = targetPage;
     }
-    this.loadPageController(page); // This will also trigger a redraw
+    this.loadPageController(targetPage);
 
     if (this.state.isPortraitMode && this.state.isNavExpanded) {
-      this.state.isNavExpanded = false; // Close nav on navigation
+      this.state.isNavExpanded = false;
       // loadPageController will call requestGlobalRedraw
     }
   }
 
   private loadPageController(page: AppPage): void {
-    // Ensure previous controller is destroyed if any
     if (this.activePageController && typeof this.activePageController.destroy === 'function') {
         this.activePageController.destroy();
     }
@@ -355,11 +348,13 @@ export class AppController {
       case 'welcome':
         this.activePageController = new WelcomeController(this.authServiceInstance, this.requestGlobalRedraw);
         break;
-      // 'lichessCallback' case removed
       case 'finishHim':
         if (!boardHandlerForPage || !this.analysisControllerInstance) {
             logger.error("[AppController] Critical error: BoardHandler or AnalysisController not initialized for FinishHim page.");
-            this.navigateTo('welcome'); // Fallback to welcome on critical error
+            // Fallback navigation should be handled carefully to avoid loops.
+            // If this happens, it indicates a flaw in the new _isInitializing logic or similar.
+            if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
+            else logger.error("[AppController] Already on welcome, cannot fallback further from FihishHim init error.");
             return;
         }
         this.activePageController = new FinishHimController(
@@ -375,12 +370,9 @@ export class AppController {
         }
         break;
       default:
-        // This should ideally not be reached if AppPage is correctly typed and handled
         const exhaustiveCheck: never = page;
         logger.error(`[AppController] Unknown page in loadPageController: ${exhaustiveCheck}. Defaulting to welcome.`);
-        this.state.currentPage = 'welcome';
-        if(window.location.hash.slice(1) !== 'welcome') window.location.hash = 'welcome';
-        this.loadPageController('welcome'); // Recursive call, ensure it has a safe exit
+        if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
         return;
     }
     logger.info(`[AppController] Loaded controller for page: ${page}`, this.activePageController);
@@ -403,15 +395,27 @@ export class AppController {
       needsRedraw = true;
     }
 
-    this._calculateAndSetBoardSize(); // This will dispatch 'centerPanelResized'
-    if (needsRedraw) { // Redraw if orientation changed
+    this._calculateAndSetBoardSize();
+    if (needsRedraw) {
         this.requestGlobalRedraw();
     }
   }
   
   private setState(newState: Partial<AppControllerState>): void {
+    // Determine if a redraw is actually needed by comparing new vs old state values for relevant properties
+    let changed = false;
+    for (const key in newState) {
+        if (Object.prototype.hasOwnProperty.call(newState, key)) {
+            if (this.state[key as keyof AppControllerState] !== newState[key as keyof AppControllerState]) {
+                changed = true;
+                break;
+            }
+        }
+    }
     this.state = { ...this.state, ...newState };
-    this.requestGlobalRedraw();
+    if (changed) {
+        this.requestGlobalRedraw();
+    }
   }
 
   public destroy(): void {
@@ -431,7 +435,6 @@ export class AppController {
     if (this.analysisControllerInstance && typeof this.analysisControllerInstance.destroy === 'function') {
         this.analysisControllerInstance.destroy();
     }
-    // analysisServiceInstance is typically not destroyed here unless AppController itself is destroyed permanently
     logger.info('[AppController] Destroyed.');
   }
 }
