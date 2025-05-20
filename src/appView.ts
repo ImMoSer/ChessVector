@@ -2,9 +2,12 @@
 import { h } from 'snabbdom';
 import type { VNode, Hooks } from 'snabbdom';
 import type { AppController, AppPage } from './AppController';
-// PuzzleController and AnalysisTestController are no longer imported for page rendering here
 import { FinishHimController } from './features/finishHim/finishHimController';
 import { renderFinishHimUI, type FinishHimPageViewLayout } from './features/finishHim/finishHimView';
+import { WelcomeController } from './features/welcome/welcomeController';
+import { renderWelcomePage } from './features/welcome/welcomeView';
+import { LichessCallbackController } from './features/auth/lichessCallbackController';
+import { renderLichessCallbackPage } from './features/auth/lichessCallbackView';
 import logger from './utils/logger';
 import { t } from './core/i18n.service';
 
@@ -13,7 +16,7 @@ let isResizingCenterPanel = false;
 let initialCenterPanelMouseX: number | null = null;
 let initialUserPreferredVh: number | null = null;
 let centerPanelResizableWrapperEl: HTMLElement | null = null;
-const PX_PER_VH_DRAG_SENSITIVITY = 10;
+const PX_PER_VH_DRAG_SENSITIVITY = 10; // Pixels of drag to change VH by 1
 
 function onCenterPanelResizeStart(event: MouseEvent | TouchEvent, wrapperElement: HTMLElement, controller: AppController) {
     event.preventDefault();
@@ -60,31 +63,72 @@ function onCenterPanelResizeEnd(_controller: AppController, moveHandler: any, en
 export function renderAppUI(controller: AppController): VNode {
   const appState = controller.state;
   const activePageController = controller.activePageController;
+  const isAuthenticated = controller.services.authService.getIsAuthenticated();
 
-  // Only "FinishHim" link is shown for now
-  const navLinks = [
-    { page: 'finishHim' as AppPage, textKey: 'nav.finishHim' },
+  let navLinksConfig: Array<{ page: AppPage, textKey: string, requiresAuth?: boolean, hideWhenAuth?: boolean }> = [
+    // { page: 'welcome', textKey: 'nav.welcome', hideWhenAuth: true }, // Скрываем welcome если залогинен
+    { page: 'finishHim', textKey: 'nav.finishHim', requiresAuth: true },
+    // Другие страницы можно добавить сюда
   ];
 
-  // Use FinishHimPageViewLayout as the primary layout type now
-  let pageSpecificVNodes: FinishHimPageViewLayout = {
-    left: h('div.panel-placeholder', t('common.panel.leftNotLoaded')),
-    center: h('div.panel-placeholder', t('common.panel.centerNotLoaded')),
-    right: h('div.panel-placeholder', t('common.panel.rightNotLoaded'))
-  };
+  // Фильтруем навигационные ссылки
+  const visibleNavLinks = navLinksConfig.filter(link => {
+    if (link.requiresAuth && !isAuthenticated) return false;
+    if (link.hideWhenAuth && isAuthenticated) return false;
+    return true;
+  });
+
+  // Определяем, какой контент рендерить
+  let pageContentVNode: VNode | FinishHimPageViewLayout;
 
   if (activePageController) {
-    if (appState.currentPage === 'finishHim' && activePageController instanceof FinishHimController) {
-      pageSpecificVNodes = renderFinishHimUI(activePageController);
-    } else {
-        // This case should ideally not be hit if AppController correctly loads FinishHimController for 'finishHim' page
-        pageSpecificVNodes.center = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
-        logger.error(`[appView] Invalid controller instance for page ${appState.currentPage}. Controller:`, activePageController);
+    switch (appState.currentPage) {
+      case 'welcome':
+        if (activePageController instanceof WelcomeController) {
+          pageContentVNode = renderWelcomePage(activePageController);
+        } else {
+          pageContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
+        }
+        break;
+      case 'lichessCallback':
+        if (activePageController instanceof LichessCallbackController) {
+          pageContentVNode = renderLichessCallbackPage(activePageController);
+        } else {
+          pageContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
+        }
+        break;
+      case 'finishHim':
+        if (activePageController instanceof FinishHimController) {
+          pageContentVNode = renderFinishHimUI(activePageController);
+        } else {
+          pageContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
+        }
+        break;
+      default:
+        pageContentVNode = h('p', t('errorPage.unknownPage', { pageName: appState.currentPage }));
     }
   } else {
-    pageSpecificVNodes.center = h('p', t('common.loadingController'));
+    pageContentVNode = h('p', t('common.loadingController'));
     logger.debug(`[appView] No active page controller for page: ${appState.currentPage}`);
   }
+
+  // Обработка структуры FinishHimPageViewLayout
+  let leftPanelContent: VNode | null = null;
+  let centerPanelContent: VNode;
+  let rightPanelContent: VNode | null = null;
+
+  if (typeof pageContentVNode === 'object' && 'center' in pageContentVNode && 'left' in pageContentVNode && 'right' in pageContentVNode) {
+    // Это FinishHimPageViewLayout
+    const layout = pageContentVNode as FinishHimPageViewLayout;
+    leftPanelContent = layout.left;
+    centerPanelContent = layout.center;
+    rightPanelContent = layout.right;
+  } else {
+    // Это одиночный VNode (для Welcome, LichessCallback или ошибок)
+    // Помещаем его в центральную панель, боковые панели будут пустыми или скрыты CSS для этих страниц
+    centerPanelContent = pageContentVNode as VNode;
+  }
+
 
   const resizeHandleHook: Hooks = {
     insert: (vnode: VNode) => {
@@ -93,7 +137,6 @@ export function renderAppUI(controller: AppController): VNode {
         if (wrapperEl) {
             handleEl.addEventListener('mousedown', (e) => onCenterPanelResizeStart(e as MouseEvent, wrapperEl, controller), { passive: false });
             handleEl.addEventListener('touchstart', (e) => onCenterPanelResizeStart(e as TouchEvent, wrapperEl, controller), { passive: false });
-            logger.info('[appView resizeHandleHook.insert] Resize handle listeners attached.');
         } else {
             logger.error('[appView resizeHandleHook.insert] Parent wrapper for resize handle not found!');
         }
@@ -104,46 +147,88 @@ export function renderAppUI(controller: AppController): VNode {
     h('header#app-header', { class: { 'menu-open': appState.isNavExpanded && appState.isPortraitMode } }, [
       h('div.nav-header-content', [
         h('span.app-title', t('app.title')),
-        h('button.nav-toggle-button', {
-          on: { click: () => controller.toggleNav() }
-        }, appState.isNavExpanded ? '✕' : '☰'),
+        // Кнопка "гамбургер"
+        (visibleNavLinks.length > 0 || isAuthenticated) ? // Показываем гамбургер если есть ссылки или пользователь залогинен (для кнопки logout)
+          h('button.nav-toggle-button', {
+            on: { click: () => controller.toggleNav() }
+          }, appState.isNavExpanded ? '✕' : '☰') : null,
+        // Навигационные ссылки
         h('ul.nav-links',
-          navLinks.map(link =>
-            h('li', [
+          [
+            ...visibleNavLinks.map(link =>
+              h('li', [
+                h('a', {
+                  class: { active: appState.currentPage === link.page },
+                  props: { href: `#${link.page}` },
+                  on: {
+                    click: (e: Event) => {
+                      e.preventDefault();
+                      controller.navigateTo(link.page);
+                    }
+                  }
+                }, t(link.textKey))
+              ])
+            ),
+            // Кнопка Logout, если пользователь аутентифицирован
+            isAuthenticated ? h('li', [
               h('a', {
-                class: { active: appState.currentPage === link.page },
-                props: { href: `#${link.page}` }, // href can remain for potential deep linking or semantics
+                props: { href: '#' }, // Или какой-то специальный href для logout
                 on: {
-                  click: (e: Event) => {
+                  click: async (e: Event) => {
                     e.preventDefault();
-                    controller.navigateTo(link.page);
+                    logger.info('[appView] Logout button clicked.');
+                    await controller.services.authService.logout();
+                    // AppController подпишется на изменение authState и сделает редирект на 'welcome'
+                    if (appState.isNavExpanded) controller.toggleNav(); // Закрыть меню после клика
                   }
                 }
-              }, t(link.textKey))
-            ])
-          )
+              }, t('nav.logout'))
+            ]) : null
+          ].filter(Boolean) as VNode[] // filter(Boolean) для удаления null элементов, если они есть
         )
       ])
     ]),
     h('main#page-content-wrapper', [
       h(`div.three-column-layout`, {
-        class: { 'portrait-mode-layout': appState.isPortraitMode }
+        class: {
+            'portrait-mode-layout': appState.isPortraitMode,
+            'no-left-panel': !leftPanelContent && !appState.isPortraitMode, // Классы для скрытия панелей, если нет контента
+            'no-right-panel': !rightPanelContent && !appState.isPortraitMode,
+            'full-center': (!leftPanelContent && !rightPanelContent && !appState.isPortraitMode) || // Для Welcome/Callback в ландшафте
+                           (appState.currentPage === 'welcome' || appState.currentPage === 'lichessCallback') // Явно для welcome/callback
+        }
       },[
-        // Left panel: Always render if not portrait, or if portrait and content exists
-        (appState.isPortraitMode && !pageSpecificVNodes.left) ? null : h('aside#left-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode && !!pageSpecificVNodes.left } }, [pageSpecificVNodes.left]),
+        // Левая панель
+        (appState.isPortraitMode && !leftPanelContent) ? null : h('aside#left-panel', {
+            class: {
+                'portrait-mode-layout': appState.isPortraitMode && !!leftPanelContent,
+                'hidden-in-landscape': !leftPanelContent && !appState.isPortraitMode && (appState.currentPage === 'welcome' || appState.currentPage === 'lichessCallback')
+            }
+        }, [leftPanelContent || '']), // Добавляем '' чтобы избежать ошибки если leftPanelContent null
 
+        // Центральная панель
         h('div#center-panel-resizable-wrapper', {
-            key: 'center-wrapper',
-            class: { 'portrait-mode-layout': appState.isPortraitMode }
+            key: 'center-wrapper', // Важно для корректной работы хуков при смене страниц
+            class: {
+                'portrait-mode-layout': appState.isPortraitMode,
+                 // Класс для растягивания на всю ширину, если это welcome/callback
+                'center-full-width-page': appState.currentPage === 'welcome' || appState.currentPage === 'lichessCallback'
+            }
         }, [
-          h('section#center-panel', [pageSpecificVNodes.center]),
-          (appState.isPortraitMode || !pageSpecificVNodes.center || (pageSpecificVNodes.center as VNode).sel === 'div.panel-placeholder' || (pageSpecificVNodes.center as VNode).sel === 'p')
+          h('section#center-panel', [centerPanelContent]),
+          // Хэндл ресайза показываем только если это не welcome/callback и не портретный режим
+          (appState.isPortraitMode || appState.currentPage === 'welcome' || appState.currentPage === 'lichessCallback')
             ? null
             : h('div.resize-handle-center', { hook: resizeHandleHook, key: 'center-resize-handle' })
         ]),
 
-        // Right panel: Always render if not portrait, or if portrait and content exists
-        (appState.isPortraitMode && !pageSpecificVNodes.right) ? null : h('aside#right-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode && !!pageSpecificVNodes.right } }, [pageSpecificVNodes.right])
+        // Правая панель
+        (appState.isPortraitMode && !rightPanelContent) ? null : h('aside#right-panel', {
+            class: {
+                'portrait-mode-layout': appState.isPortraitMode && !!rightPanelContent,
+                'hidden-in-landscape': !rightPanelContent && !appState.isPortraitMode && (appState.currentPage === 'welcome' || appState.currentPage === 'lichessCallback')
+            }
+        }, [rightPanelContent || '']) // Добавляем ''
       ])
     ])
   ]);

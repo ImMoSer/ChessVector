@@ -6,6 +6,8 @@ import './assets/main.css'; // Main styles
 import './features/common/promotion/promotion.css'; // Promotion specific styles
 import './features/analysis/analysisPanel.css'; // <--- ДОБАВЛЕН ИМПОРТ СТИЛЕЙ АНАЛИЗА
 import './features/finishHim/finishHim.css'; // <--- ДОБАВЛЕН ИМПОРТ СТИЛЕЙ FINISH HIM
+import './features/welcome/welcome.css'; // <--- ДОБАВЛЕН ИМПОРТ СТИЛЕЙ WELCOME
+import './features/auth/lichessCallback.css'; // <--- ДОБАВЛЕН ИМПОРТ СТИЛЕЙ LICHESS CALLBACK
 
 
 // Import core services

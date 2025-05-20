@@ -3,7 +3,18 @@
     "title": "ChessApp"
   },
   "nav": {
-    "finishHim": "FinishHim"
+    "finishHim": "FinishHim",
+    "logout": "Logout"
+  },
+    "welcome": {
+    "message": "Welcome to ChessApp",
+    "loginButton": "Login with Lichess"
+  },
+  "lichessCallback": {
+    "processing": "Processing Lichess login...",
+    "success": "Login successful! Redirecting...",
+    "failure": "Lichess login failed.",
+    "unknownError": "An unknown error occurred during login."
   },
   "common": {
     "loading": "Loading...",

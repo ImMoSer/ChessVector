@@ -19,7 +19,7 @@
   flex-shrink: 0;
   min-height: 2.5em;
   /* order: -1; задан инлайн в finishHimView.ts */
-  background-color: var(--color-bg-primary);
+  background-color: var(--color-bg-tertiary);
   border-radius: var(--panel-border-radius);
   padding: 10px;
   border: 1px solid var(--color-border);
@@ -107,7 +107,7 @@
 .current-task-info {
   margin-top: 20px;
   padding: 10px;
-  background-color: var(--color-bg-primary);
+  background-color: var(--color-bg-tertiary);
   border-radius: var(--panel-border-radius);
   border: 1px solid var(--color-border);
   flex-shrink: 0;
