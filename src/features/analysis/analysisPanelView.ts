@@ -6,7 +6,7 @@ import type { EvaluatedLineWithSan } from '../../core/analysis.service';
 import { t } from '../../core/i18n.service';
 import logger from '../../utils/logger';
 
-// --- Логика рендеринга линий анализа ---
+// --- Логика рендеринга линий анализа (без изменений) ---
 function renderAnalysisLinesContent(
   panelState: AnalysisPanelState,
   onPlayMoveFromLine: (uciMove: string) => void
@@ -34,7 +34,7 @@ function renderAnalysisLinesContent(
       if (turnForPv === 'white') {
         pvString += `${currentMoveNumber}. ${san} `;
       } else {
-        if (sanIndex === 0 && line.pvSan.length > 0) { // Ensure ... is only for first black move if it's the start of PV
+        if (sanIndex === 0 && line.pvSan.length > 0) { 
              pvString += `${currentMoveNumber}...${san} `;
         } else {
              pvString += `${san} `;
@@ -60,7 +60,7 @@ function renderAnalysisLinesContent(
     }
 
     return h('div.analysis-line-entry', {
-      key: `analysis-line-${line.id}-${index}` // Unique key for Snabbdom
+      key: `analysis-line-${line.id}-${index}` 
     }, [
       h(`button.${scoreButtonClass}`, {
         on: {
@@ -75,55 +75,60 @@ function renderAnalysisLinesContent(
         },
         attrs: {
           title: firstMoveUci ? t('analysis.playFirstMove') : t('analysis.noMoveToPlay'),
-          disabled: !firstMoveUci // Disable if no move
+          disabled: !firstMoveUci 
         }
       }, scoreValueDisplay),
       h('span.analysis-pv-text', {
-        attrs: { title: pvString.trim() } // Tooltip with full PV
+        attrs: { title: pvString.trim() } 
       }, pvString.trim())
     ]);
   });
 }
 
-// Updated PGN controls to call methods on AnalysisController
+// Updated PGN controls
 function renderPgnControls(controller: AnalysisController, panelState: AnalysisPanelState): VNode {
-  // PGN buttons are disabled if analysis is not active OR if the specific navigation is not possible.
-  const pgnNavDisabledBase = !panelState.isAnalysisActive;
+  // PGN buttons are disabled if analysis is not active OR if a game is currently active.
+  const pgnNavDisabled = !panelState.isAnalysisActive || panelState.isGameCurrentlyActive;
+  // PGN buttons are styled as "active" (blue) only if analysis is active AND game is NOT active.
+  const pgnNavStyledActive = panelState.isAnalysisActive && !panelState.isGameCurrentlyActive;
 
   return h('div#pgn-navigation-controls.button-group.horizontal', [
     h('button.button.pgn-nav-button', {
+      class: { 'active-analysis-mode': pgnNavStyledActive },
       attrs: {
-        disabled: pgnNavDisabledBase || !panelState.canNavigatePgnBackward,
+        disabled: pgnNavDisabled || !panelState.canNavigatePgnBackward,
         title: t('pgn.nav.start')
       },
-      on: { click: () => controller.pgnNavigateToStart() } // Calls AnalysisController method
+      on: { click: () => controller.pgnNavigateToStart() }
     }, '|◀'),
     h('button.button.pgn-nav-button', {
+      class: { 'active-analysis-mode': pgnNavStyledActive },
       attrs: {
-        disabled: pgnNavDisabledBase || !panelState.canNavigatePgnBackward,
+        disabled: pgnNavDisabled || !panelState.canNavigatePgnBackward,
         title: t('pgn.nav.prev')
       },
-      on: { click: () => controller.pgnNavigateBackward() } // Calls AnalysisController method
+      on: { click: () => controller.pgnNavigateBackward() }
     }, '◀'),
     h('button.button.pgn-nav-button', {
+      class: { 'active-analysis-mode': pgnNavStyledActive },
       attrs: {
-        disabled: pgnNavDisabledBase || !panelState.canNavigatePgnForward,
+        disabled: pgnNavDisabled || !panelState.canNavigatePgnForward,
         title: t('pgn.nav.next')
       },
-      on: { click: () => controller.pgnNavigateForward(0) } // Calls AnalysisController method
+      on: { click: () => controller.pgnNavigateForward(0) }
     }, '▶'),
     h('button.button.pgn-nav-button', {
+      class: { 'active-analysis-mode': pgnNavStyledActive },
       attrs: {
-        disabled: pgnNavDisabledBase || !panelState.canNavigatePgnForward, // Technically, end might be same as current
+        disabled: pgnNavDisabled || !panelState.canNavigatePgnForward,
         title: t('pgn.nav.end')
       },
-      on: { click: () => controller.pgnNavigateToEnd() } // Calls AnalysisController method
+      on: { click: () => controller.pgnNavigateToEnd() }
     }, '▶|'),
   ]);
 }
 
-// Main controls remain largely the same, calling methods on AnalysisController
-// which then calls GameControlCallbacks if needed.
+// Main controls: Disable game control buttons if a game is active.
 function renderMainControls(controller: AnalysisController, panelState: AnalysisPanelState): VNode {
   let analysisResignButtonText: string;
 
@@ -137,38 +142,41 @@ function renderMainControls(controller: AnalysisController, panelState: Analysis
     }
   }
 
+  // Buttons "Next", "Restart", "Set FEN" are disabled if a game is currently active.
+  const gameControlButtonDisabled = panelState.isGameCurrentlyActive;
+
   return h('div#main-controls.button-group.vertical', [
     h('button.button.game-control-button.primary-button', {
       attrs: { 
-        disabled: !panelState.canLoadNextTask || panelState.isGameCurrentlyActive 
+        disabled: gameControlButtonDisabled || !panelState.canLoadNextTask // Keep existing logic for canLoadNextTask
       },
-      on: { click: () => controller.requestNextTask() } // Calls AnalysisController method
+      on: { click: () => controller.requestNextTask() }
     }, t('puzzle.button.next')),
     h('button.button.game-control-button', {
       attrs: { 
-        disabled: !panelState.canRestartTask || panelState.isGameCurrentlyActive 
+        disabled: gameControlButtonDisabled || !panelState.canRestartTask // Keep existing logic for canRestartTask
       },
-      on: { click: () => controller.requestRestartTask() } // Calls AnalysisController method
+      on: { click: () => controller.requestRestartTask() }
     }, t('puzzle.button.restartTask')),
-    h('button.button', {
+    h('button.button', { // This is the Analysis/Resign button
       class: {
           'analysis-toggle-button': true,
           'active-analysis': !panelState.isGameCurrentlyActive && panelState.isAnalysisActive,
           'resign-button': panelState.isGameCurrentlyActive,
       },
-      on: { click: () => controller.toggleAnalysisEngine() } // Calls AnalysisController method
+      // This button is never disabled by gameControlButtonDisabled, its state is handled by its own classes/text
+      on: { click: () => controller.toggleAnalysisEngine() } 
     }, analysisResignButtonText),
     h('button.button.game-control-button', {
       attrs: { 
-        disabled: !panelState.canSetFen || panelState.isGameCurrentlyActive 
+        disabled: gameControlButtonDisabled || !panelState.canSetFen // Keep existing logic for canSetFen
       },
-      on: { click: () => controller.requestSetFen() } // Calls AnalysisController method
+      on: { click: () => controller.requestSetFen() }
     }, t('puzzle.button.setFen')),
   ]);
 }
 
 export function renderAnalysisPanel(controller: AnalysisController): VNode {
-  // Get the most current state from the controller
   const panelState = controller.getPanelState();
   logger.debug('[AnalysisPanelView] Rendering with state:', panelState);
 
@@ -176,16 +184,14 @@ export function renderAnalysisPanel(controller: AnalysisController): VNode {
     ? h('div.analysis-lines-section',
         renderAnalysisLinesContent(
           panelState,
-          // This callback is for playing a move *from* an analysis line,
-          // which is still handled by AnalysisController.
           (uciMove: string) => controller.playMoveFromAnalysisLine(uciMove)
         )
       )
     : null;
 
   return h('div#analysis-panel-container', [
-    renderPgnControls(controller, panelState), // Pass controller and its state
+    renderPgnControls(controller, panelState),
     analysisLinesSection,
-    renderMainControls(controller, panelState), // Pass controller and its state
-  ].filter(Boolean) as VNode[]); // Filter out null for cleaner VDOM
+    renderMainControls(controller, panelState),
+  ].filter(Boolean) as VNode[]);
 }
