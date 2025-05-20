@@ -9,64 +9,70 @@ import type {
   AnalysisController,
   GameControlCallbacks,
   GameControlState,
-  // AnalysisPanelState, // Removed as it's no longer used directly here
 } from '../analysis/analysisController';
-// import type { AnalysisStateForUI } from '../../core/analysis.service'; // Removed as getAnalysisStateForUI was removed
 import logger from '../../utils/logger';
 import { SoundService } from '../../core/sound.service';
 import { t } from '../../core/i18n.service';
 import type { FinishHimPuzzleType } from './finishHim.types';
 import { FINISH_HIM_PUZZLE_TYPES } from './finishHim.types';
+// Исправляем импорт и использование AuthService
+import { AuthService, type FinishHimStats } from '../../core/auth.service';
 
 interface FinishHimControllerState {
   activePuzzle: AppPuzzle | null;
   interactiveSetupMoves: string[];
   currentInteractiveSetupMoveIndex: number;
-
   activePuzzleType: FinishHimPuzzleType;
-  userRating: number;
-  userPieceCount: number;
-
+  userStats: FinishHimStats | null;
   isUserTurnContext: boolean;
   feedbackMessage: string;
   isInPlayoutMode: boolean;
   isStockfishThinking: boolean;
   gameOverMessage: string | null;
-  currentPgnString: string; // Still needed if PGN is displayed outside analysis panel
+  currentPgnString: string;
   currentTaskPieceCount: number;
   isGameEffectivelyActive: boolean;
+  outplayTimerId: number | null;
+  outplayTimeRemainingMs: number | null;
 }
 
 export class FinishHimController {
   public state: FinishHimControllerState;
   public boardHandler: BoardHandler;
-  public analysisController: AnalysisController; // Remains public for the view
+  public analysisController: AnalysisController;
+  private authService: typeof AuthService; // Используем typeof AuthService для типа экземпляра синглтона
   private webhookService: WebhookService;
   private stockfishService: StockfishService;
 
-  private defaultUserRating = 1500;
-  private defaultUserPieceCount = 10;
+  private readonly defaultUserRating = 1200;
+  private readonly defaultUserPieceCount = 10;
 
   constructor(
     public chessboardService: ChessboardService,
     boardHandler: BoardHandler,
+    authService: typeof AuthService, // Используем typeof AuthService
     webhookService: WebhookService,
     stockfishService: StockfishService,
     analysisController: AnalysisController,
     public requestRedraw: () => void,
   ) {
     this.boardHandler = boardHandler;
-    this.analysisController = analysisController;
+    this.authService = authService;
     this.webhookService = webhookService;
     this.stockfishService = stockfishService;
+    this.analysisController = analysisController;
+
+    const initialStats = this.authService.getFinishHimStats();
+    if (!initialStats && this.authService.getIsAuthenticated()) { // Добавлена проверка на аутентификацию
+        logger.error("[FinishHimController] CRITICAL: FinishHimStats not available from AuthService on init for an authenticated user.");
+    }
 
     this.state = {
       activePuzzle: null,
       interactiveSetupMoves: [],
       currentInteractiveSetupMoveIndex: 0,
       activePuzzleType: FINISH_HIM_PUZZLE_TYPES[0],
-      userRating: this.defaultUserRating,
-      userPieceCount: this.defaultUserPieceCount,
+      userStats: initialStats,
       isUserTurnContext: false,
       feedbackMessage: t('finishHim.feedback.selectCategoryAndStart'),
       isInPlayoutMode: false,
@@ -75,20 +81,27 @@ export class FinishHimController {
       currentPgnString: "",
       currentTaskPieceCount: 0,
       isGameEffectivelyActive: false,
+      outplayTimerId: null,
+      outplayTimeRemainingMs: null,
     };
 
     this._registerGameCallbacksWithAnalysisController();
 
     this.boardHandler.onMoveMade(() => {
-        this._updatePgnDisplay(); 
-        this._updateAnalysisControllerGameState(); 
+        this._updatePgnDisplay();
+        this._updateAnalysisControllerGameState();
     });
     this.boardHandler.onPgnNavigated(() => {
-        this._updatePgnDisplay(); 
-        this._updateAnalysisControllerGameState(); 
+        this._updatePgnDisplay();
+        this._updateAnalysisControllerGameState();
     });
 
     logger.info('[FinishHimController] Initialized.');
+    if (this.state.userStats) {
+        logger.debug('[FinishHimController] Initial userStats:', JSON.parse(JSON.stringify(this.state.userStats)));
+    } else {
+        logger.warn('[FinishHimController] userStats are null after initialization.');
+    }
   }
 
   private _registerGameCallbacksWithAnalysisController(): void {
@@ -104,7 +117,7 @@ export class FinishHimController {
   private _updateAnalysisControllerGameState(): void {
     const gameState: GameControlState = {
       canRestartTask: !!this.state.activePuzzle,
-      canLoadNextTask: true, 
+      canLoadNextTask: true,
       isGameActive: this.state.isGameEffectivelyActive,
     };
     this.analysisController.updateGameControlState(gameState);
@@ -114,8 +127,15 @@ export class FinishHimController {
     logger.info(`[FinishHimController] Stopping current game activity. Called from analysis: ${calledFromAnalysis}`);
     this.state.isStockfishThinking = false;
     this.state.isInPlayoutMode = false;
-    this.state.isUserTurnContext = false; 
+    this.state.isUserTurnContext = false;
     this.state.isGameEffectivelyActive = false;
+
+    if (this.state.outplayTimerId) {
+        clearTimeout(this.state.outplayTimerId);
+        this.state.outplayTimerId = null;
+        this.state.outplayTimeRemainingMs = null;
+        logger.info('[FinishHimController] Outplay timer cleared due to game stop.');
+    }
 
     if (this.state.gameOverMessage === null && calledFromAnalysis) {
         this.state.feedbackMessage = t('finishHim.feedback.gameStoppedForAnalysis');
@@ -125,10 +145,20 @@ export class FinishHimController {
   }
 
   public initializeGame(): void {
+    const currentAuthStats = this.authService.getFinishHimStats();
+    if (currentAuthStats) {
+        if (JSON.stringify(this.state.userStats) !== JSON.stringify(currentAuthStats)) {
+            logger.info('[FinishHimController initializeGame] Updating userStats from AuthService.');
+            this.state.userStats = { ...currentAuthStats };
+        }
+    } else if (this.authService.getIsAuthenticated()) {
+        logger.error("[FinishHimController initializeGame] FinishHimStats are null from AuthService for an authenticated user!");
+    }
+
     this.state.feedbackMessage = t('finishHim.feedback.selectCategoryAndStart');
     this.state.isGameEffectivelyActive = false;
     this._updatePgnDisplay();
-    this._updateAnalysisControllerGameState(); 
+    this._updateAnalysisControllerGameState();
     this.requestRedraw();
   }
 
@@ -165,19 +195,85 @@ export class FinishHimController {
 
     this.state.currentPgnString = this.boardHandler.getPgn({
         showResult: showResultInPgn,
-        showVariations: this.analysisController.getPanelState().isAnalysisActive 
+        showVariations: this.analysisController.getPanelState().isAnalysisActive
     });
+  }
+
+  private _incrementGamesPlayed(): void {
+    if (this.state.userStats) {
+      this.state.userStats.gamesPlayed += 1;
+      logger.debug(`[FinishHimController] Games played incremented: ${this.state.userStats.gamesPlayed}`);
+      this._sendStatsToBackend();
+    }
+  }
+
+  private _updateTacticalRating(isWin: boolean): void {
+    if (this.state.userStats) {
+      if (isWin) {
+        this.state.userStats.tacticalRating += 10;
+        this.state.userStats.tacticalWins += 1;
+        logger.debug(`[FinishHimController] Tactical phase WIN. Rating: ${this.state.userStats.tacticalRating}, Wins: ${this.state.userStats.tacticalWins}`);
+      } else {
+        this.state.userStats.tacticalRating -= 10;
+        this.state.userStats.tacticalLosses += 1;
+        logger.debug(`[FinishHimController] Tactical phase LOSS. Rating: ${this.state.userStats.tacticalRating}, Losses: ${this.state.userStats.tacticalLosses}`);
+      }
+      // Статистика отправляется после _incrementGamesPlayed, если это конец тактической фазы
+    }
+  }
+
+  private _updateFinishHimRatingAndPieceCount(outcome: 'win' | 'loss' | 'draw'): void {
+    if (this.state.userStats) {
+      const oldRating = this.state.userStats.finishHimRating;
+      const oldPieceCount = this.state.userStats.currentPieceCount;
+
+      if (outcome === 'win') {
+        this.state.userStats.finishHimRating += 10;
+        this.state.userStats.playoutWins += 1;
+        this.state.userStats.currentPieceCount = Math.min(22, this.state.userStats.currentPieceCount + 1);
+      } else if (outcome === 'loss') {
+        this.state.userStats.finishHimRating -= 10;
+        this.state.userStats.playoutLosses += 1;
+        this.state.userStats.currentPieceCount = Math.max(4, this.state.userStats.currentPieceCount - 1);
+      } else { // draw
+        this.state.userStats.finishHimRating -= 10;
+        this.state.userStats.playoutDraws += 1;
+      }
+      logger.debug(`[FinishHimController] Playout phase ${outcome}. Rating: ${oldRating} -> ${this.state.userStats.finishHimRating}. PieceCount: ${oldPieceCount} -> ${this.state.userStats.currentPieceCount}`);
+      this._sendStatsToBackend(); // Отправляем статистику после обновления результатов доигрывания
+    }
+  }
+
+  private async _sendStatsToBackend(): Promise<void> {
+    const userId = this.authService.getUserProfile()?.id;
+    if (userId && this.state.userStats) {
+        logger.info(`[FinishHimController] Sending updated FinishHimStats to backend for user ${userId}.`);
+        try {
+            // Создаем копию, чтобы избежать случайных мутаций во время асинхронной операции
+            const statsToSend = { ...this.state.userStats };
+            const success = await this.webhookService.sendFinishHimStatsUpdate(userId, statsToSend);
+            if (success) {
+                logger.info('[FinishHimController] FinishHimStats successfully sent to backend.');
+            } else {
+                logger.warn('[FinishHimController] Failed to send FinishHimStats to backend (webhookService returned false).');
+            }
+        } catch (error) {
+            logger.error('[FinishHimController] Error sending FinishHimStats to backend:', error);
+        }
+    } else {
+        logger.warn('[FinishHimController _sendStatsToBackend] Cannot send stats: userId or userStats missing.', { userId, userStats: !!this.state.userStats });
+    }
   }
 
   private checkAndSetGameOver(): boolean {
     if (this.analysisController.getPanelState().isAnalysisActive) {
         if (this.state.gameOverMessage) {
-            this.state.gameOverMessage = null; 
+            this.state.gameOverMessage = null;
             this.requestRedraw();
         }
-        this.state.isGameEffectivelyActive = false; 
+        this.state.isGameEffectivelyActive = false;
         this._updateAnalysisControllerGameState();
-        return false; 
+        return false;
     }
 
     const gameStatus: GameStatus = this.boardHandler.getGameStatus();
@@ -189,20 +285,43 @@ export class FinishHimController {
       this.state.isGameEffectivelyActive = false;
       logger.info(`[FinishHimController] Game over detected. Message: ${this.state.gameOverMessage}`);
 
-      if (this.state.activePuzzle && gameStatus.outcome?.reason !== 'stalemate') {
-        const humanColor = this.boardHandler.getHumanPlayerColor();
-        if (gameStatus.outcome?.winner && humanColor) {
-          if (gameStatus.outcome.winner === humanColor) {
-            this.state.feedbackMessage = t('finishHim.feedback.taskComplete');
-            SoundService.playSound('puzzle_user_won');
-          } else {
-            this.state.feedbackMessage = t('finishHim.feedback.taskFailed');
-            SoundService.playSound('puzzle_user_lost');
-          }
+      if (this.state.outplayTimerId) {
+          clearTimeout(this.state.outplayTimerId);
+          this.state.outplayTimerId = null;
+          this.state.outplayTimeRemainingMs = null;
+          logger.info('[FinishHimController] Outplay timer cleared due to game over.');
+      }
+
+      if (this.state.activePuzzle) {
+        if (this.state.isInPlayoutMode) {
+            const humanColor = this.boardHandler.getHumanPlayerColor();
+            let playoutOutcome: 'win' | 'loss' | 'draw' = 'draw'; // Default to draw
+
+            if (gameStatus.outcome?.winner === humanColor) playoutOutcome = 'win';
+            else if (gameStatus.outcome?.winner) playoutOutcome = 'loss';
+            // Если нет победителя, это ничья (stalemate, insufficient_material, etc.)
+            
+            this._updateFinishHimRatingAndPieceCount(playoutOutcome);
+            // _incrementGamesPlayed() не вызывается здесь, так как игра уже была засчитана после тактической фазы
+
+            if (playoutOutcome === 'win') SoundService.playSound('puzzle_user_won');
+            else if (playoutOutcome === 'loss') SoundService.playSound('puzzle_user_lost');
+            // Звук для ничьей будет обработан ниже
         }
-      } else if (gameStatus.outcome?.reason === 'stalemate') {
+        // Если игра закончилась НЕ в playoutMode, значит это произошло в тактической фазе
+        // (например, пользователь сделал неверный ход, что уже обработано,
+        // или противник поставил мат - это тоже проигрыш тактики)
+        // Но _updateTacticalRating и _incrementGamesPlayed уже были вызваны в processUserMoveResultInInteractiveSetup
+        // или при завершении ходов системы.
+      }
+
+      if (gameStatus.outcome?.reason === 'stalemate') {
           SoundService.playSound('stalemate');
       }
+      // else if (gameStatus.outcome && !gameStatus.outcome.winner) { // Другие виды ничьих
+          // SoundService.playSound('DRAW_GENERAL'); // Будет добавлено позже
+      // }
+
       this._updatePgnDisplay();
       this._updateAnalysisControllerGameState();
       this.requestRedraw();
@@ -224,9 +343,14 @@ export class FinishHimController {
 
   public async loadAndStartFinishHimPuzzle(puzzleToLoad?: AppPuzzle): Promise<void> {
     if (this.boardHandler.promotionCtrl.isActive()) this.boardHandler.promotionCtrl.cancel();
-    
+
     if (this.analysisController.getPanelState().isAnalysisActive) {
-        this.analysisController.toggleAnalysisEngine(); 
+        this.analysisController.toggleAnalysisEngine();
+    }
+    if (this.state.outplayTimerId) {
+        clearTimeout(this.state.outplayTimerId);
+        this.state.outplayTimerId = null;
+        this.state.outplayTimeRemainingMs = null;
     }
 
     this.state.activePuzzle = null;
@@ -239,18 +363,19 @@ export class FinishHimController {
     this.state.gameOverMessage = null;
     this.state.currentPgnString = "";
     this.state.currentTaskPieceCount = 0;
-    this.state.isGameEffectivelyActive = true; 
+    this.state.isGameEffectivelyActive = true;
     this.requestRedraw();
 
     let puzzleDataToProcess: AppPuzzle | null = puzzleToLoad || null;
+    const currentStats = this.authService.getFinishHimStats();
 
     if (!puzzleDataToProcess) {
         logger.info(`[FinishHimController] Loading new FinishHim puzzle from webhook. Type: ${this.state.activePuzzleType}`);
         const payload: PuzzleRequestPayload = {
           event: "FinishHim",
-          lichess_id: "valid_all", 
-          pieceCount: this.state.userPieceCount,
-          rating: this.state.userRating,
+          lichess_id: this.authService.getUserProfile()?.id || "unknown_user",
+          pieceCount: currentStats?.currentPieceCount || this.defaultUserPieceCount,
+          rating: currentStats?.finishHimRating || this.defaultUserRating,
           puzzleType: this.state.activePuzzleType,
         };
         puzzleDataToProcess = await this.webhookService.fetchPuzzle(payload);
@@ -273,9 +398,9 @@ export class FinishHimController {
       this.state.feedbackMessage = puzzleToLoad
         ? t('finishHim.feedback.restarted', { puzzleId: puzzleDataToProcess.PuzzleId, color: playerColorName, category: categoryName })
         : t('finishHim.feedback.loaded', { puzzleId: puzzleDataToProcess.PuzzleId, color: playerColorName, category: categoryName });
-      
-      this.state.isGameEffectivelyActive = true; 
-      if (this.checkAndSetGameOver()) return; 
+
+      this.state.isGameEffectivelyActive = true;
+      if (this.checkAndSetGameOver()) return;
 
       const initialTurnColorInPuzzle = this.boardHandler.getBoardTurnColor();
       const humanColor = this.boardHandler.getHumanPlayerColor();
@@ -293,8 +418,10 @@ export class FinishHimController {
           logger.info(`[FinishHimController] Interactive setup starts with user's turn.`);
           this.requestRedraw();
         }
-      } else {
-        logger.info("[FinishHimController] No interactive setup moves. Entering playout mode directly.");
+      } else { // No interactive setup moves, tactical phase is considered "won" by default
+        logger.info("[FinishHimController] No interactive setup moves. Tactical phase won by default. Entering playout mode directly.");
+        this._updateTacticalRating(true);
+        this._incrementGamesPlayed();
         this._enterPlayoutMode();
       }
     } else {
@@ -303,7 +430,7 @@ export class FinishHimController {
       this.state.isGameEffectivelyActive = false;
     }
     this._updatePgnDisplay();
-    this._updateAnalysisControllerGameState(); 
+    this._updateAnalysisControllerGameState();
     this.requestRedraw();
   }
 
@@ -312,7 +439,11 @@ export class FinishHimController {
 
     if (!this.state.activePuzzle || this.state.currentInteractiveSetupMoveIndex >= this.state.interactiveSetupMoves.length) {
       if (this.state.activePuzzle) {
-        logger.info("[FinishHimController] Interactive setup completed. Entering playout mode.");
+        logger.info("[FinishHimController] Interactive setup completed by system. Entering playout mode.");
+        if (this.state.currentInteractiveSetupMoveIndex > 0 && this.state.interactiveSetupMoves.length > 0) {
+            this._updateTacticalRating(true);
+            this._incrementGamesPlayed();
+        }
         this._enterPlayoutMode();
       } else {
         logger.warn("[FinishHimController _playNextInteractiveSetupMoveSystem] No active puzzle.");
@@ -334,6 +465,8 @@ export class FinishHimController {
 
       if (this.state.currentInteractiveSetupMoveIndex >= this.state.interactiveSetupMoves.length) {
         logger.info("[FinishHimController] SYSTEM COMPLETED INTERACTIVE SETUP!");
+        this._updateTacticalRating(true);
+        this._incrementGamesPlayed();
         this._enterPlayoutMode();
       } else {
         this.state.isUserTurnContext = true;
@@ -342,7 +475,7 @@ export class FinishHimController {
     } else {
       logger.error(`[FinishHimController] Failed to apply interactive setup move ${uciSetupMove}. Result: ${JSON.stringify(moveResult)}`);
       this.state.feedbackMessage = t('puzzle.feedback.puzzleDataError');
-      this.state.isUserTurnContext = true; 
+      this.state.isUserTurnContext = true;
     }
     this.requestRedraw();
   }
@@ -352,9 +485,9 @@ export class FinishHimController {
         logger.debug("[FinishHimController] Already in playout mode. Ensuring turn context is correct.");
     } else {
         logger.info("[FinishHimController] Entering playout mode.");
-        SoundService.playSound('puzzle_playout_start');
+        // SoundService.playSound('puzzle_playout_start'); // Звук будет добавлен позже
         this.state.isInPlayoutMode = true;
-        this.state.isGameEffectivelyActive = true; 
+        this.state.isGameEffectivelyActive = true;
     }
 
     const currentBoardTurn = this.boardHandler.getBoardTurnColor();
@@ -369,7 +502,7 @@ export class FinishHimController {
         if (!this.state.gameOverMessage) this.state.feedbackMessage = t('finishHim.feedback.systemToMovePlayout');
         this.triggerStockfishMoveInPlayoutIfNeeded();
     }
-    this._updateAnalysisControllerGameState(); 
+    this._updateAnalysisControllerGameState();
     this.requestRedraw();
   }
 
@@ -388,7 +521,7 @@ export class FinishHimController {
 
       try {
         const stockfishMoveUci = await this.stockfishService.getBestMoveOnly(this.boardHandler.getFen(), { depth: 12 });
-        this.state.isStockfishThinking = false; 
+        this.state.isStockfishThinking = false;
 
         if (this.state.gameOverMessage || !this.state.isInPlayoutMode || !this.state.isGameEffectivelyActive || this.analysisController.getPanelState().isAnalysisActive) {
             logger.info("[FinishHimController] State changed during Stockfish thinking, aborting move application.");
@@ -406,13 +539,13 @@ export class FinishHimController {
           } else {
             logger.error("[FinishHimController] Stockfish (auto) made an illegal move or FEN update failed:", stockfishMoveUci);
             this.state.feedbackMessage = t('puzzle.feedback.stockfishError');
-            this.state.isUserTurnContext = true; 
+            this.state.isUserTurnContext = true;
           }
         } else {
           logger.warn("[FinishHimController] Stockfish (auto) did not return a move in playout (e.g. mate/stalemate already).");
-          if (!this.checkAndSetGameOver()) { 
+          if (!this.checkAndSetGameOver()) {
             this.state.feedbackMessage = t('puzzle.feedback.stockfishNoMove');
-            this.state.isUserTurnContext = true; 
+            this.state.isUserTurnContext = true;
           }
         }
       } catch (error) {
@@ -448,7 +581,7 @@ export class FinishHimController {
             this.state.feedbackMessage = t('puzzle.feedback.moveErrorAnalysis');
         }
         this.state.currentTaskPieceCount = this.countPiecesFromFen(this.boardHandler.getFen());
-        this._updatePgnDisplay(); 
+        this._updatePgnDisplay();
         this.requestRedraw();
         return;
     }
@@ -480,13 +613,13 @@ export class FinishHimController {
 
     if (moveResult.success && moveResult.uciMove) {
       this.state.currentTaskPieceCount = this.countPiecesFromFen(this.boardHandler.getFen());
-      this._updatePgnDisplay(); 
+      this._updatePgnDisplay();
 
-      if (this.checkAndSetGameOver()) return; 
+      if (this.checkAndSetGameOver()) return;
 
       if (this.state.isInPlayoutMode) {
         logger.info(`[FinishHimController] User move in playout mode: ${moveResult.uciMove}`);
-        this.state.isUserTurnContext = false; 
+        this.state.isUserTurnContext = false;
         this.triggerStockfishMoveInPlayoutIfNeeded();
       } else {
         this.processUserMoveResultInInteractiveSetup(moveResult.uciMove);
@@ -506,7 +639,9 @@ export class FinishHimController {
 
     if (!this.state.activePuzzle) {
       logger.warn("[FinishHimController processUserMoveResultInInteractiveSetup] No active puzzle. Entering playout mode as fallback.");
-      this._enterPlayoutMode(); 
+      this._updateTacticalRating(true); // Если нет пазла, но ход как-то прошел - считаем тактику успешной
+      this._incrementGamesPlayed();
+      this._enterPlayoutMode();
       return;
     }
 
@@ -516,12 +651,14 @@ export class FinishHimController {
       logger.info(`[FinishHimController processUserMoveResultInInteractiveSetup] User move ${uciUserMove} is CORRECT for setup!`);
       this.state.feedbackMessage = t('puzzle.feedback.correctMove');
       this.state.currentInteractiveSetupMoveIndex++;
-      this.state.isUserTurnContext = false; 
+      this.state.isUserTurnContext = false;
 
-      if (this.checkAndSetGameOver()) return; 
+      if (this.checkAndSetGameOver()) return;
 
       if (this.state.currentInteractiveSetupMoveIndex >= this.state.interactiveSetupMoves.length) {
         logger.info("[FinishHimController processUserMoveResultInInteractiveSetup] USER COMPLETED INTERACTIVE SETUP!");
+        this._updateTacticalRating(true);
+        this._incrementGamesPlayed();
         this._enterPlayoutMode();
       } else {
         this.state.feedbackMessage = t('puzzle.feedback.systemMove');
@@ -530,35 +667,42 @@ export class FinishHimController {
           if (!this.analysisController.getPanelState().isAnalysisActive && !this.state.gameOverMessage) {
             this._playNextInteractiveSetupMoveSystem(true);
           }
-        }, 300); 
+        }, 300);
       }
     } else {
-      logger.warn(`[FinishHimController processUserMoveResultInInteractiveSetup] User move ${uciUserMove} is INCORRECT for setup. Expected: ${expectedSetupMove}. Undoing user's move.`);
-      this.state.feedbackMessage = t('puzzle.feedback.incorrectMove', { expectedMove: expectedSetupMove });
-      if (this.boardHandler.undoLastMove()) {
-        logger.info(`[FinishHimController processUserMoveResultInInteractiveSetup] Incorrect user move ${uciUserMove} was undone. FEN is now: ${this.boardHandler.getFen()}`);
-        this.state.currentTaskPieceCount = this.countPiecesFromFen(this.boardHandler.getFen());
-      } else {
-        logger.error(`[FinishHimController processUserMoveResultInInteractiveSetup] Failed to undo incorrect user move ${uciUserMove}.`);
-      }
-      this.state.isUserTurnContext = true; 
+      logger.warn(`[FinishHimController processUserMoveResultInInteractiveSetup] User move ${uciUserMove} is INCORRECT for setup. Expected: ${expectedSetupMove}.`);
+      this.state.feedbackMessage = t('finishHim.feedback.tacticalFail');
+      this.state.gameOverMessage = t('finishHim.feedback.tacticalFailDetailed', {userMove: uciUserMove, expectedMove: expectedSetupMove});
+      this.state.isUserTurnContext = false;
+      this.state.isGameEffectivelyActive = false;
+      this._updateTacticalRating(false);
+      this._incrementGamesPlayed();
+      // SoundService.playSound('USER_TACTICAL_FAIL'); // Будет добавлено позже
+      this._updatePgnDisplay();
+      this._updateAnalysisControllerGameState();
     }
+    this.requestRedraw();
   }
 
   public handleRestartTask(): void {
     if (this.boardHandler.promotionCtrl.isActive()) this.boardHandler.promotionCtrl.cancel();
-    
+
     if (this.analysisController.getPanelState().isAnalysisActive) {
-        this.analysisController.toggleAnalysisEngine(); 
+        this.analysisController.toggleAnalysisEngine();
+    }
+    if (this.state.outplayTimerId) {
+        clearTimeout(this.state.outplayTimerId);
+        this.state.outplayTimerId = null;
+        this.state.outplayTimeRemainingMs = null;
     }
 
     if (this.state.activePuzzle) {
       logger.info(`[FinishHimController] Restarting current task: ${this.state.activePuzzle.PuzzleId}`);
-      this.loadAndStartFinishHimPuzzle(this.state.activePuzzle); 
+      this.loadAndStartFinishHimPuzzle(this.state.activePuzzle);
     } else {
       logger.warn("[FinishHimController] Restart task called, but no active task to restart. Loading new one.");
       this.state.feedbackMessage = t('finishHim.feedback.noTaskToRestart');
-      this.loadAndStartFinishHimPuzzle(); 
+      this.loadAndStartFinishHimPuzzle();
     }
   }
 
@@ -566,27 +710,37 @@ export class FinishHimController {
     if (this.boardHandler.promotionCtrl.isActive()) this.boardHandler.promotionCtrl.cancel();
 
     if (this.analysisController.getPanelState().isAnalysisActive) {
-        this.analysisController.toggleAnalysisEngine(); 
+        this.analysisController.toggleAnalysisEngine();
+    }
+    if (this.state.outplayTimerId) {
+        clearTimeout(this.state.outplayTimerId);
+        this.state.outplayTimerId = null;
+        this.state.outplayTimeRemainingMs = null;
     }
 
     const fen = prompt(t('puzzle.feedback.enterFenPrompt'), this.boardHandler.getFen());
     if (fen) {
-      this.state.activePuzzle = null; 
+      this.state.activePuzzle = null;
       this.state.interactiveSetupMoves = [];
       this.state.currentInteractiveSetupMoveIndex = 0;
       this.state.currentTaskPieceCount = this.countPiecesFromFen(fen);
       this.state.isStockfishThinking = false;
       this.state.gameOverMessage = null;
-      this.state.isInPlayoutMode = false; 
-      this.state.isGameEffectivelyActive = true; 
+      this.state.isInPlayoutMode = false;
+      this.state.isGameEffectivelyActive = true;
 
       const humanPlayerColorBasedOnTurn = fen.includes(' w ') ? 'white' : 'black';
-      this.boardHandler.setupPosition(fen, humanPlayerColorBasedOnTurn, true); 
+      this.boardHandler.setupPosition(fen, humanPlayerColorBasedOnTurn, true);
       this._updatePgnDisplay();
 
-      if (this.checkAndSetGameOver()) return; 
+      if (this.checkAndSetGameOver()) return; // Важно проверить после установки позиции
 
-      this._enterPlayoutMode(); 
+      // Если нет ходов для интерактивной настройки (что обычно при ручной установке FEN),
+      // то тактическая фаза считается пройденной (или неактуальной для этого сценария)
+      // и можно сразу переходить в режим доигрывания.
+      // В этом случае не увеличиваем счетчик игр и не меняем тактический рейтинг.
+      logger.info("[FinishHimController handleSetFen] FEN set manually. Entering playout mode directly.");
+      this._enterPlayoutMode();
       this.requestRedraw();
     }
   }
@@ -594,7 +748,11 @@ export class FinishHimController {
   public destroy(): void {
     logger.info('[FinishHimController] Destroying FinishHimController instance.');
     if (this.analysisController && this.analysisController.getPanelState().isAnalysisActive) {
-        this.analysisController.toggleAnalysisEngine(); 
+        this.analysisController.toggleAnalysisEngine();
+    }
+    if (this.state.outplayTimerId) {
+        clearTimeout(this.state.outplayTimerId);
+        this.state.outplayTimerId = null;
     }
   }
 }

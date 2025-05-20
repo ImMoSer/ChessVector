@@ -6,7 +6,7 @@
     "finishHim": "FinishHim",
     "logout": "Logout"
   },
-    "welcome": {
+  "welcome": {
     "message": "Welcome to ChessApp",
     "loginButton": "Login with Lichess"
   },
@@ -150,6 +150,8 @@
       "analysisDeactivated": "Analysis deactivated. Switched to game mode.",
       "taskComplete": "Task Complete!",
       "taskFailed": "Task Failed.",
+      "tacticalFail": "Tactical phase failed.",
+      "tacticalFailDetailed": "Incorrect. Expected {expectedMove}, you played {userMove}. Task failed.",
       "systemToMovePlayout": "System to move (playout).",
       "yourTurnPlayout": "Your turn (playout).",
       "taskResumed": "Task resumed.",
@@ -158,5 +160,20 @@
       "restarted": "Task {puzzleId} ({category}) restarted. You play as {color}.",
       "gameStoppedForAnalysis": "Game stopped. Analysis can be started."
     }
+  },
+  "stats": {
+    "title": "Player Stats",
+    "loading": "Loading stats...",
+    "gamesPlayed": "Games Played",
+    "currentPieceCount": "Piece Count",
+    "tacticalSectionTitle": "Tactical Phase",
+    "tacticalRating": "Tactical Rating",
+    "tacticalWDL": "Tactics (W/L)",
+    "finishHimSectionTitle": "Playout Phase",
+    "finishHimRating": "Playout Rating",
+    "playoutWDL": "Playout (W/D/L)"
+  },
+  "auth": {
+    "processingLogin": "Processing Login..."
   }
 }

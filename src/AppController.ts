@@ -2,7 +2,7 @@
 import logger from './utils/logger';
 import type { ChessboardService } from './core/chessboard.service';
 import type { StockfishService } from './core/stockfish.service';
-import type { WebhookService } from './core/webhook.service';
+import { WebhookService } from './core/webhook.service';
 import { BoardHandler } from './core/boardHandler';
 import { PgnService } from './core/pgn.service';
 import { AnalysisService } from './core/analysis.service';
@@ -48,6 +48,7 @@ export class AppController {
   private analysisControllerInstance: AnalysisController | null = null;
   private analysisServiceInstance: AnalysisService;
   private authServiceInstance: typeof AuthService;
+  private webhookServiceInstance: WebhookService;
 
   private unsubscribeFromLangChange: (() => void) | null = null;
   private unsubscribeFromAuthChange: (() => void) | null = null;
@@ -62,10 +63,14 @@ export class AppController {
     requestGlobalRedraw: () => void
   ) {
     this.authServiceInstance = AuthService;
+    this.webhookServiceInstance = globalServices.webhookService;
     this.analysisServiceInstance = new AnalysisService(globalServices.stockfishService);
 
     this.services = {
-      ...globalServices,
+      chessboardService: globalServices.chessboardService,
+      stockfishService: globalServices.stockfishService,
+      webhookService: this.webhookServiceInstance,
+      logger: globalServices.logger,
       authService: this.authServiceInstance,
       analysisService: this.analysisServiceInstance,
     };
@@ -76,11 +81,11 @@ export class AppController {
     this.userPreferredBoardSizeVh = Math.max(BOARD_MIN_VH, Math.min(BOARD_MAX_VH, this.userPreferredBoardSizeVh));
 
     this.state = {
-      currentPage: 'welcome', // Default, will be updated by initializeApp
+      currentPage: 'welcome',
       isNavExpanded: false,
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
       currentUser: null,
-      isLoadingAuth: true, // Start in loading state for auth
+      isLoadingAuth: true,
     };
 
     this.unsubscribeFromLangChange = subscribeToLangChange(() => {
@@ -88,7 +93,6 @@ export class AppController {
       this.requestGlobalRedraw();
     });
 
-    // Simplified Auth Subscriber
     this.unsubscribeFromAuthChange = this.authServiceInstance.subscribe(() => {
       logger.info('[AppController] Auth state changed via subscription (simplified).');
       const authState = this.authServiceInstance.getState();
@@ -99,18 +103,12 @@ export class AppController {
       this.state.currentUser = authState.userProfile;
       this.state.isLoadingAuth = authState.isProcessing;
 
-      // Redraw if user profile or loading state actually changed
       if (prevUserProfileId !== authState.userProfile?.id || prevIsLoadingAuth !== authState.isProcessing) {
           this.requestGlobalRedraw();
       }
 
-      // Handle logout or session expiration *after* initial app load sequence
-      // initializeApp is responsible for the first page load decision.
-      // This handles subsequent events like user clicking "logout".
       if (!this._isInitializing && !authState.isProcessing && !authState.isAuthenticated && this.state.currentPage !== 'welcome') {
           logger.info('[AppController Subscriber] Post-init: User logged out or session expired, navigating to welcome.');
-          // The outer condition already ensures this.state.currentPage is not 'welcome'.
-          // So, the inner check was redundant.
           this.navigateTo('welcome'); 
       }
     });
@@ -118,7 +116,7 @@ export class AppController {
     logger.info(`[AppController] Initialized. Current lang: ${getCurrentLang()}`);
   }
 
-  private _isInitializing: boolean = true; // Flag to manage initial load phase
+  private _isInitializing: boolean = true;
 
   public async initializeApp(): Promise<void> {
     this._isInitializing = true;
@@ -126,11 +124,10 @@ export class AppController {
     this.setState({ isLoadingAuth: true });
 
     const authCallbackProcessed = await this.authServiceInstance.handleAuthentication();
-    // Auth subscriber will update this.state.currentUser and this.state.isLoadingAuth
-
+    
     let finalInitialPageTarget: AppPage;
     const hash = window.location.hash.slice(1) as AppPage;
-    const isAuthenticated = this.authServiceInstance.getIsAuthenticated(); // Use getter after handleAuthentication
+    const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
 
     if (authCallbackProcessed) {
         finalInitialPageTarget = isAuthenticated ? 'finishHim' : 'welcome';
@@ -149,16 +146,13 @@ export class AppController {
         logger.info(`[AppController] No auth callback. Determined initial target based on stored session/hash: ${finalInitialPageTarget}`);
     }
     
-    // Navigate to the final determined page.
-    // navigateTo will set this.state.currentPage and call loadPageController.
     this.navigateTo(finalInitialPageTarget, true);
 
     logger.info(`[AppController] App initialization sequence complete. Final page: ${this.state.currentPage}`);
-    this._calculateAndSetBoardSize(); // Ensures board size is set after page structure might be decided.
+    this._calculateAndSetBoardSize();
     
     window.addEventListener('hashchange', this.handleHashChange.bind(this));
-    this._isInitializing = false; // Mark initialization as complete
-    // requestGlobalRedraw is handled by navigateTo
+    this._isInitializing = false;
   }
 
   private handleHashChange(): void {
@@ -258,8 +252,6 @@ export class AppController {
 
     logger.info(`[AppController navigateTo] Attempting navigation to: ${page}. Current: ${this.state.currentPage}. Auth: ${isAuthenticated}, Tier: ${userTier}`);
     
-    // Block navigation if auth is processing, except during the initial call from initializeApp.
-    // The _isInitializing flag helps distinguish this.
     if (this.state.isLoadingAuth && !this._isInitializing && page !== this.state.currentPage) {
         logger.warn(`[AppController navigateTo] Navigation to ${page} blocked: authentication is processing, and not initial load.`);
         return;
@@ -287,7 +279,7 @@ export class AppController {
       if (this.state.isPortraitMode && this.state.isNavExpanded) {
         this.toggleNav();
       } else {
-        this.requestGlobalRedraw(); // Ensure UI updates if only sub-state (like nav) changed
+        this.requestGlobalRedraw();
       }
       if (updateHash && window.location.hash.slice(1) !== targetPage) {
           window.location.hash = targetPage;
@@ -312,7 +304,6 @@ export class AppController {
 
     if (this.state.isPortraitMode && this.state.isNavExpanded) {
       this.state.isNavExpanded = false;
-      // loadPageController will call requestGlobalRedraw
     }
   }
 
@@ -351,19 +342,18 @@ export class AppController {
       case 'finishHim':
         if (!boardHandlerForPage || !this.analysisControllerInstance) {
             logger.error("[AppController] Critical error: BoardHandler or AnalysisController not initialized for FinishHim page.");
-            // Fallback navigation should be handled carefully to avoid loops.
-            // If this happens, it indicates a flaw in the new _isInitializing logic or similar.
             if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
-            else logger.error("[AppController] Already on welcome, cannot fallback further from FihishHim init error.");
+            else logger.error("[AppController] Already on welcome, cannot fallback further from FinishHim init error.");
             return;
         }
         this.activePageController = new FinishHimController(
-          this.services.chessboardService,
-          boardHandlerForPage,
-          this.services.webhookService,
-          this.services.stockfishService,
-          this.analysisControllerInstance,
-          this.requestGlobalRedraw
+          this.services.chessboardService,    // 1
+          boardHandlerForPage,                // 2
+          this.authServiceInstance,           // 3 - Теперь передаем AuthService
+          this.webhookServiceInstance,       // 4
+          this.services.stockfishService,    // 5
+          this.analysisControllerInstance,   // 6
+          this.requestGlobalRedraw           // 7
         );
         if (typeof this.activePageController.initializeGame === 'function') {
             this.activePageController.initializeGame();
@@ -402,7 +392,6 @@ export class AppController {
   }
   
   private setState(newState: Partial<AppControllerState>): void {
-    // Determine if a redraw is actually needed by comparing new vs old state values for relevant properties
     let changed = false;
     for (const key in newState) {
         if (Object.prototype.hasOwnProperty.call(newState, key)) {

@@ -7,8 +7,9 @@ import { FINISH_HIM_PUZZLE_TYPES } from './finishHim.types';
 import { BoardView } from '../../shared/components/boardView';
 import logger from '../../utils/logger';
 import { renderPromotionDialog } from '../common/promotion/promotionView';
-import { renderAnalysisPanel } from '../analysis/analysisPanelView'; // This now expects AnalysisController
+import { renderAnalysisPanel } from '../analysis/analysisPanelView';
 import { t } from '../../core/i18n.service';
+import type { FinishHimStats } from '../../core/auth.service'; // Импортируем FinishHimStats
 
 let boardViewInstance: BoardView | null = null;
 
@@ -33,9 +34,8 @@ function renderCategoryButtons(controller: FinishHimController): VNode {
             }
           },
           attrs: {
-            // Disable category buttons if analysis is active and loading, or if stockfish is thinking (game active), or promotion
-            disabled: (controller.analysisController.getPanelState().isAnalysisActive && controller.analysisController.getPanelState().isAnalysisLoading) || 
-                      controller.state.isStockfishThinking || 
+            disabled: (controller.analysisController.getPanelState().isAnalysisActive && controller.analysisController.getPanelState().isAnalysisLoading) ||
+                      controller.state.isStockfishThinking ||
                       controller.boardHandler.promotionCtrl.isActive()
           }
         }, t(`finishHim.puzzleTypes.${type}`))
@@ -43,6 +43,67 @@ function renderCategoryButtons(controller: FinishHimController): VNode {
     )
   ]);
 }
+
+/**
+ * Рендерит блок статистики пользователя.
+ * @param stats - Объект FinishHimStats или null.
+ * @returns VNode блока статистики или null.
+ */
+function renderUserStats(stats: FinishHimStats | null): VNode | null {
+  if (!stats) {
+    return h('div.user-stats-container', [
+        h('h4', t('stats.title')),
+        h('p', t('stats.loading'))
+    ]);
+  }
+
+  // Форматируем статистику W/D/L
+  const tacticalWDL = `${stats.tacticalWins}W / ${stats.tacticalLosses}L`;
+  const playoutWDL = `${stats.playoutWins}W / ${stats.playoutDraws}D / ${stats.playoutLosses}L`;
+
+  return h('div.user-stats-container', [
+    h('h4', t('stats.title')),
+    h('div.stats-grid', [
+      // Games Played
+      h('div.stat-item', [
+        h('span.stat-label', `${t('stats.gamesPlayed')}:`),
+        h('span.stat-value', String(stats.gamesPlayed))
+      ]),
+      // Current PieceCount
+      h('div.stat-item', [
+        h('span.stat-label', `${t('stats.currentPieceCount')}:`),
+        h('span.stat-value', String(stats.currentPieceCount))
+      ]),
+
+      // Tactical Rating
+      h('div.stat-item.full-width-stat', [ // Используем full-width для заголовков секций
+        h('h5.stat-section-title', t('stats.tacticalSectionTitle'))
+      ]),
+      h('div.stat-item', [
+        h('span.stat-label', `${t('stats.tacticalRating')}:`),
+        h('span.stat-value', String(stats.tacticalRating))
+      ]),
+      h('div.stat-item', [
+        h('span.stat-label', `${t('stats.tacticalWDL')}:`),
+        h('span.stat-value', tacticalWDL)
+      ]),
+
+      // FinishHim Rating
+      h('div.stat-item.full-width-stat', [
+        h('h5.stat-section-title', t('stats.finishHimSectionTitle'))
+      ]),
+      h('div.stat-item', [
+        h('span.stat-label', `${t('stats.finishHimRating')}:`),
+        h('span.stat-value', String(stats.finishHimRating))
+      ]),
+      h('div.stat-item', [
+        h('span.stat-label', `${t('stats.playoutWDL')}:`),
+        h('span.stat-value', playoutWDL)
+      ]),
+    ])
+  ]);
+}
+
 
 export function renderFinishHimUI(controller: FinishHimController): FinishHimPageViewLayout {
   const fhState = controller.state;
@@ -70,11 +131,11 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
                 boardViewInstance = new BoardView(boardContainerEl, boardHandler, controller.chessboardService,
                     (orig: Key, dest: Key) => controller.handleUserMove(orig, dest)
                 );
-            } else { 
-                boardViewInstance.updateView(); 
+            } else {
+                boardViewInstance.updateView();
             }
-        } else { 
-            logger.error('[FinishHimView] #board-container not found within #board-wrapper!'); 
+        } else {
+            logger.error('[FinishHimView] #board-container not found within #board-wrapper!');
         }
     },
     update: (_oldVnode: VNode, vnode: VNode) => {
@@ -84,63 +145,64 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
                  boardViewInstance.destroy();
                  boardViewInstance = new BoardView(newBoardContainerEl, boardHandler, controller.chessboardService,
                     (orig: Key, dest: Key) => controller.handleUserMove(orig, dest));
-            } else { 
-                boardViewInstance.updateView(); 
+            } else {
+                boardViewInstance.updateView();
             }
-        } else if (newBoardContainerEl && !boardViewInstance) { // If instance was null but container exists now
+        } else if (newBoardContainerEl && !boardViewInstance) {
             boardViewInstance = new BoardView(newBoardContainerEl, boardHandler, controller.chessboardService,
                 (orig: Key, dest: Key) => controller.handleUserMove(orig, dest));
-        } else if (!newBoardContainerEl && boardViewInstance) { // If container disappeared but instance exists
-            boardViewInstance.destroy(); 
+        } else if (!newBoardContainerEl && boardViewInstance) {
+            boardViewInstance.destroy();
             boardViewInstance = null;
         }
     },
     destroy: () => {
-        if (boardViewInstance) { 
-            boardViewInstance.destroy(); 
-            boardViewInstance = null; 
+        if (boardViewInstance) {
+            boardViewInstance.destroy();
+            boardViewInstance = null;
         }
     }
   };
 
-  const centerContent = h('div#board-wrapper', { 
-    key: 'fh-board-wrapper', 
-    style: { position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center'}, 
-    hook: boardWrapperHook 
+  const centerContent = h('div#board-wrapper', {
+    key: 'fh-board-wrapper',
+    style: { position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center'},
+    hook: boardWrapperHook
   }, [
-    h('div#board-container.cg-wrap', { 
-      key: 'fh-board-container', 
-      style: { width: '100%' /* Chessground will adapt to this */ }}
+    h('div#board-container.cg-wrap', {
+      key: 'fh-board-container',
+      style: { width: '100%' }}
     ),
     promotionDialogVNode
   ]);
 
   const leftContent = h('div.finish-him-left-panel', [
     h('div#finish-him-feedback', {
-      style: { order: '-1' } 
+      style: { order: '1' } // Фидбек теперь первый
     }, [
-      h('p', { 
-        style: { 
-          fontWeight: 'bold', 
-          color: fhState.gameOverMessage ? 'var(--color-accent-error)' : 'var(--color-text-default)' 
-        } 
+      h('p', {
+        style: {
+          fontWeight: 'bold',
+          color: fhState.gameOverMessage ? 'var(--color-accent-error)' : 'var(--color-text-default)'
+        }
       },
         fhState.gameOverMessage || fhState.feedbackMessage
       ),
     ]),
-    renderCategoryButtons(controller),
-    fhState.activePuzzle ? h('div.current-task-info', [
-        h('h4', t('finishHim.currentTask.title')),
-        h('p', `${t('puzzle.details.idLabel')} ${fhState.activePuzzle.PuzzleId}`),
-        h('p', `${t('puzzle.details.ratingLabel')} ${fhState.activePuzzle.Rating || t('common.na')}`),
-    ]) : null,
+    renderCategoryButtons(controller), // Кнопки категорий вторые
+    renderUserStats(fhState.userStats) // Статистика пользователя третья, заменит "Current Task"
+    // Удален блок "Current Task"
+    // fhState.activePuzzle ? h('div.current-task-info', [
+    //     h('h4', t('finishHim.currentTask.title')),
+    //     h('p', `${t('puzzle.details.idLabel')} ${fhState.activePuzzle.PuzzleId}`),
+    //     h('p', `${t('puzzle.details.ratingLabel')} ${fhState.activePuzzle.Rating || t('common.na')}`),
+    // ]) : null,
   ]);
 
-  // Pass controller.analysisController to renderAnalysisPanel
-  const rightContent = h('div.finish-him-right-panel', { 
-    style: { display: 'flex', flexDirection: 'column', height: '100%' } 
+  const rightContent = h('div.finish-him-right-panel', {
+    style: { display: 'flex', flexDirection: 'column', height: '100%' }
   }, [
-    renderAnalysisPanel(controller.analysisController) // Corrected: Pass the AnalysisController instance
+    renderAnalysisPanel(controller.analysisController)
   ]);
 
   return {

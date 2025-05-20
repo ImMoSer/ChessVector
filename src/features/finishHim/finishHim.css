@@ -8,61 +8,60 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  box-sizing: border-box; /* Добавлено для консистентности */
+  box-sizing: border-box;
+  gap: 15px; /* Добавлен отступ между основными блоками в левой панели */
 }
 
 /* Блок для фидбека пользователю */
 #finish-him-feedback {
   text-align: center;
-  margin-bottom: 15px;
+  /* margin-bottom: 15px; -- Удалено, так как теперь есть gap у родителя */
   font-size: 1.2em;
   flex-shrink: 0;
   min-height: 2.5em;
-  /* order: -1; задан инлайн в finishHimView.ts */
   background-color: var(--color-bg-tertiary);
   border-radius: var(--panel-border-radius);
   padding: 10px;
   border: 1px solid var(--color-border);
+  /* order: '1' из finishHimView.ts будет применен */
 }
 
 #finish-him-feedback p {
   font-weight: bold;
-  /* Цвет текста (gameOverMessage или обычный) задается инлайн в finishHimView.ts */
   margin: 0;
   padding: 5px 0;
 }
 
 /* Секция выбора категорий */
 .finish-him-categories {
-  margin-bottom: 20px;
+  /* margin-bottom: 20px; -- Удалено */
   flex-shrink: 0;
+  /* order: '2' из finishHimView.ts будет применен */
 }
 
 .finish-him-categories h3 {
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 10px; /* Уменьшен отступ */
   color: var(--color-text-muted);
   border-bottom: 1px solid var(--color-border);
   padding-bottom: 8px;
-  font-size: 1.15em;
+  font-size: 1.1em; /* Немного уменьшен для компактности */
   font-weight: 600;
 }
 
-/* Группа кнопок категорий (вертикальная) */
 .finish-him-categories .button-group.vertical {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-/* Стили для кнопок категорий */
 .finish-him-categories .button.category-button {
   width: 100%;
-  padding: 10px 12px;
-  font-size: 0.95em;
-  margin: 0; /* Убедимся, что нет внешних отступов */
+  padding: 8px 10px; /* Уменьшен padding */
+  font-size: 0.9em;  /* Уменьшен шрифт */
+  margin: 0;
   box-sizing: border-box;
-  min-height: 40px;
+  min-height: 36px; /* Уменьшена высота */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -98,12 +97,90 @@
   font-weight: bold;
 }
 .finish-him-categories .button.category-button.active:hover:not(:disabled) {
-  background-color: #a56e17; /* Более темный var(--color-accent-primary) */
+  background-color: #a56e17;
   border-color: #a56e17;
 }
 
+/* ---- Новые стили для блока статистики пользователя ---- */
+.user-stats-container {
+  /* margin-top: 20px; -- Удалено, используется gap родителя */
+  padding: 12px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0; /* Чтобы блок не сжимался, если контента много */
+  /* order: '3' из finishHimView.ts будет применен */
+}
 
-/* Информация о текущей задаче */
+.user-stats-container h4 { /* Заголовок "Статистика игрока" */
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  color: var(--color-text-muted);
+  font-size: 1.1em;
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.user-stats-container p { /* Для сообщения "Загрузка..." */
+    margin: 5px 0;
+    text-align: center;
+    font-style: italic;
+    color: var(--color-text-muted);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); /* Адаптивные колонки */
+  gap: 8px 12px; /* Отступы между элементами сетки (вертикальный и горизонтальный) */
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column; /* Метка над значением */
+  align-items: flex-start; /* Выравнивание по левому краю */
+  padding: 4px 0;
+  font-size: 0.95em;
+}
+
+.stat-item.full-width-stat { /* Для заголовков секций, чтобы они занимали всю ширину */
+  grid-column: 1 / -1; /* Растягиваем на все колонки */
+  margin-top: 8px; /* Добавляем небольшой отступ сверху перед заголовком секции */
+}
+.stat-item.full-width-stat:first-child {
+    margin-top: 0; /* Убираем верхний отступ у первого заголовка секции */
+}
+
+
+.stat-label {
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-bottom: 2px; /* Небольшой отступ под меткой */
+  font-size: 0.9em;
+}
+
+.stat-value {
+  font-weight: 600;
+  color: var(--color-text-default);
+  font-size: 1.05em;
+}
+
+.stat-section-title { /* Для "Тактика" и "Доигрывание" */
+  font-size: 1em;
+  font-weight: bold;
+  color: var(--color-accent-secondary); /* Используем акцентный цвет */
+  margin: 5px 0 2px 0; /* Уменьшаем отступы */
+  padding-bottom: 3px;
+  border-bottom: 1px dashed var(--color-border-hover);
+  text-align: left; /* Выравнивание по левому краю */
+}
+
+
+/* Старые стили для current-task-info, если они еще где-то используются,
+   но по логике их можно удалить, так как блок был заменен.
+   Оставлю закомментированными на всякий случай.
+*/
+/*
 .current-task-info {
   margin-top: 20px;
   padding: 10px;
@@ -123,22 +200,11 @@
 }
 
 .current-task-info p {
-  margin: 8px 0; /* Немного увеличен вертикальный отступ */
-  font-size: 1.05em; /* Увеличен размер шрифта (эффективно ~0.945em от базового) */
+  margin: 8px 0;
+  font-size: 1.05em;
   color: var(--color-text-default);
   line-height: 1.5;
-  font-weight: 500; /* Сделаем текст полужирным, чтобы он был более читаемым и выразительным */
+  font-weight: 500;
 }
-
-/* Эти классы пока не используются в finishHimView.ts, но если будут, стили готовы */
-.current-task-info p .info-label {
-  font-weight: 600; /* Если метки будут отдельными, они могут быть еще жирнее */
-  color: var(--color-text-muted);
-  margin-right: 5px;
-}
-
-.current-task-info p .info-value {
-  color: var(--color-text-default);
-  /* font-weight: normal; Если метки жирные, значения могут быть обычными */
-}
+*/
 
