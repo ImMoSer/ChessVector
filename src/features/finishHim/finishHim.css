@@ -15,7 +15,6 @@
 /* Блок для фидбека пользователю */
 #finish-him-feedback {
   text-align: center;
-  /* margin-bottom: 15px; -- Удалено, так как теперь есть gap у родителя */
   font-size: 1.2em;
   flex-shrink: 0;
   min-height: 2.5em;
@@ -34,18 +33,17 @@
 
 /* Секция выбора категорий */
 .finish-him-categories {
-  /* margin-bottom: 20px; -- Удалено */
   flex-shrink: 0;
-  /* order: '2' из finishHimView.ts будет применен */
+  /* order: '2' (или '3' если таймер был бы здесь) из finishHimView.ts будет применен */
 }
 
 .finish-him-categories h3 {
   margin-top: 0;
-  margin-bottom: 10px; /* Уменьшен отступ */
+  margin-bottom: 10px;
   color: var(--color-text-muted);
   border-bottom: 1px solid var(--color-border);
   padding-bottom: 8px;
-  font-size: 1.1em; /* Немного уменьшен для компактности */
+  font-size: 1.1em;
   font-weight: 600;
 }
 
@@ -57,11 +55,11 @@
 
 .finish-him-categories .button.category-button {
   width: 100%;
-  padding: 8px 10px; /* Уменьшен padding */
-  font-size: 0.9em;  /* Уменьшен шрифт */
+  padding: 8px 10px;
+  font-size: 0.9em;
   margin: 0;
   box-sizing: border-box;
-  min-height: 36px; /* Уменьшена высота */
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -101,18 +99,17 @@
   border-color: #a56e17;
 }
 
-/* ---- Новые стили для блока статистики пользователя ---- */
+/* ---- Стили для блока статистики пользователя ---- */
 .user-stats-container {
-  /* margin-top: 20px; -- Удалено, используется gap родителя */
   padding: 12px;
   background-color: var(--color-bg-tertiary);
   border-radius: var(--panel-border-radius);
   border: 1px solid var(--color-border);
-  flex-shrink: 0; /* Чтобы блок не сжимался, если контента много */
-  /* order: '3' из finishHimView.ts будет применен */
+  flex-shrink: 0;
+  /* order: '3' (или '4') из finishHimView.ts будет применен */
 }
 
-.user-stats-container h4 { /* Заголовок "Статистика игрока" */
+.user-stats-container h4 {
   margin: 0 0 12px 0;
   padding-bottom: 8px;
   color: var(--color-text-muted);
@@ -122,7 +119,7 @@
   text-align: center;
 }
 
-.user-stats-container p { /* Для сообщения "Загрузка..." */
+.user-stats-container p {
     margin: 5px 0;
     text-align: center;
     font-style: italic;
@@ -131,31 +128,30 @@
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); /* Адаптивные колонки */
-  gap: 8px 12px; /* Отступы между элементами сетки (вертикальный и горизонтальный) */
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px 12px;
 }
 
 .stat-item {
   display: flex;
-  flex-direction: column; /* Метка над значением */
-  align-items: flex-start; /* Выравнивание по левому краю */
+  flex-direction: column;
+  align-items: flex-start;
   padding: 4px 0;
   font-size: 0.95em;
 }
 
-.stat-item.full-width-stat { /* Для заголовков секций, чтобы они занимали всю ширину */
-  grid-column: 1 / -1; /* Растягиваем на все колонки */
-  margin-top: 8px; /* Добавляем небольшой отступ сверху перед заголовком секции */
+.stat-item.full-width-stat {
+  grid-column: 1 / -1;
+  margin-top: 8px;
 }
 .stat-item.full-width-stat:first-child {
-    margin-top: 0; /* Убираем верхний отступ у первого заголовка секции */
+    margin-top: 0;
 }
-
 
 .stat-label {
   font-weight: 500;
   color: var(--color-text-muted);
-  margin-bottom: 2px; /* Небольшой отступ под меткой */
+  margin-bottom: 2px;
   font-size: 0.9em;
 }
 
@@ -165,46 +161,37 @@
   font-size: 1.05em;
 }
 
-.stat-section-title { /* Для "Тактика" и "Доигрывание" */
+.stat-section-title {
   font-size: 1em;
   font-weight: bold;
-  color: var(--color-accent-secondary); /* Используем акцентный цвет */
-  margin: 5px 0 2px 0; /* Уменьшаем отступы */
+  color: var(--color-accent-secondary);
+  margin: 5px 0 2px 0;
   padding-bottom: 3px;
   border-bottom: 1px dashed var(--color-border-hover);
-  text-align: left; /* Выравнивание по левому краю */
+  text-align: left;
 }
 
+/* ---- Стили для правой панели и оверлея таймера ---- */
+.finish-him-right-panel {
+  position: relative; /* Необходимо для абсолютного позиционирования дочерних элементов */
+  /* display: flex; flex-direction: column; height: 100%; уже есть из finishHimView.ts */
+}
 
-/* Старые стили для current-task-info, если они еще где-то используются,
-   но по логике их можно удалить, так как блок был заменен.
-   Оставлю закомментированными на всякий случай.
-*/
-/*
-.current-task-info {
-  margin-top: 20px;
-  padding: 10px;
-  background-color: var(--color-bg-tertiary);
+.timer-value-overlay {
+  position: absolute;
+  top: 0px; /* Оставляем отступ сверху */
+  left: 0;   /* Начинается от левого края родителя */
+  width: 100%; /* Занимает всю ширину родителя */
+  box-sizing: border-box; /* padding и border включаются в width */
+  background-color: #161512;
+  color: var(--color-accent-warning);
   border-radius: var(--panel-border-radius);
-  border: 1px solid var(--color-border);
-  flex-shrink: 0;
+  font-family: monospace, "Courier New", Courier;
+  font-size: 2em;
+  font-weight: bold;
+  text-align: center; /* Текст по центру */
+  border: 1px solid var(--color-accent-warning);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  z-index: 10;
+  pointer-events: none;
 }
-
-.current-task-info h4 {
-  margin: 0 0 10px 0;
-  padding-bottom: 8px;
-  color: var(--color-text-muted);
-  font-size: 1.1em;
-  font-weight: 600;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.current-task-info p {
-  margin: 8px 0;
-  font-size: 1.05em;
-  color: var(--color-text-default);
-  line-height: 1.5;
-  font-weight: 500;
-}
-*/
-

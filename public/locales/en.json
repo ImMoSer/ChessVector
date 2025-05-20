@@ -1,13 +1,13 @@
 {
   "app": {
-    "title": "ChessApp"
+    "title": "ChessBoard.fun"
   },
   "nav": {
     "finishHim": "FinishHim",
     "logout": "Logout"
   },
   "welcome": {
-    "message": "Welcome to ChessApp",
+    "message": "Welcome to ChessBoard.fun",
     "loginButton": "Login with Lichess"
   },
   "lichessCallback": {
@@ -158,7 +158,8 @@
       "waitForSetup": "Please wait for task setup or start a new task.",
       "noTaskToRestart": "No active task to restart. Load a new one.",
       "restarted": "Task {puzzleId} ({category}) restarted. You play as {color}.",
-      "gameStoppedForAnalysis": "Game stopped. Analysis can be started."
+      "gameStoppedForAnalysis": "Game stopped. Analysis can be started.",
+      "timeUp": "Time's up! Task failed."
     }
   },
   "stats": {

@@ -9,7 +9,7 @@ import logger from '../../utils/logger';
 import { renderPromotionDialog } from '../common/promotion/promotionView';
 import { renderAnalysisPanel } from '../analysis/analysisPanelView';
 import { t } from '../../core/i18n.service';
-import type { FinishHimStats } from '../../core/auth.service'; // Импортируем FinishHimStats
+import type { FinishHimStats } from '../../core/auth.service';
 
 let boardViewInstance: BoardView | null = null;
 
@@ -17,6 +17,14 @@ export interface FinishHimPageViewLayout {
   left: VNode | null;
   center: VNode;
   right: VNode | null;
+}
+
+function formatTime(ms: number | null): string {
+  if (ms === null || ms < 0) return "--:--";
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function renderCategoryButtons(controller: FinishHimController): VNode {
@@ -44,11 +52,6 @@ function renderCategoryButtons(controller: FinishHimController): VNode {
   ]);
 }
 
-/**
- * Рендерит блок статистики пользователя.
- * @param stats - Объект FinishHimStats или null.
- * @returns VNode блока статистики или null.
- */
 function renderUserStats(stats: FinishHimStats | null): VNode | null {
   if (!stats) {
     return h('div.user-stats-container', [
@@ -57,26 +60,21 @@ function renderUserStats(stats: FinishHimStats | null): VNode | null {
     ]);
   }
 
-  // Форматируем статистику W/D/L
   const tacticalWDL = `${stats.tacticalWins}W / ${stats.tacticalLosses}L`;
   const playoutWDL = `${stats.playoutWins}W / ${stats.playoutDraws}D / ${stats.playoutLosses}L`;
 
   return h('div.user-stats-container', [
     h('h4', t('stats.title')),
     h('div.stats-grid', [
-      // Games Played
       h('div.stat-item', [
         h('span.stat-label', `${t('stats.gamesPlayed')}:`),
         h('span.stat-value', String(stats.gamesPlayed))
       ]),
-      // Current PieceCount
       h('div.stat-item', [
         h('span.stat-label', `${t('stats.currentPieceCount')}:`),
         h('span.stat-value', String(stats.currentPieceCount))
       ]),
-
-      // Tactical Rating
-      h('div.stat-item.full-width-stat', [ // Используем full-width для заголовков секций
+      h('div.stat-item.full-width-stat', [
         h('h5.stat-section-title', t('stats.tacticalSectionTitle'))
       ]),
       h('div.stat-item', [
@@ -87,8 +85,6 @@ function renderUserStats(stats: FinishHimStats | null): VNode | null {
         h('span.stat-label', `${t('stats.tacticalWDL')}:`),
         h('span.stat-value', tacticalWDL)
       ]),
-
-      // FinishHim Rating
       h('div.stat-item.full-width-stat', [
         h('h5.stat-section-title', t('stats.finishHimSectionTitle'))
       ]),
@@ -102,6 +98,15 @@ function renderUserStats(stats: FinishHimStats | null): VNode | null {
       ]),
     ])
   ]);
+}
+
+// Updated renderPlayoutTimer to only show the time value
+function renderPlayoutTimerValue(controller: FinishHimController): VNode | null {
+    if (controller.state.isInPlayoutMode && controller.state.outplayTimeRemainingMs !== null && controller.state.isGameEffectivelyActive) {
+        // Removed the container and label, just returning the timer value span
+        return h('span.timer-value-overlay', formatTime(controller.state.outplayTimeRemainingMs));
+    }
+    return null;
 }
 
 
@@ -176,9 +181,9 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
     promotionDialogVNode
   ]);
 
-  const leftContent = h('div.finish-him-left-panel', [
+  const leftPanelContent = h('div.finish-him-left-panel', [
     h('div#finish-him-feedback', {
-      style: { order: '1' } // Фидбек теперь первый
+      style: { order: '1' } // Feedback first
     }, [
       h('p', {
         style: {
@@ -189,25 +194,24 @@ export function renderFinishHimUI(controller: FinishHimController): FinishHimPag
         fhState.gameOverMessage || fhState.feedbackMessage
       ),
     ]),
-    renderCategoryButtons(controller), // Кнопки категорий вторые
-    renderUserStats(fhState.userStats) // Статистика пользователя третья, заменит "Current Task"
-    // Удален блок "Current Task"
-    // fhState.activePuzzle ? h('div.current-task-info', [
-    //     h('h4', t('finishHim.currentTask.title')),
-    //     h('p', `${t('puzzle.details.idLabel')} ${fhState.activePuzzle.PuzzleId}`),
-    //     h('p', `${t('puzzle.details.ratingLabel')} ${fhState.activePuzzle.Rating || t('common.na')}`),
-    // ]) : null,
+    // Timer is removed from left panel
+    renderCategoryButtons(controller), // Categories will have order '2' (after feedback)
+    renderUserStats(fhState.userStats) // Stats will have order '3'
   ]);
 
-  const rightContent = h('div.finish-him-right-panel', {
-    style: { display: 'flex', flexDirection: 'column', height: '100%' }
+  // Right panel now includes the timer overlay
+  const timerOverlayVNode = renderPlayoutTimerValue(controller);
+
+  const rightPanelContent = h('div.finish-him-right-panel', { // This container needs position: relative for the overlay
+    style: { display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }
   }, [
-    renderAnalysisPanel(controller.analysisController)
+    renderAnalysisPanel(controller.analysisController), // Analysis panel itself
+    timerOverlayVNode // Timer will be positioned absolutely within this relative container
   ]);
 
   return {
-    left: leftContent,
+    left: leftPanelContent,
     center: centerContent,
-    right: rightContent
+    right: rightPanelContent
   };
 }

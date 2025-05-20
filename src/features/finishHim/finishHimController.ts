@@ -15,8 +15,9 @@ import { SoundService } from '../../core/sound.service';
 import { t } from '../../core/i18n.service';
 import type { FinishHimPuzzleType } from './finishHim.types';
 import { FINISH_HIM_PUZZLE_TYPES } from './finishHim.types';
-// Исправляем импорт и использование AuthService
 import { AuthService, type FinishHimStats } from '../../core/auth.service';
+
+const OUTPLAY_TIMER_DURATION_MS = 60000; // 60 seconds for playout
 
 interface FinishHimControllerState {
   activePuzzle: AppPuzzle | null;
@@ -40,7 +41,7 @@ export class FinishHimController {
   public state: FinishHimControllerState;
   public boardHandler: BoardHandler;
   public analysisController: AnalysisController;
-  private authService: typeof AuthService; // Используем typeof AuthService для типа экземпляра синглтона
+  private authService: typeof AuthService;
   private webhookService: WebhookService;
   private stockfishService: StockfishService;
 
@@ -50,7 +51,7 @@ export class FinishHimController {
   constructor(
     public chessboardService: ChessboardService,
     boardHandler: BoardHandler,
-    authService: typeof AuthService, // Используем typeof AuthService
+    authService: typeof AuthService,
     webhookService: WebhookService,
     stockfishService: StockfishService,
     analysisController: AnalysisController,
@@ -63,7 +64,7 @@ export class FinishHimController {
     this.analysisController = analysisController;
 
     const initialStats = this.authService.getFinishHimStats();
-    if (!initialStats && this.authService.getIsAuthenticated()) { // Добавлена проверка на аутентификацию
+    if (!initialStats && this.authService.getIsAuthenticated()) {
         logger.error("[FinishHimController] CRITICAL: FinishHimStats not available from AuthService on init for an authenticated user.");
     }
 
@@ -123,19 +124,26 @@ export class FinishHimController {
     this.analysisController.updateGameControlState(gameState);
   }
 
+  private _clearOutplayTimer(): void {
+    if (this.state.outplayTimerId) {
+      clearTimeout(this.state.outplayTimerId);
+      this.state.outplayTimerId = null;
+      // Do not nullify outplayTimeRemainingMs here if we want to show the initial value
+      // It will be reset or nulled when a new game/mode starts or timer truly ends.
+      logger.info('[FinishHimController] Outplay timer (timeoutId) cleared.');
+    }
+    // If we want the timer display to disappear completely when cleared:
+    // this.state.outplayTimeRemainingMs = null;
+  }
+
   private _stopCurrentGameActivity(calledFromAnalysis: boolean = true): void {
     logger.info(`[FinishHimController] Stopping current game activity. Called from analysis: ${calledFromAnalysis}`);
     this.state.isStockfishThinking = false;
     this.state.isInPlayoutMode = false;
     this.state.isUserTurnContext = false;
     this.state.isGameEffectivelyActive = false;
-
-    if (this.state.outplayTimerId) {
-        clearTimeout(this.state.outplayTimerId);
-        this.state.outplayTimerId = null;
-        this.state.outplayTimeRemainingMs = null;
-        logger.info('[FinishHimController] Outplay timer cleared due to game stop.');
-    }
+    this._clearOutplayTimer();
+    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
 
     if (this.state.gameOverMessage === null && calledFromAnalysis) {
         this.state.feedbackMessage = t('finishHim.feedback.gameStoppedForAnalysis');
@@ -157,6 +165,8 @@ export class FinishHimController {
 
     this.state.feedbackMessage = t('finishHim.feedback.selectCategoryAndStart');
     this.state.isGameEffectivelyActive = false;
+    this._clearOutplayTimer();
+    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
     this._updatePgnDisplay();
     this._updateAnalysisControllerGameState();
     this.requestRedraw();
@@ -218,7 +228,6 @@ export class FinishHimController {
         this.state.userStats.tacticalLosses += 1;
         logger.debug(`[FinishHimController] Tactical phase LOSS. Rating: ${this.state.userStats.tacticalRating}, Losses: ${this.state.userStats.tacticalLosses}`);
       }
-      // Статистика отправляется после _incrementGamesPlayed, если это конец тактической фазы
     }
   }
 
@@ -234,13 +243,13 @@ export class FinishHimController {
       } else if (outcome === 'loss') {
         this.state.userStats.finishHimRating -= 10;
         this.state.userStats.playoutLosses += 1;
-        this.state.userStats.currentPieceCount = Math.max(4, this.state.userStats.currentPieceCount - 1);
+        this.state.userStats.currentPieceCount = Math.max(7, this.state.userStats.currentPieceCount - 1);
       } else { // draw
         this.state.userStats.finishHimRating -= 10;
         this.state.userStats.playoutDraws += 1;
       }
       logger.debug(`[FinishHimController] Playout phase ${outcome}. Rating: ${oldRating} -> ${this.state.userStats.finishHimRating}. PieceCount: ${oldPieceCount} -> ${this.state.userStats.currentPieceCount}`);
-      this._sendStatsToBackend(); // Отправляем статистику после обновления результатов доигрывания
+      this._sendStatsToBackend();
     }
   }
 
@@ -249,7 +258,6 @@ export class FinishHimController {
     if (userId && this.state.userStats) {
         logger.info(`[FinishHimController] Sending updated FinishHimStats to backend for user ${userId}.`);
         try {
-            // Создаем копию, чтобы избежать случайных мутаций во время асинхронной операции
             const statsToSend = { ...this.state.userStats };
             const success = await this.webhookService.sendFinishHimStatsUpdate(userId, statsToSend);
             if (success) {
@@ -284,43 +292,29 @@ export class FinishHimController {
       this.state.isStockfishThinking = false;
       this.state.isGameEffectivelyActive = false;
       logger.info(`[FinishHimController] Game over detected. Message: ${this.state.gameOverMessage}`);
-
-      if (this.state.outplayTimerId) {
-          clearTimeout(this.state.outplayTimerId);
-          this.state.outplayTimerId = null;
-          this.state.outplayTimeRemainingMs = null;
-          logger.info('[FinishHimController] Outplay timer cleared due to game over.');
-      }
+      this._clearOutplayTimer();
+      this.state.outplayTimeRemainingMs = null; // Ensure timer display is fully removed
 
       if (this.state.activePuzzle) {
         if (this.state.isInPlayoutMode) {
             const humanColor = this.boardHandler.getHumanPlayerColor();
-            let playoutOutcome: 'win' | 'loss' | 'draw' = 'draw'; // Default to draw
+            let playoutOutcome: 'win' | 'loss' | 'draw' = 'draw';
 
             if (gameStatus.outcome?.winner === humanColor) playoutOutcome = 'win';
             else if (gameStatus.outcome?.winner) playoutOutcome = 'loss';
-            // Если нет победителя, это ничья (stalemate, insufficient_material, etc.)
             
             this._updateFinishHimRatingAndPieceCount(playoutOutcome);
-            // _incrementGamesPlayed() не вызывается здесь, так как игра уже была засчитана после тактической фазы
 
             if (playoutOutcome === 'win') SoundService.playSound('puzzle_user_won');
             else if (playoutOutcome === 'loss') SoundService.playSound('puzzle_user_lost');
-            // Звук для ничьей будет обработан ниже
         }
-        // Если игра закончилась НЕ в playoutMode, значит это произошло в тактической фазе
-        // (например, пользователь сделал неверный ход, что уже обработано,
-        // или противник поставил мат - это тоже проигрыш тактики)
-        // Но _updateTacticalRating и _incrementGamesPlayed уже были вызваны в processUserMoveResultInInteractiveSetup
-        // или при завершении ходов системы.
       }
 
       if (gameStatus.outcome?.reason === 'stalemate') {
           SoundService.playSound('stalemate');
+      } else if (gameStatus.outcome && !gameStatus.outcome.winner) {
+          SoundService.playSound('DRAW_GENERAL');
       }
-      // else if (gameStatus.outcome && !gameStatus.outcome.winner) { // Другие виды ничьих
-          // SoundService.playSound('DRAW_GENERAL'); // Будет добавлено позже
-      // }
 
       this._updatePgnDisplay();
       this._updateAnalysisControllerGameState();
@@ -347,11 +341,8 @@ export class FinishHimController {
     if (this.analysisController.getPanelState().isAnalysisActive) {
         this.analysisController.toggleAnalysisEngine();
     }
-    if (this.state.outplayTimerId) {
-        clearTimeout(this.state.outplayTimerId);
-        this.state.outplayTimerId = null;
-        this.state.outplayTimeRemainingMs = null;
-    }
+    this._clearOutplayTimer();
+    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
 
     this.state.activePuzzle = null;
     this.state.interactiveSetupMoves = [];
@@ -375,7 +366,7 @@ export class FinishHimController {
           event: "FinishHim",
           lichess_id: this.authService.getUserProfile()?.id || "unknown_user",
           pieceCount: currentStats?.currentPieceCount || this.defaultUserPieceCount,
-          rating: currentStats?.finishHimRating || this.defaultUserRating,
+          rating: currentStats?.tacticalRating || this.defaultUserRating,
           puzzleType: this.state.activePuzzleType,
         };
         puzzleDataToProcess = await this.webhookService.fetchPuzzle(payload);
@@ -418,7 +409,7 @@ export class FinishHimController {
           logger.info(`[FinishHimController] Interactive setup starts with user's turn.`);
           this.requestRedraw();
         }
-      } else { // No interactive setup moves, tactical phase is considered "won" by default
+      } else {
         logger.info("[FinishHimController] No interactive setup moves. Tactical phase won by default. Entering playout mode directly.");
         this._updateTacticalRating(true);
         this._incrementGamesPlayed();
@@ -480,21 +471,57 @@ export class FinishHimController {
     this.requestRedraw();
   }
 
+  private _tickOutplayTimer(): void {
+    if (!this.state.isInPlayoutMode || this.state.gameOverMessage || !this.state.isGameEffectivelyActive || this.analysisController.getPanelState().isAnalysisActive) {
+        this._clearOutplayTimer();
+        // If timer is cleared because game is over etc., ensure remaining time is nulled for display
+        if (this.state.gameOverMessage || !this.state.isGameEffectivelyActive) {
+            this.state.outplayTimeRemainingMs = null;
+        }
+        return;
+    }
+
+    if (this.state.outplayTimeRemainingMs !== null) {
+        this.state.outplayTimeRemainingMs -= 1000;
+        if (this.state.outplayTimeRemainingMs <= 0) {
+            logger.info('[FinishHimController] Outplay time expired.');
+            this._clearOutplayTimer(); // Clears timeoutId
+            this.state.outplayTimeRemainingMs = 0; // Show 00:00
+            SoundService.playSound('PLAYOUT_TIME_UP');
+            this._updateFinishHimRatingAndPieceCount('loss');
+            this.state.gameOverMessage = t('finishHim.feedback.timeUp');
+            this.state.feedbackMessage = this.state.gameOverMessage;
+            this.state.isUserTurnContext = false;
+            this.state.isGameEffectivelyActive = false;
+            this._updatePgnDisplay();
+            this._updateAnalysisControllerGameState();
+            this.requestRedraw();
+            return;
+        }
+    }
+    this.requestRedraw();
+    this.state.outplayTimerId = window.setTimeout(() => this._tickOutplayTimer(), 1000);
+  }
+
   private _enterPlayoutMode(): void {
     if (this.state.isInPlayoutMode && this.state.isGameEffectivelyActive) {
         logger.debug("[FinishHimController] Already in playout mode. Ensuring turn context is correct.");
     } else {
         logger.info("[FinishHimController] Entering playout mode.");
-        // SoundService.playSound('puzzle_playout_start'); // Звук будет добавлен позже
+        SoundService.playSound('puzzle_playout_start');
         this.state.isInPlayoutMode = true;
         this.state.isGameEffectivelyActive = true;
     }
+
+    this._clearOutplayTimer(); // Ensure no old timer is running
+    this.state.outplayTimeRemainingMs = OUTPLAY_TIMER_DURATION_MS; // Set initial time for display
+    // The timer tick will be started by the user's first move in handleUserMove
 
     const currentBoardTurn = this.boardHandler.getBoardTurnColor();
     const humanAs = this.boardHandler.getHumanPlayerColor();
     this.state.isUserTurnContext = (currentBoardTurn === humanAs);
 
-    logger.info(`[FinishHimController] Playout mode active. Board turn: ${currentBoardTurn}, Human plays as: ${humanAs}, Is user turn context: ${this.state.isUserTurnContext}`);
+    logger.info(`[FinishHimController] Playout mode active. Board turn: ${currentBoardTurn}, Human plays as: ${humanAs}, Is user turn context: ${this.state.isUserTurnContext}. Timer set to ${this.state.outplayTimeRemainingMs / 1000}s, but not ticking yet.`);
 
     if (this.state.isUserTurnContext) {
         if (!this.state.gameOverMessage) this.state.feedbackMessage = t('finishHim.feedback.yourTurnPlayout');
@@ -508,6 +535,9 @@ export class FinishHimController {
 
   private async triggerStockfishMoveInPlayoutIfNeeded(): Promise<void> {
     if (this.state.gameOverMessage || this.boardHandler.promotionCtrl.isActive() || this.analysisController.getPanelState().isAnalysisActive || !this.state.isInPlayoutMode || !this.state.isGameEffectivelyActive) {
+      // If timer is running and system move is aborted, timer should continue if it's user's turn next.
+      // If game ends, timer is cleared by checkAndSetGameOver.
+      // If analysis starts, timer is cleared by _stopCurrentGameActivity.
       return;
     }
     const currentBoardTurn = this.boardHandler.getBoardTurnColor();
@@ -535,6 +565,7 @@ export class FinishHimController {
             if (!this.checkAndSetGameOver()) {
               this.state.feedbackMessage = t('finishHim.feedback.yourTurnPlayout');
               this.state.isUserTurnContext = true;
+              // Timer is NOT started here; waits for user's move.
             }
           } else {
             logger.error("[FinishHimController] Stockfish (auto) made an illegal move or FEN update failed:", stockfishMoveUci);
@@ -619,6 +650,11 @@ export class FinishHimController {
 
       if (this.state.isInPlayoutMode) {
         logger.info(`[FinishHimController] User move in playout mode: ${moveResult.uciMove}`);
+        // Start timer ticking if it's the first user move in this playout session
+        if (this.state.outplayTimeRemainingMs !== null && this.state.outplayTimerId === null) {
+            logger.info('[FinishHimController] Starting outplay timer tick after user move.');
+            this.state.outplayTimerId = window.setTimeout(() => this._tickOutplayTimer(), 1000);
+        }
         this.state.isUserTurnContext = false;
         this.triggerStockfishMoveInPlayoutIfNeeded();
       } else {
@@ -639,7 +675,7 @@ export class FinishHimController {
 
     if (!this.state.activePuzzle) {
       logger.warn("[FinishHimController processUserMoveResultInInteractiveSetup] No active puzzle. Entering playout mode as fallback.");
-      this._updateTacticalRating(true); // Если нет пазла, но ход как-то прошел - считаем тактику успешной
+      this._updateTacticalRating(true);
       this._incrementGamesPlayed();
       this._enterPlayoutMode();
       return;
@@ -677,7 +713,7 @@ export class FinishHimController {
       this.state.isGameEffectivelyActive = false;
       this._updateTacticalRating(false);
       this._incrementGamesPlayed();
-      // SoundService.playSound('USER_TACTICAL_FAIL'); // Будет добавлено позже
+      SoundService.playSound('USER_TACTICAL_FAIL');
       this._updatePgnDisplay();
       this._updateAnalysisControllerGameState();
     }
@@ -690,11 +726,8 @@ export class FinishHimController {
     if (this.analysisController.getPanelState().isAnalysisActive) {
         this.analysisController.toggleAnalysisEngine();
     }
-    if (this.state.outplayTimerId) {
-        clearTimeout(this.state.outplayTimerId);
-        this.state.outplayTimerId = null;
-        this.state.outplayTimeRemainingMs = null;
-    }
+    this._clearOutplayTimer();
+    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
 
     if (this.state.activePuzzle) {
       logger.info(`[FinishHimController] Restarting current task: ${this.state.activePuzzle.PuzzleId}`);
@@ -712,11 +745,8 @@ export class FinishHimController {
     if (this.analysisController.getPanelState().isAnalysisActive) {
         this.analysisController.toggleAnalysisEngine();
     }
-    if (this.state.outplayTimerId) {
-        clearTimeout(this.state.outplayTimerId);
-        this.state.outplayTimerId = null;
-        this.state.outplayTimeRemainingMs = null;
-    }
+    this._clearOutplayTimer();
+    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
 
     const fen = prompt(t('puzzle.feedback.enterFenPrompt'), this.boardHandler.getFen());
     if (fen) {
@@ -726,21 +756,17 @@ export class FinishHimController {
       this.state.currentTaskPieceCount = this.countPiecesFromFen(fen);
       this.state.isStockfishThinking = false;
       this.state.gameOverMessage = null;
-      this.state.isInPlayoutMode = false;
+      this.state.isInPlayoutMode = false; // Will be set true by _enterPlayoutMode
       this.state.isGameEffectivelyActive = true;
 
       const humanPlayerColorBasedOnTurn = fen.includes(' w ') ? 'white' : 'black';
       this.boardHandler.setupPosition(fen, humanPlayerColorBasedOnTurn, true);
       this._updatePgnDisplay();
 
-      if (this.checkAndSetGameOver()) return; // Важно проверить после установки позиции
+      if (this.checkAndSetGameOver()) return;
 
-      // Если нет ходов для интерактивной настройки (что обычно при ручной установке FEN),
-      // то тактическая фаза считается пройденной (или неактуальной для этого сценария)
-      // и можно сразу переходить в режим доигрывания.
-      // В этом случае не увеличиваем счетчик игр и не меняем тактический рейтинг.
       logger.info("[FinishHimController handleSetFen] FEN set manually. Entering playout mode directly.");
-      this._enterPlayoutMode();
+      this._enterPlayoutMode(); // This will set isInPlayoutMode and initialize timer display
       this.requestRedraw();
     }
   }
@@ -750,9 +776,7 @@ export class FinishHimController {
     if (this.analysisController && this.analysisController.getPanelState().isAnalysisActive) {
         this.analysisController.toggleAnalysisEngine();
     }
-    if (this.state.outplayTimerId) {
-        clearTimeout(this.state.outplayTimerId);
-        this.state.outplayTimerId = null;
-    }
+    this._clearOutplayTimer();
+    this.state.outplayTimeRemainingMs = null; // Ensure timer display is removed
   }
 }
