@@ -4,10 +4,10 @@ import type { VNode } from 'snabbdom';
 // Import main application styles
 import './assets/main.css'; // Main styles
 import './features/common/promotion/promotion.css'; // Promotion specific styles
-import './features/analysis/analysisPanel.css'; // <--- ДОБАВЛЕН ИМПОРТ СТИЛЕЙ АНАЛИЗА
-import './features/finishHim/finishHim.css'; // <--- ДОБАВЛЕН ИМПОРТ СТИЛЕЙ FINISH HIM
-import './features/welcome/welcome.css'; // <--- ДОБАВЛЕН ИМПОРТ СТИЛЕЙ WELCOME
-import './features/auth/lichessCallback.css'; // <--- ДОБАВЛЕН ИМПОРТ СТИЛЕЙ LICHESS CALLBACK
+import './features/analysis/analysisPanel.css'; 
+import './features/finishHim/finishHim.css'; 
+import './features/welcome/welcome.css'; 
+// Removed: import './features/auth/lichessCallback.css'; 
 
 
 // Import core services
@@ -95,8 +95,9 @@ async function initializeApplication() {
       requestGlobalRedraw
     );
 
-    appController.initializeApp();
-    logger.info('[AppEntry] AppController initialized and first render sequence initiated.');
+    // initializeApp in AppController now handles auth and initial page loading
+    await appController.initializeApp(); 
+    logger.info('[AppEntry] AppController initialization sequence complete.');
 
   } catch (error) {
     logger.error('[AppEntry] Critical error during application initialization:', error);
