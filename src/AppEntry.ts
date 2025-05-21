@@ -7,6 +7,7 @@ import './features/common/promotion/promotion.css'; // Promotion specific styles
 import './features/analysis/analysisPanel.css';
 import './features/finishHim/finishHim.css';
 import './features/welcome/welcome.css';
+import './features/clubPage/clubPage.css';
 
 
 // Import core services

@@ -117,47 +117,51 @@ html, body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Стили для обычных ссылок меню при наведении и для активных ссылок */
-.nav-links li a:hover:not(.logout-link), /* Исключаем logout-link из этого правила hover */
-.nav-links li a.active:not(.logout-link) { /* Исключаем logout-link из этого правила active */
-  background-color: var(--color-accent-warning); /* Новый цвет #E46A09 */
-  color: var(--color-text-on-accent); /* Белый текст для контраста */
-}
-
-/* Стили для кнопки Logout */
-.nav-links li a.logout-link {
-  background-color: var(--color-accent-error); /* Цвет #CC3432 */
-  color: var(--color-text-on-accent); /* Белый текст для контраста */
-}
-
-.nav-links li a.logout-link:hover {
-  background-color: #a52a27; /* Более темный оттенок красного при наведении */
+.nav-links li a:hover:not(.logout-link),
+.nav-links li a.active:not(.logout-link) {
+  background-color: var(--color-accent-warning);
   color: var(--color-text-on-accent);
 }
 
-
-/* Контейнер для основного контента страницы */
-#page-content-wrapper {
-  flex-grow: 1; /* Занимает все оставшееся пространство по высоте */
-  display: flex;
-  justify-content: center;
-  align-items: flex-start; 
-  overflow: hidden; 
-  padding-top: var(--page-vertical-padding);
-  padding-bottom: var(--page-vertical-padding);
-  padding-left: var(--panel-gap);
-  padding-right: var(--panel-gap);
+.nav-links li a.logout-link {
+  background-color: var(--color-accent-error);
+  color: var(--color-text-on-accent);
 }
 
-/* --- Стили для альбомной ориентации (по умолчанию) --- */
+.nav-links li a.logout-link:hover {
+  background-color: #a52a27;
+  color: var(--color-text-on-accent);
+}
+
+#page-content-wrapper {
+  flex-grow: 1; 
+  display: flex; 
+  flex-direction: column; /* Для корректного отображения clubPage, если он один */
+  align-items: center; /* Центрирует .club-page-container, если он уже чем wrapper */
+  overflow-y: auto; /* Главный скроллбар здесь */
+  padding-top: var(--page-vertical-padding);
+  padding-bottom: var(--page-vertical-padding);
+  /* Боковые padding-и теперь будут управляться дочерними элементами, 
+     такими как .three-column-layout или .club-page-container, 
+     чтобы .club-page-container мог занимать 100% ширины в портретном режиме.
+     Если для .three-column-layout нужны боковые отступы, их нужно добавить ему.
+  */
+}
+
+/* --- Стили для альбомной ориентации (по умолчанию для .three-column-layout) --- */
 .three-column-layout {
   display: flex;
   flex-direction: row; 
-  width: 100%;
+  width: 100%; /* Занимает всю ширину #page-content-wrapper */
+  max-width: calc( (2 * var(--panel-width)) + var(--calculated-board-size-vh) + (2 * var(--panel-gap)) ); /* Ограничиваем максимальную ширину */
+  margin: 0 auto; /* Центрируем, если #page-content-wrapper шире */
   height: 100%; 
   align-items: flex-start; 
   justify-content: center; 
   gap: var(--panel-gap);
+  padding-left: var(--panel-gap); /* Добавляем боковые отступы здесь */
+  padding-right: var(--panel-gap); /* Добавляем боковые отступы здесь */
+  box-sizing: border-box;
 }
 
 #left-panel,
@@ -235,21 +239,17 @@ body.board-resizing * {
 
 /* --- Стили для портретной ориентации --- */
 @media (orientation: portrait) {
-  #page-content-wrapper {
-    flex-direction: column; 
-    align-items: center;    
-    justify-content: flex-start; 
-    overflow-y: auto;      
-  }
-
-  .three-column-layout {
+  .three-column-layout { 
     flex-direction: column; 
     align-items: center;    
     height: auto;           
-    width: 100%;            
+    width: 100%;
+    max-width: 100%; /* Снимаем ограничение max-width для портретного режима */
+    padding-left: 0; /* Убираем боковые отступы, так как панели будут на всю ширину */
+    padding-right: 0;
   }
 
-  #center-panel-resizable-wrapper { 
+  .three-column-layout #center-panel-resizable-wrapper { 
     order: 1; 
     width: 100vw !important;  
     height: 100vw !important; 
@@ -259,11 +259,11 @@ body.board-resizing * {
     margin-right: calc(-1 * var(--panel-gap));
   }
 
-  #right-panel { 
-    order: 2; 
+  .three-column-layout #right-panel,
+  .three-column-layout #left-panel { 
     width: 100vw; 
     height: auto; 
-    min-height: 200px; 
+    min-height: 150px; /* Adjusted min-height */
     padding: 15px;
     box-shadow: none;
     border-radius: 0;
@@ -275,29 +275,14 @@ body.board-resizing * {
     flex-direction: column; 
     overflow-y: visible; 
   }
+   .three-column-layout #right-panel { order: 2; min-height: 200px;}
+   .three-column-layout #left-panel { order: 3; }
 
-  #left-panel { 
-    order: 3; 
-    width: 100vw; 
-    height: auto;
-    min-height: 150px; 
-    padding: 15px;
-    box-shadow: none;
-    border-radius: 0;
-    flex-shrink: 0;
-    margin-left: calc(-1 * var(--panel-gap));
-    margin-right: calc(-1 * var(--panel-gap));
-    background-color: var(--color-bg-secondary);
-    display: flex;
-    flex-direction: column;
-    overflow-y: visible;
-  }
 
-  .resize-handle-center {
+  .three-column-layout .resize-handle-center {
     display: none; 
   }
 
-  /* Мобильная навигация */
   .nav-toggle-button {
     display: block; 
   }

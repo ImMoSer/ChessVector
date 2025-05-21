@@ -11,9 +11,9 @@ import { subscribeToLangChange, getCurrentLang } from './core/i18n.service';
 import { FinishHimController } from './features/finishHim/finishHimController';
 import { WelcomeController } from './features/welcome/welcomeController';
 import { AuthService, type UserSessionProfile, type SubscriptionTier } from './core/auth.service';
+import { ClubPageController } from './features/clubPage/ClubPageController';
 
-
-export type AppPage = 'welcome' | 'finishHim';
+export type AppPage = 'welcome' | 'finishHim' | 'clubPage';
 
 export interface AppServices {
   authService: typeof AuthService;
@@ -26,13 +26,14 @@ export interface AppServices {
 
 interface AppControllerState {
   currentPage: AppPage;
+  currentClubId: string | null;
   isNavExpanded: boolean;
   isPortraitMode: boolean;
   currentUser: UserSessionProfile | null;
   isLoadingAuth: boolean;
 }
 
-type ActivePageController = WelcomeController | FinishHimController | null;
+type ActivePageController = WelcomeController | FinishHimController | ClubPageController | null;
 
 const BOARD_MAX_VH = 94;
 const BOARD_MIN_VH = 10;
@@ -82,6 +83,7 @@ export class AppController {
 
     this.state = {
       currentPage: 'welcome',
+      currentClubId: null,
       isNavExpanded: false,
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
       currentUser: null,
@@ -123,56 +125,63 @@ export class AppController {
     logger.info(`[AppController] Initializing app & authentication...`);
     this.setState({ isLoadingAuth: true });
 
+    window.addEventListener('hashchange', this.handleHashChange.bind(this));
+
     const authCallbackProcessed = await this.authServiceInstance.handleAuthentication();
-    
-    let finalInitialPageTarget: AppPage;
-    const hash = window.location.hash.slice(1) as AppPage;
-    const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
+    this.setState({ isLoadingAuth: false }); 
 
     if (authCallbackProcessed) {
-        finalInitialPageTarget = isAuthenticated ? 'finishHim' : 'welcome';
-        logger.info(`[AppController] Auth callback processed. Determined initial target: ${finalInitialPageTarget}`);
+        const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
+        const targetPage = isAuthenticated ? 'finishHim' : 'welcome';
+        logger.info(`[AppController] Auth callback processed. Navigating to default after auth: ${targetPage}`);
+        this.navigateTo(targetPage, true, null);
     } else {
-        if (isAuthenticated) {
-            const validPagesAfterAuth: AppPage[] = ['finishHim'];
-            if (validPagesAfterAuth.includes(hash)) {
-                finalInitialPageTarget = hash;
-            } else {
-                finalInitialPageTarget = 'finishHim';
-            }
-        } else {
-            finalInitialPageTarget = 'welcome';
-        }
-        logger.info(`[AppController] No auth callback. Determined initial target based on stored session/hash: ${finalInitialPageTarget}`);
+        logger.info(`[AppController] No auth callback. Processing current hash for initial navigation.`);
+        this.handleHashChange(); 
     }
-    
-    this.navigateTo(finalInitialPageTarget, true);
 
-    logger.info(`[AppController] App initialization sequence complete. Final page: ${this.state.currentPage}`);
+    logger.info(`[AppController] App initialization sequence complete.`);
     this._calculateAndSetBoardSize();
-    
-    window.addEventListener('hashchange', this.handleHashChange.bind(this));
     this._isInitializing = false;
   }
 
   private handleHashChange(): void {
-    const newPageFromHash = window.location.hash.slice(1) as AppPage;
-    logger.info(`[AppController] Hash changed to: #${newPageFromHash}`);
+    const rawHash = window.location.hash.slice(1); // Gets content after #
+    logger.info(`[AppController] Hash changed. Raw hash: "${rawHash}"`);
 
-    const validPages: AppPage[] = ['welcome', 'finishHim'];
-    const isValidAppPage = validPages.includes(newPageFromHash);
+    // Remove leading slash if present (e.g. from "#/clubs/id" to "clubs/id")
+    const cleanHash = rawHash.startsWith('/') ? rawHash.slice(1) : rawHash;
+    logger.info(`[AppController] Cleaned hash for parsing: "${cleanHash}"`);
 
-    if (isValidAppPage && newPageFromHash !== this.state.currentPage) {
-        this.navigateTo(newPageFromHash, false); 
-    } else if (!isValidAppPage && newPageFromHash) {
-        logger.warn(`[AppController] Invalid page in hash: #${newPageFromHash}. Redirecting to default.`);
-        const defaultPage = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
-        this.navigateTo(defaultPage);
-    } else if (!newPageFromHash) {
-        const defaultPage = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
-        if (this.state.currentPage !== defaultPage) {
-            this.navigateTo(defaultPage);
+    let newPageFromHash: AppPage = 'welcome'; 
+    let clubIdFromHash: string | null = null;
+
+    if (cleanHash.startsWith('clubs/')) {
+        const parts = cleanHash.split('/'); 
+        if (parts.length === 2 && parts[1]) {
+            clubIdFromHash = parts[1];
+            newPageFromHash = 'clubPage';
+            logger.info(`[AppController] Parsed club page from hash. Club ID: ${clubIdFromHash}`);
+        } else {
+            logger.warn(`[AppController] Invalid club page hash format: "${cleanHash}". Defaulting.`);
+            newPageFromHash = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
         }
+    } else if (validAppPages.includes(cleanHash as AppPage)) {
+        newPageFromHash = cleanHash as AppPage;
+        logger.info(`[AppController] Parsed standard page from hash: ${newPageFromHash}`);
+    } else if (cleanHash === '') {
+        newPageFromHash = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
+        logger.info(`[AppController] Empty hash. Defaulting to: ${newPageFromHash}`);
+    } else {
+        logger.warn(`[AppController] Unrecognized hash: "${cleanHash}". Defaulting.`);
+        newPageFromHash = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
+    }
+
+    if (newPageFromHash !== this.state.currentPage || (newPageFromHash === 'clubPage' && clubIdFromHash !== this.state.currentClubId)) {
+        logger.info(`[AppController handleHashChange] Navigating due to hash change or clubId mismatch. New page: ${newPageFromHash}, Club ID: ${clubIdFromHash}`);
+        this.navigateTo(newPageFromHash, false, clubIdFromHash); 
+    } else {
+        logger.info(`[AppController handleHashChange] Hash matches current state or no navigation needed. Page: ${this.state.currentPage}, Club ID: ${this.state.currentClubId}`);
     }
   }
 
@@ -246,11 +255,11 @@ export class AppController {
     window.dispatchEvent(resizeEvent);
   }
 
-  public navigateTo(page: AppPage, updateHash: boolean = true): void {
+  public navigateTo(page: AppPage, updateHash: boolean = true, clubId: string | null = null): void {
     const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
     const userTier = this.authServiceInstance.getUserSubscriptionTier();
 
-    logger.info(`[AppController navigateTo] Attempting navigation to: ${page}. Current: ${this.state.currentPage}. Auth: ${isAuthenticated}, Tier: ${userTier}`);
+    logger.info(`[AppController navigateTo] Attempting navigation. Requested: ${page}${clubId ? ` (Club ID: ${clubId})` : ''}. Current: ${this.state.currentPage} (Club ID: ${this.state.currentClubId}). Auth: ${isAuthenticated}, Tier: ${userTier}`);
     
     if (this.state.isLoadingAuth && !this._isInitializing && page !== this.state.currentPage) {
         logger.warn(`[AppController navigateTo] Navigation to ${page} blocked: authentication is processing, and not initial load.`);
@@ -258,31 +267,45 @@ export class AppController {
     }
 
     let targetPage = page;
-    if (page === 'finishHim') {
+    let targetClubId = clubId;
+
+    if (page === 'clubPage') {
+        if (!clubId) {
+            logger.warn('[AppController navigateTo] Club page navigation attempted without clubId. Redirecting to welcome.');
+            targetPage = 'welcome';
+            targetClubId = null;
+        }
+    } else if (page === 'finishHim') {
       if (!isAuthenticated) {
         logger.warn('[AppController navigateTo] Access to finishHim denied: not authenticated. Redirecting to welcome.');
         targetPage = 'welcome';
+        targetClubId = null;
       } else {
         const allowedTiersForFinishHim: SubscriptionTier[] = ['bronze', 'silver', 'gold', 'platinum'];
         if (!allowedTiersForFinishHim.includes(userTier)) {
           logger.warn(`[AppController navigateTo] Access to finishHim denied: tier ${userTier} not allowed. Redirecting to welcome.`);
           targetPage = 'welcome';
+          targetClubId = null;
         }
       }
-    } else if (page === 'welcome' && isAuthenticated) {
-        logger.info('[AppController navigateTo] Authenticated user attempting to navigate to welcome. Redirecting to finishHim.');
+    } else if (page === 'welcome' && isAuthenticated && !this._isInitializing) { 
+        logger.info('[AppController navigateTo] Authenticated user attempting to navigate to welcome post-init. Redirecting to finishHim.');
         targetPage = 'finishHim';
+        targetClubId = null;
     }
 
-    if (this.state.currentPage === targetPage && this.activePageController) {
-      logger.info(`[AppController navigateTo] Already on page: ${targetPage}. Controller exists.`);
+    if (this.state.currentPage === targetPage && this.state.currentClubId === targetClubId && this.activePageController) {
+      logger.info(`[AppController navigateTo] Already on page: ${targetPage}${targetClubId ? ` (Club ID: ${targetClubId})` : ''}. Controller exists.`);
       if (this.state.isPortraitMode && this.state.isNavExpanded) {
-        this.toggleNav();
+        this.toggleNav(); 
       } else {
-        this.requestGlobalRedraw();
+        this.requestGlobalRedraw(); 
       }
-      if (updateHash && window.location.hash.slice(1) !== targetPage) {
-          window.location.hash = targetPage;
+      if (updateHash) {
+          const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : targetPage;
+          if (window.location.hash.slice(1) !== newHashTarget) {
+              window.location.hash = newHashTarget;
+          }
       }
       return;
     }
@@ -297,17 +320,24 @@ export class AppController {
     }
 
     this.state.currentPage = targetPage;
-    if (updateHash && window.location.hash.slice(1) !== targetPage) {
-        window.location.hash = targetPage;
+    this.state.currentClubId = targetClubId;
+
+    if (updateHash) {
+        const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : targetPage;
+        // Ensure the hash is correctly formatted for set (without leading / if slice(1) was used for reading)
+        const currentCleanHash = window.location.hash.slice(1).startsWith('/') ? window.location.hash.slice(2) : window.location.hash.slice(1);
+        if (currentCleanHash !== newHashTarget) {
+            window.location.hash = newHashTarget;
+        }
     }
-    this.loadPageController(targetPage);
+    this.loadPageController(targetPage, targetClubId);
 
     if (this.state.isPortraitMode && this.state.isNavExpanded) {
-      this.state.isNavExpanded = false;
+      this.state.isNavExpanded = false; 
     }
   }
 
-  private loadPageController(page: AppPage): void {
+  private loadPageController(page: AppPage, clubId: string | null = null): void {
     if (this.activePageController && typeof this.activePageController.destroy === 'function') {
         this.activePageController.destroy();
     }
@@ -347,20 +377,29 @@ export class AppController {
             return;
         }
         this.activePageController = new FinishHimController(
-          this.services.chessboardService,    // 1
-          boardHandlerForPage,                // 2
-          this.authServiceInstance,           // 3 - Теперь передаем AuthService
-          this.webhookServiceInstance,       // 4
-          this.services.stockfishService,    // 5
-          this.analysisControllerInstance,   // 6
-          this.requestGlobalRedraw           // 7
+          this.services.chessboardService,
+          boardHandlerForPage,
+          this.authServiceInstance,
+          this.webhookServiceInstance,
+          this.services.stockfishService,
+          this.analysisControllerInstance,
+          this.requestGlobalRedraw
         );
-        if (typeof this.activePageController.initializeGame === 'function') {
-            this.activePageController.initializeGame();
+        if (typeof (this.activePageController as FinishHimController).initializeGame === 'function') {
+            (this.activePageController as FinishHimController).initializeGame();
+        }
+        break;
+      case 'clubPage':
+        if (clubId) {
+           this.activePageController = new ClubPageController(clubId, this.services, this.requestGlobalRedraw);
+           (this.activePageController as ClubPageController).initializePage();
+        } else {
+            logger.error("[AppController] ClubId missing for clubPage. Redirecting to welcome.");
+            if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
         }
         break;
       default:
-        const exhaustiveCheck: never = page;
+        const exhaustiveCheck: never = page; 
         logger.error(`[AppController] Unknown page in loadPageController: ${exhaustiveCheck}. Defaulting to welcome.`);
         if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
         return;
@@ -395,7 +434,8 @@ export class AppController {
     let changed = false;
     for (const key in newState) {
         if (Object.prototype.hasOwnProperty.call(newState, key)) {
-            if (this.state[key as keyof AppControllerState] !== newState[key as keyof AppControllerState]) {
+            const typedKey = key as keyof AppControllerState;
+            if (this.state[typedKey] !== newState[typedKey]) {
                 changed = true;
                 break;
             }
@@ -427,3 +467,6 @@ export class AppController {
     logger.info('[AppController] Destroyed.');
   }
 }
+
+// Вспомогательная константа для валидации страниц
+const validAppPages: AppPage[] = ['welcome', 'finishHim', 'clubPage'];

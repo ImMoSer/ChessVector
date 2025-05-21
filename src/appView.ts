@@ -6,7 +6,8 @@ import { FinishHimController } from './features/finishHim/finishHimController';
 import { renderFinishHimUI, type FinishHimPageViewLayout } from './features/finishHim/finishHimView';
 import { WelcomeController } from './features/welcome/welcomeController';
 import { renderWelcomePage } from './features/welcome/welcomeView';
-// LichessCallbackController and its view are no longer imported
+import { ClubPageController } from './features/clubPage/ClubPageController';
+import { renderClubPage } from './features/clubPage/clubPageView';
 import logger from './utils/logger';
 import { t } from './core/i18n.service';
 
@@ -15,7 +16,7 @@ let isResizingCenterPanel = false;
 let initialCenterPanelMouseX: number | null = null;
 let initialUserPreferredVh: number | null = null;
 let centerPanelResizableWrapperEl: HTMLElement | null = null;
-const PX_PER_VH_DRAG_SENSITIVITY = 10; // Pixels of drag to change VH by 1
+const PX_PER_VH_DRAG_SENSITIVITY = 10;
 
 function onCenterPanelResizeStart(event: MouseEvent | TouchEvent, wrapperElement: HTMLElement, controller: AppController) {
     event.preventDefault();
@@ -64,10 +65,20 @@ export function renderAppUI(controller: AppController): VNode {
   const activePageController = controller.activePageController;
   const isAuthenticated = controller.services.authService.getIsAuthenticated();
 
-  // Nav links config - 'lichessCallback' and 'challenge' removed for now
-  let navLinksConfig: Array<{ page: AppPage, textKey: string, requiresAuth?: boolean, hideWhenAuth?: boolean }> = [
+  let navLinksConfig: Array<{ page: AppPage, textKey: string, requiresAuth?: boolean, hideWhenAuth?: boolean, clubId?: string | null }> = [
     { page: 'finishHim', textKey: 'nav.finishHim', requiresAuth: true },
   ];
+
+  if (appState.currentPage === 'clubPage' && appState.currentClubId) {
+    const clubPageLink = navLinksConfig.find(link => link.page === 'clubPage' && link.clubId === appState.currentClubId);
+    if (!clubPageLink) {
+        navLinksConfig.push({
+            page: 'clubPage',
+            textKey: 'nav.clubPage', 
+            clubId: appState.currentClubId
+        });
+    }
+  }
 
   const visibleNavLinks = navLinksConfig.filter(link => {
     if (link.requiresAuth && !isAuthenticated) return false;
@@ -75,11 +86,10 @@ export function renderAppUI(controller: AppController): VNode {
     return true;
   });
 
-  let pageContentVNode: VNode | FinishHimPageViewLayout;
+  let pageSpecificContentVNode: VNode;
 
-  // Global loading indicator for authentication processing
   if (appState.isLoadingAuth && appState.currentPage !== 'welcome') {
-    pageContentVNode = h('div.global-loader-container', [
+    pageSpecificContentVNode = h('div.global-loader-container', [
         h('h2', t('auth.processingLogin', {defaultValue: "Processing Login..."})),
         h('div.loading-spinner')
     ]);
@@ -87,43 +97,36 @@ export function renderAppUI(controller: AppController): VNode {
     switch (appState.currentPage) {
       case 'welcome':
         if (activePageController instanceof WelcomeController) {
-          pageContentVNode = renderWelcomePage(activePageController);
+          pageSpecificContentVNode = renderWelcomePage(activePageController);
         } else {
-          pageContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
+          pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
         break;
       case 'finishHim':
         if (activePageController instanceof FinishHimController) {
-          pageContentVNode = renderFinishHimUI(activePageController);
+          // renderFinishHimUI returns a layout object, not a single VNode
+          // We will handle its structure below
+          pageSpecificContentVNode = h('div.finish-him-placeholder'); // Placeholder, actual rendering below
         } else {
-          pageContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
+          pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
         break;
-      // 'challenge' case removed
+      case 'clubPage':
+        if (activePageController instanceof ClubPageController) {
+          pageSpecificContentVNode = renderClubPage(activePageController);
+        } else {
+          pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
+        }
+        break;
       default:
-        // This should not be reached if AppPage in AppController is 'welcome' | 'finishHim'
         const exhaustiveCheck: never = appState.currentPage;
-        pageContentVNode = h('p', t('errorPage.unknownPage', { pageName: exhaustiveCheck }));
+        pageSpecificContentVNode = h('p', t('errorPage.unknownPage', { pageName: exhaustiveCheck }));
         logger.error(`[appView] Reached default case in page switch with page: ${exhaustiveCheck}`);
     }
   } else {
-    pageContentVNode = h('p', t('common.loadingController'));
+    pageSpecificContentVNode = h('p', t('common.loadingController'));
     logger.debug(`[appView] No active page controller for page: ${appState.currentPage}`);
   }
-
-  let leftPanelContent: VNode | null = null;
-  let centerPanelContent: VNode;
-  let rightPanelContent: VNode | null = null;
-
-  if (typeof pageContentVNode === 'object' && 'center' in pageContentVNode && 'left' in pageContentVNode && 'right' in pageContentVNode) {
-    const layout = pageContentVNode as FinishHimPageViewLayout;
-    leftPanelContent = layout.left;
-    centerPanelContent = layout.center;
-    rightPanelContent = layout.right;
-  } else {
-    centerPanelContent = pageContentVNode as VNode;
-  }
-
 
   const resizeHandleHook: Hooks = {
     insert: (vnode: VNode) => {
@@ -138,9 +141,31 @@ export function renderAppUI(controller: AppController): VNode {
     },
   };
 
-  // Determine if panels should be shown based on current page
-  // Panels are shown for 'finishHim'. 'challenge' logic removed.
-  const showPanels = appState.currentPage === 'finishHim';
+  let mainContentStructure: VNode;
+
+  if (appState.currentPage === 'finishHim' && activePageController instanceof FinishHimController) {
+    const fhLayout: FinishHimPageViewLayout = renderFinishHimUI(activePageController); // Явно указываем тип
+    mainContentStructure = h('div.three-column-layout', {
+        class: {
+            'portrait-mode-layout': appState.isPortraitMode,
+            'no-left-panel': !fhLayout.left && !appState.isPortraitMode,
+            'no-right-panel': !fhLayout.right && !appState.isPortraitMode,
+        }
+      },[
+        fhLayout.left ? h('aside#left-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode } }, [fhLayout.left]) : null,
+        h('div#center-panel-resizable-wrapper', {
+            key: 'center-wrapper-fh',
+            class: { 'portrait-mode-layout': appState.isPortraitMode }
+        }, [
+          h('section#center-panel', [fhLayout.center]),
+          appState.isPortraitMode ? null : h('div.resize-handle-center', { hook: resizeHandleHook, key: 'center-resize-handle-fh' })
+        ]),
+        fhLayout.right ? h('aside#right-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode } }, [fhLayout.right]) : null,
+      ].filter(Boolean) as VNode[]);
+  } else {
+    // For 'welcome', 'clubPage', or loading/error states
+    mainContentStructure = pageSpecificContentVNode; // This is already the .club-page-container or .welcome-page-container
+  }
 
   return h('div#app-layout', [
     h('header#app-header', { class: { 'menu-open': appState.isNavExpanded && appState.isPortraitMode } }, [
@@ -155,20 +180,23 @@ export function renderAppUI(controller: AppController): VNode {
             ...visibleNavLinks.map(link =>
               h('li', [
                 h('a', {
-                  class: { active: appState.currentPage === link.page },
-                  props: { href: `#${link.page}` },
+                  class: { active: appState.currentPage === link.page && (link.page !== 'clubPage' || (link.page === 'clubPage' && link.clubId === appState.currentClubId)) },
+                  props: { href: link.page === 'clubPage' && link.clubId ? `#/clubs/${link.clubId}` : `#${link.page}` },
                   on: {
                     click: (e: Event) => {
                       e.preventDefault();
-                      controller.navigateTo(link.page);
+                      controller.navigateTo(link.page, true, link.clubId);
                     }
                   }
-                }, t(link.textKey))
+                }, (link.page === 'clubPage' && appState.currentClubId && activePageController instanceof ClubPageController && activePageController.state.clubData?.club_name)
+                     ? activePageController.state.clubData.club_name 
+                     : t(link.textKey)
+                )
               ])
             ),
             isAuthenticated ? h('li', [
               h('a', {
-                class: { 'logout-link': true }, // <--- ДОБАВЛЕН КЛАСС ЗДЕСЬ
+                class: { 'logout-link': true },
                 props: { href: '#' },
                 on: {
                   click: async (e: Event) => {
@@ -184,42 +212,8 @@ export function renderAppUI(controller: AppController): VNode {
         )
       ])
     ]),
-    h('main#page-content-wrapper', [
-      h(`div.three-column-layout`, {
-        class: {
-            'portrait-mode-layout': appState.isPortraitMode,
-            'no-left-panel': !leftPanelContent && !appState.isPortraitMode && showPanels,
-            'no-right-panel': !rightPanelContent && !appState.isPortraitMode && showPanels,
-            'full-center': !showPanels // For Welcome or if panels are explicitly hidden
-        }
-      },[
-        (appState.isPortraitMode && !leftPanelContent && showPanels) ? null : h('aside#left-panel', {
-            class: {
-                'portrait-mode-layout': appState.isPortraitMode && !!leftPanelContent && showPanels,
-                'hidden-in-landscape': !leftPanelContent && !appState.isPortraitMode && !showPanels
-            }
-        }, [(showPanels && leftPanelContent) ? leftPanelContent : '']),
-
-        h('div#center-panel-resizable-wrapper', {
-            key: 'center-wrapper',
-            class: {
-                'portrait-mode-layout': appState.isPortraitMode,
-                'center-full-width-page': !showPanels // Welcome page takes full width
-            }
-        }, [
-          h('section#center-panel', [centerPanelContent]),
-          (appState.isPortraitMode || !showPanels) // Hide resize handle in portrait or for non-panel pages
-            ? null
-            : h('div.resize-handle-center', { hook: resizeHandleHook, key: 'center-resize-handle' })
-        ]),
-
-        (appState.isPortraitMode && !rightPanelContent && showPanels) ? null : h('aside#right-panel', {
-            class: {
-                'portrait-mode-layout': appState.isPortraitMode && !!rightPanelContent && showPanels,
-                'hidden-in-landscape': !rightPanelContent && !appState.isPortraitMode && !showPanels
-            }
-        }, [(showPanels && rightPanelContent) ? rightPanelContent : ''])
-      ])
+    h('main#page-content-wrapper', [ // Этот элемент теперь будет содержать либо .three-column-layout, либо напрямую .club-page-container / .welcome-page-container
+        mainContentStructure
     ])
   ]);
 }

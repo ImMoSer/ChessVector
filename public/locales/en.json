@@ -4,7 +4,8 @@
   },
   "nav": {
     "finishHim": "FinishHim",
-    "logout": "Logout"
+    "logout": "Logout",
+    "clubPage": "Club Page"
   },
   "welcome": {
     "message": "Welcome to ChessBoard.fun",
@@ -166,5 +167,41 @@
   },
   "auth": {
     "processingLogin": "Processing Login..."
+  },
+  "clubPage": {
+    "title": {
+      "loading": "Loading Club Data...",
+      "loaded": "Club: {clubName}",
+      "error": "Error Loading Club"
+    },
+    "clubBannerAlt": "Club Banner for {clubName}",
+    "founder": "Founder",
+    "members": "Members",
+    "leadersTitle": "Club Leaders",
+    "noLeaders": "No leaders listed for this club.",
+    "mostValuablePlayersTitle": "Most Valuable Players (Total Score)",
+    "mostActivePlayersTitle": "Most Active Players (Tournaments Played)",
+    "topSinglePerformanceTitle": "Top Single Tournament Performances",
+    "tournamentHistoryTitle": "Tournament History",
+    "tournamentPlayersTitle": "Players in this Tournament",
+    "noPlayersInTournament": "No players participated or data unavailable for this tournament.",
+    "error": {
+      "dataLoadFailed": "Failed to load club data. Please check the club ID or try again later.",
+      "unknown": "An unknown error occurred while fetching club data.",
+      "noDataFound": "No data found for club ID: {clubId}"
+    },
+    "table": {
+      "rank": "#",
+      "player": "Player",
+      "totalScore": "Total Score",
+      "tournaments": "Tournaments",
+      "score": "Score",
+      "tournamentName": "Tournament",
+      "date": "Date",
+      "timeControl": "TC",
+      "duration": "Duration",
+      "clubRank": "Rank",
+      "clubScore": "Club Score"
+    }
   }
 }

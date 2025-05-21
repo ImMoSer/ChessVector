@@ -1,0 +1,304 @@
+/* src/features/clubPage/clubPage.css */
+
+.club-page-container {
+  padding: 20px;
+  box-sizing: border-box;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-default);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 70vw; 
+  max-width: 1000px; /* Ограничение максимальной ширины */
+  margin: 0 auto; 
+  height: auto; 
+  overflow: visible; 
+}
+
+.club-page.loading,
+.club-page.error,
+.club-page.no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 300px; 
+  width: 100%; 
+}
+
+.club-page.loading h1,
+.club-page.error h1,
+.club-page.no-data h1 {
+  color: var(--color-accent-primary);
+  margin-bottom: 15px;
+}
+
+.club-page.error .error-message {
+  color: var(--color-accent-error);
+  background-color: rgba(204, 52, 50, 0.1);
+  border: 1px solid var(--color-accent-error);
+  padding: 10px 15px;
+  border-radius: var(--panel-border-radius);
+  max-width: 600px;
+}
+
+.club-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.club-banner {
+  width: 100%; 
+  border-radius: calc(var(--panel-border-radius) - 4px);
+  object-fit: cover; 
+  border: 2px solid var(--color-border-hover);
+}
+
+.club-info .club-name-link {
+  text-decoration: none; 
+}
+
+.club-info .club-name {
+  font-size: 2em;
+  font-weight: 600;
+  color: var(--color-accent-primary);
+  margin: 0 0 5px 0;
+  transition: color 0.2s ease;
+}
+.club-info .club-name-link:hover .club-name {
+  color: var(--color-accent-warning); 
+}
+
+/* Стилизация для .club-meta */
+.club-info .club-meta {
+  font-size: 1em; /* Немного увеличим для читаемости */
+  color: var(--color-text-muted);
+  margin-top: 5px; /* Небольшой отступ сверху */
+  padding: 5px 10px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: 4px;
+  display: inline-block; /* Чтобы фон не растягивался на всю ширину */
+  border: 1px solid var(--color-border-hover);
+}
+
+.club-leaders-section {
+  padding: 15px;
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border);
+}
+
+.leaders-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap; 
+  gap: 8px 12px; 
+  justify-content: center; 
+}
+
+.leaders-list li {
+  background-color: var(--color-bg-tertiary);
+  padding: 6px 12px; 
+  border-radius: var(--panel-border-radius); 
+  font-size: 0.95em; 
+  border: 1px solid var(--color-border-hover);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
+  white-space: nowrap; 
+}
+
+.table-title {
+  font-size: 1.4em; 
+  color: var(--color-text-on-accent); 
+  background-color: var(--color-accent-error); 
+  padding: 10px 15px; 
+  margin-top: 0;
+  margin-bottom: 15px; 
+  border-radius: var(--panel-border-radius); 
+  display: block; 
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center; 
+  border-bottom: none; 
+}
+
+.player-stats-table-container,
+.tournament-history-table-container {
+  padding: 15px;
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border);
+  overflow-x: auto; 
+  height: auto; 
+  overflow-y: visible;
+}
+
+.club-stats-grid {
+    display: flex; 
+    flex-direction: column; 
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.styled-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.styled-table th,
+.styled-table td {
+  padding: 10px 12px; 
+  text-align: left; 
+  border-bottom: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border); 
+}
+.styled-table th:first-child,
+.styled-table td:first-child {
+  border-left: none; 
+}
+
+
+.styled-table .text-left { text-align: left; }
+.styled-table .text-center { text-align: center; }
+.styled-table .text-right { text-align: right; }
+
+
+.styled-table th {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  border-top: 1px solid var(--color-border); 
+}
+
+.styled-table tbody tr:nth-child(even) {
+  background-color: var(--color-bg-tertiary); 
+}
+.styled-table tbody tr:nth-child(odd) {
+  background-color: var(--color-bg-secondary); 
+}
+
+.styled-table tbody tr:hover {
+  background-color: var(--color-border-hover); 
+}
+
+.styled-table td a {
+  color: var(--color-text-link);
+  text-decoration: none;
+}
+.styled-table td a:hover {
+  text-decoration: underline;
+}
+
+.tournament-row.expandable {
+  cursor: pointer;
+}
+.tournament-row.expanded {
+  background-color: var(--color-accent-info) !important; 
+  color: var(--color-text-on-accent);
+  font-weight: bold;
+}
+.tournament-row.expanded td,
+.tournament-row.expanded td a {
+    color: var(--color-text-on-accent); 
+}
+
+
+.tournament-players-details td {
+  padding: 0; 
+  border-bottom: 1px solid var(--color-border); 
+}
+
+.tournament-players-list {
+  padding: 10px 15px;
+  background-color: var(--color-bg-primary); 
+  border-top: 1px dashed var(--color-border-hover);
+}
+
+.players-list-title {
+  font-size: 1.1em;
+  color: var(--color-text-muted);
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.mini-player-table {
+  font-size: 0.95em; 
+}
+
+.mini-player-table th,
+.mini-player-table td {
+  padding: 6px 8px;
+  border-left: 1px solid var(--color-border);
+}
+.mini-player-table th:first-child,
+.mini-player-table td:first-child {
+  border-left: none;
+}
+.mini-player-table th {
+  background-color: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+}
+
+.mini-player-table tbody tr:nth-child(even) {
+  background-color: var(--color-bg-tertiary);
+}
+.mini-player-table tbody tr:nth-child(odd) {
+  background-color: var(--color-bg-secondary);
+}
+.mini-player-table tbody tr:hover {
+  background-color: var(--color-border-hover);
+}
+
+
+.player-title {
+    color: var(--color-accent-warning);
+    font-weight: bold;
+    margin-right: 0.25em;
+}
+
+.no-players-message {
+    padding: 10px;
+    text-align: center;
+    font-style: italic;
+    color: var(--color-text-muted);
+}
+
+@media (orientation: portrait) {
+  .club-page-container {
+    width: 100%; 
+    padding: 10px; 
+    margin: 0; 
+    gap: 15px; 
+  }
+  .club-header {
+    padding: 10px;
+  }
+  .club-info .club-name {
+    font-size: 1.5em;
+  }
+  .table-title {
+    font-size: 1.2em; 
+    padding: 8px 12px;
+  }
+  .styled-table {
+    font-size: 0.85em;
+  }
+  .styled-table th,
+  .styled-table td {
+    padding: 6px 8px;
+  }
+  .club-stats-grid {
+    gap: 15px; 
+  }
+}
