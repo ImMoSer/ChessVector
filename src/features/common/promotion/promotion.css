@@ -6,22 +6,28 @@
     left: 0;
     width: 100%; /* Устанавливается JS по размеру доски */
     height: 100%; /* Устанавливается JS по размеру доски */
-    background-color: rgba(22, 21, 18, 0.75); /* #161512 с 75% alpha */
+    background-color: rgba(22, 21, 18, 0.85); /* var(--color-bg-primary) с 85% alpha, еще темнее для лучшего фокуса */
     z-index: 200;
-    display: block;
+    display: flex; /* Используем flex для центрирования группы квадратов, если они не позиционируются индивидуально JS */
+    align-items: center;
+    justify-content: center;
     pointer-events: auto;
     box-sizing: border-box;
 }
 
+/* Если квадраты позиционируются индивидуально JS, то flex на оверлее не нужен,
+   но можно добавить контейнер для группы квадратов, если их несколько.
+   Стили ниже предполагают, что .promotion-square позиционируется JS */
+
 .promotion-square {
-    position: absolute;
+    position: absolute; /* Если позиционируется JS */
     width: 12.5%; /* Размер одной клетки */
     height: 12.5%; /* Размер одной клетки */
     cursor: pointer;
-    background-color: #b0b0b0;
-    border: 1px solid var(--color-border-hover, #4d4a47);
-    border-radius: 40%;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+    background-color: var(--color-bg-tertiary); /* Темный фон для квадрата */
+    border: 2px solid var(--color-border-hover); /* Граница чуть светлее фона */
+    border-radius: 10%; /* Меньшее скругление для более "шахматного" вида */
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4); /* Тень для темной темы */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -31,11 +37,11 @@
 }
 
 .promotion-square:hover {
-    background-color: var(--color-accent-primary, #bf811d);
-    border-color: var(--color-accent-primary, #bf811d);
+    background-color: var(--color-accent-primary); /* Ярко-голубой фон при наведении */
+    border-color: var(--color-text-link-hover);    /* Темно-голубая рамка при наведении */
     transform: scale(1.1);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.35);
-    z-index: 201;
+    box-shadow: 0 4px 12px rgba(var(--color-accent-primary-rgb, 19, 173, 246), 0.5); /* Тень с цветом акцента */
+    z-index: 201; /* Чтобы был поверх других квадратов при наведении */
 }
 
 /* Общие стили для фигур внутри диалога */
@@ -47,9 +53,15 @@
     background-position: center;
     pointer-events: none;
     opacity: 1;
+    /* Фигуры SVG уже имеют свои цвета (белый/черный), поэтому дополнительная стилизация цвета не нужна.
+       Если фигуры были бы одноцветными и требовали окраски через CSS, можно было бы использовать filter.
+       Например, для белых фигур на темном фоне: filter: brightness(0) invert(1);
+       Но так как у вас уже есть SVG для белых и черных, это не требуется.
+    */
 }
 
 /* --- Стили для конкретных фигур в диалоге промоушена --- */
+/* SVG-фигуры уже определены в вашем исходном CSS. Оставляем их как есть. */
 
 /* Белые фигуры */
 .promotion-square piece.queen.white {

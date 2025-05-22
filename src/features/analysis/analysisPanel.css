@@ -2,14 +2,15 @@
 
 #analysis-panel-container {
   display: flex;
-  flex-direction: column; /* Элементы идут друг под другом: PGN nav, Lines, Main controls */
-  gap: 12px; /* Отступ между основными блоками */
+  flex-direction: column;
+  gap: 12px;
   padding: 10px;
-  background-color: var(--color-bg-secondary); /* #262421 */
-  border-radius: var(--panel-border-radius); /* 8px */
-  height: 100%;
+  background-color: var(--color-bg-secondary); /* Темно-серый фон панели */
+  border-radius: var(--panel-border-radius);
+  height: 100%; /* Предполагается, что родитель имеет высоту, например, из main.css #left-panel или #right-panel */
   box-sizing: border-box;
   overflow-y: auto;
+  border: 1px solid var(--color-border-hover); /* Граница панели */
 }
 
 /* Общие стили для групп кнопок */
@@ -24,14 +25,15 @@
 
 #analysis-panel-container .button-group.horizontal {
   flex-direction: row;
-  justify-content: space-between;
+  justify-content: space-between; /* Равномерное распределение кнопок в горизонтальной группе */
 }
 
 /* Базовый стиль для кнопок ВНУТРИ этой панели */
 #analysis-panel-container .button {
-  width: 100%; /* Для кнопок в вертикальной группе */
+  width: 100%;
   padding: 8px 10px;
   font-size: 0.9em;
+  font-weight: 500; /* Немного увеличим жирность для лучшей читаемости */
   margin: 0;
   box-sizing: border-box;
   min-height: 38px;
@@ -39,168 +41,164 @@
   align-items: center;
   justify-content: center;
   line-height: 1.2;
-  border-radius: var(--panel-border-radius); /* 8px */
-  border: 1px solid var(--color-border-hover); /* #4d4a47 */
-  background-color: var(--color-bg-tertiary); /* #33312e */
-  color: var(--color-text-default); /* #eaeaea */
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border-hover); /* Граница кнопки */
+  background-color: var(--color-bg-tertiary); /* Фон кнопки */
+  color: var(--color-text-default); /* Светлый текст на кнопке */
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, color 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   text-align: center;
   white-space: nowrap;
 }
 
 #analysis-panel-container .button:hover:not(:disabled) {
-  background-color: var(--color-border-hover); /* #4d4a47 */
-  border-color: var(--color-accent-primary); /* #bf811d */
+  background-color: var(--color-border-hover); /* Затемнение фона при наведении */
+  border-color: var(--color-accent-primary); /* Ярко-голубая рамка при наведении */
+  box-shadow: 0 0 5px rgba(var(--color-accent-primary-rgb, 19, 173, 246), 0.5); /* Подсветка рамки */
 }
 
 #analysis-panel-container .button:disabled,
-#analysis-panel-container .button[disabled] { /* Добавлен селектор атрибута для надежности */
-  opacity: 0.5; 
+#analysis-panel-container .button[disabled] {
+  opacity: 0.5;
   cursor: not-allowed;
-  background-color: var(--color-bg-tertiary); 
-  border-color: var(--color-border); 
-  color: var(--color-text-muted); 
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  box-shadow: none;
 }
 
 /* Кнопки навигации PGN */
-#pgn-navigation-controls { 
-  margin-bottom: 0; 
-  gap: 5px;
+#pgn-navigation-controls {
+  margin-bottom: 0;
+  gap: 5px; /* Меньший отступ между кнопками навигации */
 }
 
 #pgn-navigation-controls .button.pgn-nav-button {
   flex-grow: 1;
   font-size: 0.85em;
   padding: 6px 8px;
+  background-color: var(--color-bg-tertiary); /* Стандартный фон для кнопок PGN */
+  border-color: var(--color-border);
 }
+#pgn-navigation-controls .button.pgn-nav-button:hover:not(:disabled) {
+  background-color: var(--color-border-hover);
+  border-color: var(--color-accent-info); /* Голубой при наведении */
+}
+
 
 /* Стиль для кнопок PGN, когда анализ активен и игра НЕ активна */
 #pgn-navigation-controls .button.pgn-nav-button.active-analysis-mode {
-  background-color: var(--color-accent-info); /* #0072b1 */
+  background-color: var(--color-accent-info); /* Ярко-голубой */
   border-color: var(--color-accent-info);
-  color: var(--color-text-on-accent); /* #ffffff */
+  color: var(--color-text-on-accent); /* Белый текст */
 }
 #pgn-navigation-controls .button.pgn-nav-button.active-analysis-mode:hover:not(:disabled) {
-  background-color: #005f92; /* Darker info */
-  border-color: #005f92;
+  background-color: var(--color-text-link-hover); /* Затемненный голубой */
+  border-color: var(--color-text-link-hover);
 }
-/* Когда .active-analysis-mode и :disabled, общий стиль .button:disabled должен применяться */
 
 /* Основные управляющие кнопки в #main-controls */
 #main-controls.button-group.vertical .button {
    width: 100%;
 }
 
-/* Стилизация конкретных кнопок */
+/* Стилизация конкретных кнопок с использованием ярких акцентов */
 
-/* Кнопка "Next Puzzle" */
+/* Кнопка "Next Puzzle" или основное действие */
 #main-controls .button.game-control-button.primary-button {
-  background-color: var(--color-accent-success);
+  background-color: var(--color-accent-success); /* Ярко-салатовый */
   border-color: var(--color-accent-success);
-  color: var(--color-text-on-accent);
+  color: var(--color-accent-error);
+  font-weight: bold;
+  font-size: 1.3em;
 }
 #main-controls .button.game-control-button.primary-button:hover:not(:disabled) {
-  background-color: #4f7a1e; 
-  border-color: #4f7a1e;
+  background-color: #A0D003; /* Чуть темнее/насыщеннее салатовый */
+  border-color: #A0D003;
 }
-/* Явное определение стилей для :disabled, чтобы переопределить базовые цветные стили */
 #main-controls .button.game-control-button.primary-button:disabled,
 #main-controls .button.game-control-button.primary-button[disabled] {
-  background-color: var(--color-bg-tertiary);
-  border-color: var(--color-border);
-  color: var(--color-text-muted);
-  opacity: 0.5;
-  cursor: not-allowed;
+  background-color: var(--color-bg-tertiary); border-color: var(--color-border); color: var(--color-text-muted); opacity: 0.5; cursor: not-allowed;
 }
 
 
 /* Кнопка "Restart Task" */
-#main-controls .button.game-control-button:nth-of-type(2) { /* Предполагаем, что это кнопка Restart */
-  background-color: var(--color-accent-warning);
+#main-controls .button.game-control-button.restart-button { /* Рекомендую добавить класс, например .restart-button */
+  background-color: var(--color-accent-warning); /* Ярко-оранжевый */
   border-color: var(--color-accent-warning);
   color: var(--color-text-on-accent);
 }
-#main-controls .button.game-control-button:nth-of-type(2):hover:not(:disabled) {
-  background-color: #c75a07; 
-  border-color: #c75a07;
+#main-controls .button.game-control-button.restart-button:hover:not(:disabled) {
+  background-color: #E05608; /* Затемненный оранжевый */
+  border-color: #E05608;
 }
-#main-controls .button.game-control-button:nth-of-type(2):disabled,
-#main-controls .button.game-control-button:nth-of-type(2)[disabled] {
-  background-color: var(--color-bg-tertiary);
-  border-color: var(--color-border);
-  color: var(--color-text-muted);
-  opacity: 0.5;
-  cursor: not-allowed;
+#main-controls .button.game-control-button.restart-button:disabled,
+#main-controls .button.game-control-button.restart-button[disabled] {
+  background-color: var(--color-bg-tertiary); border-color: var(--color-border); color: var(--color-text-muted); opacity: 0.5; cursor: not-allowed;
 }
 
-/* Кнопка "Analysis" / "Finish Analysis" / "Resign" - ее :disabled состояние управляется общим правилом */
-#main-controls .button.analysis-toggle-button { 
-  background-color: var(--color-accent-special); 
-  border-color: var(--color-accent-special);
+/* Кнопка "Analysis" / "Finish Analysis" / "Resign" */
+#main-controls .button.analysis-toggle-button {
+  background-color: var(--color-accent-secondary); /* Ярко-розовый */
+  border-color: var(--color-accent-secondary);
   color: var(--color-text-on-accent);
 }
 #main-controls .button.analysis-toggle-button:hover:not(:disabled) {
-  background-color: #93259e; 
-  border-color: #93259e;
+  background-color: #D6037E; /* Затемненный розовый */
+  border-color: #D6037E;
 }
 
-#main-controls .button.analysis-toggle-button.active-analysis { 
-  background-color: var(--color-accent-info); 
+#main-controls .button.analysis-toggle-button.active-analysis {
+  background-color: var(--color-accent-info); /* Ярко-голубой, когда анализ активен */
   border-color: var(--color-accent-info);
   color: var(--color-text-on-accent);
 }
 #main-controls .button.analysis-toggle-button.active-analysis:hover:not(:disabled) {
-  background-color: #005f92; 
-  border-color: #005f92;
+  background-color: var(--color-text-link-hover); /* Затемненный голубой */
+  border-color: var(--color-text-link-hover);
 }
 
 #main-controls .button.analysis-toggle-button.resign-button {
-  background-color: var(--color-accent-error); 
+  background-color: var(--color-accent-error); /* Красный для "Resign" */
   border-color: var(--color-accent-error);
   color: var(--color-text-on-accent);
 }
 #main-controls .button.analysis-toggle-button.resign-button:hover:not(:disabled) {
-  background-color: #a52a27; 
-  border-color: #a52a27;
+  background-color: #C4312D; /* Затемненный красный */
+  border-color: #C4312D;
 }
 
 /* Кнопка "Set FEN" */
-/* Если кнопка "Analysis/Resign" третья, то "Set FEN" будет четвертой */
-#main-controls .button.game-control-button:nth-of-type(4) { 
-  background-color: var(--color-accent-secondary); 
-  border-color: var(--color-accent-secondary);
+#main-controls .button.game-control-button.set-fen-button { /* Рекомендую добавить класс, например .set-fen-button */
+  background-color: var(--color-accent-special); /* Это розовый, можно выбрать другой, если нужно разнообразие */
+                                                 /* Например, var(--color-accent-primary) - голубой */
+  border-color: var(--color-accent-special);
   color: var(--color-text-on-accent);
 }
-#main-controls .button.game-control-button:nth-of-type(4):hover:not(:disabled) {
-  background-color: #705ce0; 
-  border-color: #705ce0;
+#main-controls .button.game-control-button.set-fen-button:hover:not(:disabled) {
+  background-color: #D6037E; /* Затемненный цвет, соответствующий базовому */
+  border-color: #D6037E;
 }
-#main-controls .button.game-control-button:nth-of-type(4):disabled,
-#main-controls .button.game-control-button:nth-of-type(4)[disabled] {
-  background-color: var(--color-bg-tertiary);
-  border-color: var(--color-border);
-  color: var(--color-text-muted);
-  opacity: 0.5;
-  cursor: not-allowed;
+#main-controls .button.game-control-button.set-fen-button:disabled,
+#main-controls .button.game-control-button.set-fen-button[disabled] {
+  background-color: var(--color-bg-tertiary); border-color: var(--color-border); color: var(--color-text-muted); opacity: 0.5; cursor: not-allowed;
 }
 
 
-/* Секция с линиями анализа (без изменений) */
+/* Секция с линиями анализа */
 .analysis-lines-section {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-family: monospace, "Courier New", Courier;
   font-size: 0.9em;
-  min-height: 95px;
-  height: 120px;
+  min-height: 95px; /* Минимальная высота, чтобы избежать "прыжков" */
+  height: 120px;    /* Фиксированная высота для блока с прокруткой */
   overflow-y: auto;
-  border: 1px solid var(--color-border); 
-  border-radius: var(--panel-border-radius); 
+  border: 1px solid var(--color-border);
+  border-radius: var(--panel-border-radius);
   padding: 8px;
-  background-color: var(--color-bg-primary); 
-  flex-shrink: 0;
+  background-color: var(--color-bg-primary); /* Самый темный фон для контраста с текстом линий */
+  flex-shrink: 0; /* Чтобы не сжимался, если мало места */
 }
 
 .analysis-line-entry {
@@ -208,8 +206,8 @@
   align-items: center;
   padding: 4px 6px;
   border-radius: 4px;
-  background-color: var(--color-bg-tertiary); 
-  border: 1px solid var(--color-border); 
+  background-color: var(--color-bg-tertiary); /* Фон для каждой строки анализа */
+  border: 1px solid var(--color-border);
   overflow: hidden;
   min-height: 28px;
 }
@@ -221,7 +219,7 @@
   margin-right: 8px;
   cursor: pointer;
   border: 1px solid transparent;
-  color: var(--color-text-on-accent); 
+  color: var(--color-text-on-accent); /* Белый текст на цветных кнопках оценки */
   min-width: 60px;
   text-align: center;
   flex-shrink: 0;
@@ -233,36 +231,37 @@
   opacity: 0.6;
 }
 
+/* Цвета для кнопок оценки, используем яркие акценты */
 .analysis-score-button.best-line-score {
-  background-color: var(--color-accent-success); 
+  background-color: var(--color-accent-success); /* Салатовый */
   border-color: var(--color-accent-success);
 }
 .analysis-score-button.best-line-score:hover:not(:disabled) {
-  background-color: #4a7d1c;
+  background-color: #A0D003; /* Затемненный салатовый */
 }
 
 .analysis-score-button.second-line-score {
-  background-color: var(--color-accent-warning); 
+  background-color: var(--color-accent-warning); /* Оранжевый */
   border-color: var(--color-accent-warning);
 }
 .analysis-score-button.second-line-score:hover:not(:disabled) {
-  background-color: #c75a07;
+  background-color: #E05608; /* Затемненный оранжевый */
 }
 
 .analysis-score-button.third-line-score {
-  background-color: var(--color-accent-error); 
-  border-color: var(--color-accent-error);
+  background-color: var(--color-accent-secondary); /* Розовый */
+  border-color: var(--color-accent-secondary);
 }
 .analysis-score-button.third-line-score:hover:not(:disabled) {
-  background-color: #a52a27;
+  background-color: #D6037E; /* Затемненный розовый */
 }
 
 .analysis-score-button.other-line-score {
-  background-color: var(--color-accent-info); 
+  background-color: var(--color-accent-info); /* Голубой */
   border-color: var(--color-accent-info);
 }
 .analysis-score-button.other-line-score:hover:not(:disabled) {
-  background-color: #005f92;
+  background-color: var(--color-text-link-hover); /* Затемненный голубой */
 }
 
 .analysis-pv-text {
@@ -270,7 +269,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   flex-grow: 1;
-  color: var(--color-text-default); 
+  color: var(--color-text-default); /* Светлый текст для PGN */
 }
 
 .analysis-lines-section .loading-message,
@@ -278,7 +277,7 @@
 .analysis-lines-section .inactive-message {
   padding: 10px;
   text-align: center;
-  color: var(--color-text-muted); 
+  color: var(--color-text-muted); /* Приглушенный светлый текст */
   font-style: italic;
   border-radius: 4px;
   display: flex;
@@ -287,18 +286,18 @@
   height: 100%;
 }
 
-/* Контейнер для отображения PGN (без изменений) */
+/* Контейнер для отображения PGN */
 #pgn-display-container {
-  font-family: monospace, "Courier New", Courier;
-  white-space: pre-wrap;
-  border: 1px solid var(--color-border); 
+  white-space: pre-wrap; /* Для корректного отображения переносов строк в PGN */
+  word-break: break-all; /* Для переноса длинных строк без пробелов */
+  border: 1px solid var(--color-border);
   padding: 10px;
-  background-color: var(--color-bg-tertiary); 
-  border-radius: var(--panel-border-radius); 
+  background-color: var(--color-bg-tertiary); /* Фон для PGN */
+  border-radius: var(--panel-border-radius);
   overflow-y: auto;
-  flex-grow: 1;
+  flex-grow: 1; /* Чтобы занимал оставшееся место */
   min-height: 100px;
   font-size: 0.9em;
-  color: var(--color-text-default); 
-  margin-top: auto; 
+  color: var(--color-text-default); /* Светлый текст PGN */
+  margin-top: auto; /* Прижимает к нижней части, если #analysis-panel-container это flex-column */
 }

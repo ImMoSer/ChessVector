@@ -3,16 +3,16 @@
 .club-page-container {
   padding: 20px;
   box-sizing: border-box;
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-default);
+  background-color: var(--color-bg-primary); /* Основной темный фон */
+  color: var(--color-text-default); /* Светлый текст по умолчанию */
   display: flex;
   flex-direction: column;
   gap: 20px;
-  width: 70vw; 
-  max-width: 1000px; /* Ограничение максимальной ширины */
-  margin: 0 auto; 
-  height: auto; 
-  overflow: visible; 
+  width: 70vw;
+  max-width: 1000px;
+  margin: 0 auto;
+  height: auto;
+  overflow: visible;
 }
 
 .club-page.loading,
@@ -23,21 +23,21 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  min-height: 300px; 
-  width: 100%; 
+  min-height: 300px;
+  width: 100%;
 }
 
-.club-page.loading h1,
+.club-page.loading h1, /* Заголовки состояния загрузки/ошибки */
 .club-page.error h1,
 .club-page.no-data h1 {
-  color: var(--color-accent-primary);
+  color: var(--color-accent-primary); /* Ярко-голубой */
   margin-bottom: 15px;
 }
 
 .club-page.error .error-message {
-  color: var(--color-accent-error);
-  background-color: rgba(204, 52, 50, 0.1);
-  border: 1px solid var(--color-accent-error);
+  color: var(--color-text-error); /* Светло-розовый текст ошибки */
+  background-color: rgba(229, 57, 53, 0.15); /* Полупрозрачный фон для акцента ошибки */
+  border: 1px solid var(--color-accent-error); /* Ярко-красная граница ошибки */
   padding: 10px 15px;
   border-radius: var(--panel-border-radius);
   max-width: 600px;
@@ -49,102 +49,146 @@
   align-items: center;
   gap: 15px;
   padding: 15px;
-  background-color: var(--color-bg-secondary);
+  background-color: var(--color-bg-secondary); /* Темно-серый фон */
   border-radius: var(--panel-border-radius);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-hover); /* Граница */
   text-align: center;
 }
 
 .club-banner {
-  width: 100%; 
-  border-radius: calc(var(--panel-border-radius) - 4px);
-  object-fit: cover; 
-  border: 2px solid var(--color-border-hover);
+  width: 100%;
+  border-radius: calc(var(--panel-border-radius) - 4px); /* Чтобы вписался во внутренний padding хедера */
+  object-fit: cover;
+  border: 1px solid var(--color-border); /* Тонкая рамка для баннера */
 }
 
 .club-info .club-name-link {
-  text-decoration: none; 
+  text-decoration: none;
 }
 
 .club-info .club-name {
   font-size: 2em;
   font-weight: 600;
-  color: var(--color-accent-primary);
+  color: var(--color-accent-primary); /* Ярко-голубой для названия клуба */
   margin: 0 0 5px 0;
   transition: color 0.2s ease;
 }
 .club-info .club-name-link:hover .club-name {
-  color: var(--color-accent-warning); 
+  color: var(--color-accent-secondary); /* Ярко-розовый при наведении */
 }
 
-/* Стилизация для .club-meta */
 .club-info .club-meta {
-  font-size: 1em; /* Немного увеличим для читаемости */
-  color: var(--color-text-muted);
-  margin-top: 5px; /* Небольшой отступ сверху */
+  font-size: 1em;
+  color: var(--color-text-muted); /* Приглушенный светлый текст */
+  margin-top: 5px;
   padding: 5px 10px;
-  background-color: var(--color-bg-tertiary);
+  background-color: var(--color-bg-tertiary); /* Фон для мета-информации */
   border-radius: 4px;
-  display: inline-block; /* Чтобы фон не растягивался на всю ширину */
-  border: 1px solid var(--color-border-hover);
-}
-
-.club-leaders-section {
-  padding: 15px;
-  background-color: var(--color-bg-secondary);
-  border-radius: var(--panel-border-radius);
+  display: inline-block;
   border: 1px solid var(--color-border);
 }
+
+/* Секция лидеров клуба - более строгий стиль */
+.club-leaders-section {
+  padding: 15px;
+  background-color: var(--color-bg-secondary); /* Тот же фон, что и у хедера */
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border-hover); /* Стандартная граница */
+}
+
+.club-leaders-section .section-title { /* Добавим класс для заголовка этой секции, если он есть в HTML */
+  font-size: 1.4em;
+  color: var(--color-text-default); /* Обычный светлый текст */
+  margin-top: 0;
+  margin-bottom: 15px;
+  text-align: center;
+  font-weight: 600;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
 
 .leaders-list {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
-  flex-wrap: wrap; 
-  gap: 8px 12px; 
-  justify-content: center; 
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: center;
 }
 
 .leaders-list li {
-  background-color: var(--color-bg-tertiary);
-  padding: 6px 12px; 
-  border-radius: var(--panel-border-radius); 
-  font-size: 0.95em; 
-  border: 1px solid var(--color-border-hover);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
-  white-space: nowrap; 
+  background-color: var(--color-bg-tertiary); /* Фон для элемента списка лидеров */
+  padding: 6px 12px;
+  border-radius: var(--panel-border-radius);
+  font-size: 0.95em;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  white-space: nowrap;
+  color: var(--color-text-default); /* Светлый текст */
 }
 
-.table-title {
-  font-size: 1.4em; 
-  color: var(--color-text-on-accent); 
-  background-color: var(--color-accent-error); 
-  padding: 10px 15px; 
-  margin-top: 0;
-  margin-bottom: 15px; 
-  border-radius: var(--panel-border-radius); 
-  display: block; 
-  width: 100%;
-  box-sizing: border-box;
-  text-align: center; 
-  border-bottom: none; 
-}
-
+/* Общий стиль для контейнеров таблиц */
 .player-stats-table-container,
 .tournament-history-table-container {
-  padding: 15px;
-  background-color: var(--color-bg-secondary);
+  padding: 0; /* Убираем внутренний padding */
+  background-color: var(--color-bg-secondary); /* Фон контейнера таблицы */
   border-radius: var(--panel-border-radius);
-  border: 1px solid var(--color-border);
-  overflow-x: auto; 
-  height: auto; 
-  overflow-y: visible;
+  border: 1px solid var(--color-border-hover);
+  overflow: hidden; /* Для корректного скругления с заголовком */
+  height: auto;
 }
 
+.table-content-wrapper { /* Обертка для самой таблицы внутри контейнера */
+    padding: 15px;
+    overflow-x: auto;
+}
+
+/* Заголовки таблиц - делаем их разноцветными */
+.table-title {
+  font-size: 1.4em;
+  color: var(--color-text-on-accent); /* Белый текст на ярком фоне */
+  padding: 10px 15px;
+  margin-top: 0;
+  margin-bottom: 0; /* Убираем отступ, таблица идет сразу */
+  /* border-radius убран, т.к. скругление на родительском .player-stats-table-container и т.д. */
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  border-bottom: 1px solid var(--color-border-hover); /* Граница под заголовком, чуть светлее фона */
+  font-weight: 600;
+}
+
+/* Назначаем разные цвета для разных таблиц */
+/* Предположим, у вас есть специфичные классы или ID для контейнеров таблиц или самих таблиц */
+/* Если нет, можно использовать :nth-of-type на .player-stats-table-container / .tournament-history-table-container */
+
+/* Пример: Таблица статистики игроков */
+.player-stats-table-container .table-title {
+  background-color: var(--color-accent-primary); /* Ярко-голубой */
+}
+
+/* Пример: Таблица истории турниров */
+.tournament-history-table-container .table-title {
+  background-color: var(--color-accent-success); /* Ярко-салатовый */
+}
+
+/* Если есть еще таблицы, можно использовать --color-accent-secondary (розовый) и --color-accent-warning (оранжевый) */
+/* Например:
+.some-other-table-container .table-title {
+  background-color: var(--color-accent-secondary);
+}
+.yet-another-table-container .table-title {
+  background-color: var(--color-accent-warning);
+}
+*/
+
+
 .club-stats-grid {
-    display: flex; 
-    flex-direction: column; 
+    display: flex;
+    flex-direction: column;
     gap: 20px;
     margin-bottom: 20px;
 }
@@ -157,14 +201,15 @@
 
 .styled-table th,
 .styled-table td {
-  padding: 10px 12px; 
-  text-align: left; 
+  padding: 10px 12px;
+  text-align: left;
   border-bottom: 1px solid var(--color-border);
-  border-left: 1px solid var(--color-border); 
+  border-left: 1px solid var(--color-border);
+  color: var(--color-text-default); /* Светлый текст */
 }
 .styled-table th:first-child,
 .styled-table td:first-child {
-  border-left: none; 
+  border-left: none;
 }
 
 
@@ -174,54 +219,55 @@
 
 
 .styled-table th {
-  background-color: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
+  background-color: var(--color-bg-tertiary); /* Фон заголовков столбцов */
+  color: var(--color-text-muted); /* Приглушенный светлый текст */
   font-weight: 600;
   white-space: nowrap;
-  border-top: 1px solid var(--color-border); 
+  border-top: none; /* Убираем, т.к. есть граница у .table-title */
 }
 
 .styled-table tbody tr:nth-child(even) {
-  background-color: var(--color-bg-tertiary); 
+  background-color: var(--color-bg-tertiary);
 }
 .styled-table tbody tr:nth-child(odd) {
-  background-color: var(--color-bg-secondary); 
+  background-color: var(--color-bg-secondary);
 }
 
 .styled-table tbody tr:hover {
-  background-color: var(--color-border-hover); 
+  background-color: var(--color-border-hover); /* Затемнение при наведении */
 }
 
 .styled-table td a {
-  color: var(--color-text-link);
+  color: var(--color-text-link); /* Яркая ссылка */
   text-decoration: none;
 }
 .styled-table td a:hover {
   text-decoration: underline;
+  color: var(--color-text-link-hover);
 }
 
 .tournament-row.expandable {
   cursor: pointer;
 }
 .tournament-row.expanded {
-  background-color: var(--color-accent-info) !important; 
-  color: var(--color-text-on-accent);
+  background-color: var(--color-accent-info) !important; /* Ярко-голубой для выделенной строки */
+  color: var(--color-text-on-accent) !important; /* Белый текст */
   font-weight: bold;
 }
 .tournament-row.expanded td,
 .tournament-row.expanded td a {
-    color: var(--color-text-on-accent); 
+    color: var(--color-text-on-accent) !important; /* Белый текст для ячеек и ссылок в выделенной строке */
 }
 
 
 .tournament-players-details td {
-  padding: 0; 
-  border-bottom: 1px solid var(--color-border); 
+  padding: 0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .tournament-players-list {
   padding: 10px 15px;
-  background-color: var(--color-bg-primary); 
+  background-color: var(--color-bg-primary); /* Основной фон для списка игроков */
   border-top: 1px dashed var(--color-border-hover);
 }
 
@@ -233,13 +279,14 @@
 }
 
 .mini-player-table {
-  font-size: 0.95em; 
+  font-size: 0.95em;
 }
 
 .mini-player-table th,
 .mini-player-table td {
   padding: 6px 8px;
   border-left: 1px solid var(--color-border);
+  color: var(--color-text-default);
 }
 .mini-player-table th:first-child,
 .mini-player-table td:first-child {
@@ -248,6 +295,7 @@
 .mini-player-table th {
   background-color: var(--color-bg-secondary);
   border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
 }
 
 .mini-player-table tbody tr:nth-child(even) {
@@ -262,7 +310,7 @@
 
 
 .player-title {
-    color: var(--color-accent-warning);
+    color: var(--color-accent-warning); /* Ярко-оранжевый для титула игрока */
     font-weight: bold;
     margin-right: 0.25em;
 }
@@ -276,10 +324,10 @@
 
 @media (orientation: portrait) {
   .club-page-container {
-    width: 100%; 
-    padding: 10px; 
-    margin: 0; 
-    gap: 15px; 
+    width: 100%;
+    padding: 10px;
+    margin: 0;
+    gap: 15px;
   }
   .club-header {
     padding: 10px;
@@ -288,8 +336,11 @@
     font-size: 1.5em;
   }
   .table-title {
-    font-size: 1.2em; 
+    font-size: 1.2em;
     padding: 8px 12px;
+  }
+  .table-content-wrapper {
+    padding: 10px;
   }
   .styled-table {
     font-size: 0.85em;
@@ -299,6 +350,6 @@
     padding: 6px 8px;
   }
   .club-stats-grid {
-    gap: 15px; 
+    gap: 15px;
   }
 }

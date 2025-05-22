@@ -1,38 +1,60 @@
 /* src/assets/main.css */
 
+/* Новая яркая и веселая цветовая палитра для chessboard.fun (Темная тема) */
 :root {
+  /* === Основные параметры === */
   --header-height: 5.5vh;
-  --color-bg-primary: #161512;
-  --color-bg-secondary: #262421;
-  --color-bg-tertiary: #33312e;
-  --color-text-default: #eaeaea;
-  --color-text-muted: #a0a0a0;
-  --color-text-on-accent: #ffffff;
-  --color-text-error: #ffcdd2;
-  --color-text-link: var(--color-accent-info);
-  --color-border: #33312e;
-  --color-border-hover: #4d4a47;
-  --color-accent-primary: #BF811D;
-  --color-accent-secondary: #8572FF;
-  --color-accent-success: #3D9333;
-  --color-accent-warning: #d55e00;
-  --color-accent-error: #c93d3d;
-  --color-accent-info: #0072B2;
-  --color-accent-special: #b72fc6;
 
+  /* === Фоны (Темная тема) === */
+  --color-bg-primary: #161512;     /* Очень темный (почти черный) */
+  --color-bg-secondary: #262421;   /* Темно-серый */
+  --color-bg-tertiary: #33312E;    /* Темно-серый (чуть светлее) */
+
+  /* === Текст (Светлый для темного фона) === */
+  --color-text-default: #EAEAEA;  /* Очень светло-серый */
+  --color-text-muted: #A0A0A0;    /* Серый */
+  --color-text-on-accent: #FFFFFF;/* Белый (для текста на ярких акцентах) */
+  --color-text-error: #ffcdd2;    /* Светло-розовый (для текста ошибок на темном фоне) */
+
+  /* === Границы (Для темного фона) === */
+  --color-border: #33312E;       /* Темно-серый (как фон tertiary) */
+  --color-border-hover: #4D4A47;  /* Темно-серый (чуть светлее для ховера) */
+
+  /* === АКЦЕНТЫ (Яркие) === */
+  --color-accent-primary: #13ADF6;   /* Ярко-голубой */
+  --color-accent-secondary: #FF0496; /* Ярко-розовый */
+  --color-accent-success: #B8F304;   /* Ярко-салатовый/Лайм */
+  --color-accent-warning: #FC6209;   /* Ярко-оранжевый */
+  --color-accent-error: #E53935;     /* Насыщенный красный (для фонов ошибок) */
+  --color-accent-info: var(--color-accent-primary); /* Используем основной ярко-голубой */
+  --color-accent-special: #FF0496; /* Ярко-розовый */
+  /* Для тени в .promotion-square:hover, если используется --color-accent-primary-rgb */
+  --color-accent-primary-rgb: 19, 173, 246;
+
+
+  /* === Ссылки (Яркие) === */
+  --color-text-link: var(--color-accent-primary); /* Ярко-голубой для ссылок */
+  --color-text-link-hover: #0B8ACB; /* Чуть темнее голубой для ховера на ссылках */
+
+  /* === Остальные переменные === */
   --panel-width: 300px;
   --calculated-board-size-vh: 70vh;
-
   --page-vertical-padding: 10px;
   --panel-gap: 10px;
   --panel-border-radius: 8px;
 }
 
+/* В main.css */
+button, input, select, textarea {
+  font-family: "Comic Sans MS", cursive;
+}
+
 html, body {
   margin: 0;
   padding: 0;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  font-size: 15px;
+  /* Изменяем шрифт на "Comic Sans MS" с подходящими запасными вариантами */
+  font-family: "Comic Sans MS";
+  font-size: 15px; /* Базовый размер шрифта, можно немного увеличить для "комиксного" стиля, например, 16px */
   line-height: 1.6;
   background-color: var(--color-bg-primary);
   color: var(--color-text-default);
@@ -70,26 +92,14 @@ html, body {
   width: 100%;
 }
 
-/* Удаляем стили для .app-title */
-/*
-.app-title {
-  font-size: 1.2em;
-  font-weight: 600;
-  white-space: nowrap;
-  margin-right: 20px;
-}
-*/
-
-/* Добавляем стили для .app-logo */
 .app-logo {
-  height: calc(var(--header-height) * 0.6); /* Например, 70% высоты хедера */
-  width: auto; /* Сохраняем пропорции */
-  max-width: 200px; /* Ограничиваем максимальную ширину, если нужно */
-  margin-right: 20px; /* Отступ справа, как у app-title */
-  cursor: pointer; /* Указываем, что логотип кликабельный */
-  object-fit: contain; /* Чтобы изображение полностью помещалось без обрезки */
+  height: calc(var(--header-height) * 0.6);
+  width: auto;
+  max-width: 200px;
+  margin-right: 20px;
+  cursor: pointer;
+  object-fit: contain;
 }
-
 
 .nav-toggle-button {
   background: none;
@@ -127,30 +137,32 @@ html, body {
   text-decoration: none;
   white-space: nowrap;
   border-radius: 5px;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .nav-links li a:hover:not(.logout-link) {
-  background-color: #0072B2;
+  background-color: var(--color-accent-primary);
   color: var(--color-text-on-accent);
+  border-color: var(--color-accent-primary);
 }
 
 .nav-links li a.active:not(.logout-link) {
-  background-color: #262421;
-  border-style: solid;
-  border-width: 1px;
-  border-color: #a0a0a0;
-  color: #a0a0a0;
+  background-color: var(--color-accent-primary);
+  color: var(--color-text-on-accent);
+  border: 1px solid var(--color-accent-primary);
 }
 
 .nav-links li a.logout-link {
-  background-color: #262421;
-  color: #a0a0a0;;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-hover);
 }
 
 .nav-links li a.logout-link:hover {
-  background-color: #a52a27;
+  background-color: var(--color-accent-error);
   color: var(--color-text-on-accent);
+  border-color: var(--color-accent-error);
 }
 
 .nav-dropdown-list {
@@ -201,6 +213,7 @@ html, body {
   overflow-y: auto;
   padding-top: var(--page-vertical-padding);
   padding-bottom: var(--page-vertical-padding);
+  background-color: var(--color-bg-primary);
 }
 
 .three-column-layout {
@@ -224,8 +237,9 @@ html, body {
   padding: 15px;
   overflow-y: auto;
   flex-shrink: 0;
-  box-shadow: 0 0 10px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
   border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border-hover);
   display: flex;
   flex-direction: column;
   width: var(--panel-width);
@@ -290,6 +304,10 @@ body.board-resizing * {
 }
 
 @media (orientation: portrait) {
+  #page-content-wrapper {
+    background-color: var(--color-bg-primary);
+  }
+
   .three-column-layout {
     flex-direction: column;
     align-items: center;
@@ -298,6 +316,7 @@ body.board-resizing * {
     max-width: 100%;
     padding-left: 0;
     padding-right: 0;
+    gap: 0;
   }
 
   .three-column-layout #center-panel-resizable-wrapper {
@@ -306,8 +325,7 @@ body.board-resizing * {
     height: 100vw !important;
     flex-shrink: 0;
     border-radius: 0;
-    margin-left: calc(-1 * var(--panel-gap));
-    margin-right: calc(-1 * var(--panel-gap));
+    border-bottom: 1px solid var(--color-border-hover);
   }
 
   .three-column-layout #right-panel,
@@ -319,13 +337,16 @@ body.board-resizing * {
     box-shadow: none;
     border-radius: 0;
     flex-shrink: 0;
-    margin-left: calc(-1 * var(--panel-gap));
-    margin-right: calc(-1 * var(--panel-gap));
     background-color: var(--color-bg-secondary);
     display: flex;
     flex-direction: column;
     overflow-y: visible;
+    border-bottom: 1px solid var(--color-border-hover);
   }
+   .three-column-layout #left-panel {
+    border-bottom: none;
+   }
+
    .three-column-layout #right-panel { order: 2; min-height: 200px;}
    .three-column-layout #left-panel { order: 3; }
 
@@ -336,8 +357,9 @@ body.board-resizing * {
 
   .nav-toggle-button {
     display: block;
+    color: var(--color-text-muted);
   }
-  .nav-links {
+  .nav-links { 
     display: none;
     position: absolute;
     top: var(--header-height);
@@ -347,6 +369,7 @@ body.board-resizing * {
     flex-direction: column;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     padding: 5px 0;
+    border-top: 1px solid var(--color-border-hover);
   }
   #app-header.menu-open .nav-links {
     display: flex;
@@ -359,12 +382,22 @@ body.board-resizing * {
       padding: 12px 15px;
       text-align: left;
       border-bottom: 1px solid var(--color-border);
+      border-left: none;
+      border-right: none;
+      border-top: none;
+      border-radius: 0;
+      color: var(--color-text-default);
   }
    .nav-links li:last-child a {
        border-bottom: none;
    }
+   .nav-links li a:hover { 
+      background-color: var(--color-accent-primary);
+      color: var(--color-text-on-accent);
+   }
 
-  .nav-dropdown-list {
+
+  .nav-dropdown-list { 
     position: static;
     box-shadow: none;
     border-radius: 0;
@@ -376,14 +409,18 @@ body.board-resizing * {
   .nav-dropdown-list li a {
       padding: 10px 25px;
       background-color: var(--color-bg-tertiary);
+      border-bottom: 1px solid var(--color-border);
+      color: var(--color-text-muted);
   }
    .nav-dropdown-list li a:hover {
       background-color: var(--color-accent-info);
+      color: var(--color-text-on-accent);
+   }
+   .nav-dropdown-list li:last-child a {
+       border-bottom: none;
    }
 
-  /* Стили для логотипа в портретном режиме, если нужно */
   .app-logo {
-    height: calc(var(--header-height) * 0.65); /* Можно немного уменьшить для портретного режима */
-    /* max-width: 150px; */ /* Если нужно ограничить ширину в портретном режиме */
+    height: calc(var(--header-height) * 0.65);
   }
 }

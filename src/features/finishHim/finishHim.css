@@ -7,9 +7,10 @@
   line-height: 1.6;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100%; /* Предполагается, что родитель имеет высоту, например, из main.css #left-panel */
   box-sizing: border-box;
   gap: 15px;
+  /* Фон панели будет унаследован от #left-panel (var(--color-bg-secondary)) */
 }
 
 /* Блок для фидбека пользователю */
@@ -17,11 +18,15 @@
   text-align: center;
   font-size: 1.2em;
   flex-shrink: 0;
-  min-height: 2.5em;
-  background-color: var(--color-bg-tertiary);
+  min-height: 2.5em; /* Минимальная высота для предотвращения "прыжков" */
+  background-color: var(--color-bg-tertiary); /* Темный фон для блока фидбека */
+  color: var(--color-text-default); /* Светлый текст */
   border-radius: var(--panel-border-radius);
   padding: 10px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-hover); /* Граница чуть светлее фона */
+  display: flex; /* Для вертикального центрирования текста, если нужно */
+  align-items: center;
+  justify-content: center;
 }
 
 #finish-him-feedback p {
@@ -32,9 +37,9 @@
 
 /* ---- Стили для выпадающего меню категорий ---- */
 .finish-him-categories-dropdown-container {
-  position: relative; /* Для позиционирования выпадающего списка */
+  position: relative;
   flex-shrink: 0;
-  z-index: 100; /* Убедимся, что контейнер (и его выпадающий список) выше других элементов */
+  z-index: 100;
 }
 
 .category-toggle-button {
@@ -43,9 +48,9 @@
   font-size: 1em;
   font-weight: 600;
   text-align: left;
-  background-color: #262421;
-  color: var(--color-text-on-accent);
-  border: 1px solid var(--color-border);
+  background-color: var(--color-accent-secondary); /* Ярко-розовый для кнопки категорий */
+  color: var(--color-text-on-accent); /* Белый текст */
+  border: 1px solid var(--color-accent-secondary);
   border-radius: var(--panel-border-radius);
   cursor: pointer;
   display: flex;
@@ -55,8 +60,8 @@
 }
 
 .category-toggle-button:hover:not(:disabled) {
-  background-color: #E46A09; /* Darker accent-secondary */
-  border-color: #E46A09;
+  background-color: #D6037E; /* Затемненный розовый */
+  border-color: #D6037E;
 }
 .category-toggle-button:disabled {
   opacity: 0.6;
@@ -69,22 +74,28 @@
 .dropdown-arrow {
   margin-left: 8px;
   font-size: 0.8em;
+  transition: transform 0.2s ease;
 }
+.category-toggle-button.open .dropdown-arrow { /* Если добавляется класс 'open' при открытии */
+    transform: rotate(180deg);
+}
+
 
 .categories-dropdown-list {
   position: absolute;
-  top: calc(100% + 5px); /* Появляется под кнопкой с небольшим отступом */
+  top: calc(100% + 5px);
   left: 0;
   right: 0;
-  background-color: var(--color-bg-tertiary);
+  background-color: var(--color-bg-tertiary); /* Фон выпадающего списка */
   border: 1px solid var(--color-border-hover);
   border-radius: var(--panel-border-radius);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-  z-index: 101; /* Выше чем .finish-him-categories-dropdown-container, если нужно, но обычно z-index родителя достаточен*/
-  /* Удалены max-height и overflow-y: auto */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35); /* Тень для темной темы */
+  z-index: 101;
   display: flex;
   flex-direction: column;
-  gap: 1px; /* Небольшой разделитель между элементами */
+  gap: 1px;
+  max-height: 200px; /* Ограничение высоты, если категорий много */
+  overflow-y: auto; /* Прокрутка, если категорий много */
 }
 
 .category-dropdown-item {
@@ -93,7 +104,7 @@
   font-size: 0.95em;
   text-align: left;
   background-color: var(--color-bg-tertiary);
-  color: var(--color-text-default);
+  color: var(--color-text-default); /* Светлый текст для элементов списка */
   border: none;
   border-bottom: 1px solid var(--color-border); /* Разделитель */
   cursor: pointer;
@@ -104,17 +115,17 @@
 }
 
 .category-dropdown-item:hover:not(:disabled) {
-  background-color: var(--color-border-hover);
+  background-color: var(--color-border-hover); /* Затемнение при наведении */
   color: var(--color-text-default);
 }
 
 .category-dropdown-item.active {
-  background-color: var(--color-accent-primary);
-  color: var(--color-text-on-accent);
+  background-color: var(--color-accent-primary); /* Ярко-голубой для активной категории */
+  color: var(--color-text-on-accent); /* Белый текст */
   font-weight: bold;
 }
 .category-dropdown-item.active:hover:not(:disabled) {
-  background-color: #a56e17; /* Darker accent-primary */
+  background-color: var(--color-text-link-hover); /* Затемненный голубой */
 }
 
 .category-dropdown-item:disabled {
@@ -127,20 +138,19 @@
 /* ---- Стили для обновленного блока статистики пользователя ---- */
 .user-stats-container {
   padding: 12px;
-  background-color: var(--color-bg-secondary); /* Чуть темнее основного фона панели */
+  background-color: var(--color-bg-secondary); /* Фон блока статистики */
   border-radius: var(--panel-border-radius);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-hover);
   flex-shrink: 0;
-  /* z-index: 1; Убедимся, что статистика ниже выпадающего списка */
 }
 
 .user-stats-main-title {
   margin: 0 0 12px 0;
   padding-bottom: 8px;
-  color: var(--color-text-muted);
+  color: var(--color-text-muted); /* Приглушенный светлый текст */
   font-size: 1.1em;
   font-weight: 600;
-  border-bottom: 1px solid var(--color-border-hover);
+  border-bottom: 1px solid var(--color-border);
   text-align: center;
 }
 
@@ -154,22 +164,23 @@
 .games-played-info {
   font-size: 1.3em;
   font-weight: bold;
-  color: #629924;
+  color: var(--color-accent-success); /* Ярко-салатовый для количества игр */
   text-align: center;
   margin-bottom: 12px;
   padding: 6px;
   background-color: var(--color-bg-tertiary);
   border-radius: 4px;
+  border: 1px solid var(--color-accent-success); /* Рамка в цвет текста */
 }
 
 .stats-overview-grid {
   display: grid;
-  grid-template-columns: 1fr; /* Каждый блок статистики занимает всю ширину */
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
 .stat-block {
-  background-color: var(--color-bg-tertiary);
+  background-color: var(--color-bg-tertiary); /* Фон для блока статы */
   padding: 10px;
   border-radius: 6px;
   border: 1px solid var(--color-border);
@@ -178,7 +189,7 @@
 .stat-block-title {
   font-size: 1.2em;
   font-weight: bold;
-  color: var(--color-accent-secondary);
+  color: var(--color-accent-warning); /* Ярко-оранжевый для заголовков статы */
   margin: 0 0 8px 0;
   text-align: center;
   border-bottom: 1px dashed var(--color-border-hover);
@@ -187,61 +198,51 @@
 
 .stat-block-values {
   display: flex;
-  justify-content: space-around; /* Распределяет значение и дельту по краям */
+  justify-content: space-around;
   align-items: center;
-  font-size: 1.2em; /* Увеличим основной шрифт для значений */
+  font-size: 1.2em;
 }
 
 .current-value {
   font-weight: bold;
-  color: var(--color-text-default);
+  color: var(--color-text-default); /* Светлый текст для текущего значения */
 }
 
 .value-delta {
   font-weight: bold;
-  font-size: 1.5em; /* Дельта чуть меньше основного значения */
-  margin-left: 8px; /* Отступ от основного значения */
+  font-size: 1.5em; /* Размер шрифта для дельты можно оставить или сделать 1em, чтобы не был слишком большим */
+  margin-left: 8px;
 }
 
 .positive-delta {
-  color: var(--color-accent-success);
-  /* background-color: rgba(98, 153, 36, 0.15); */
+  color: var(--color-accent-success); /* Ярко-салатовый */
 }
 
 .negative-delta {
-  color: var(--color-accent-error);
-  /* background-color: rgba(204, 52, 50, 0.15); */
+  color: var(--color-accent-error); /* Насыщенный красный */
 }
 
-
-/* ---- Старые стили категорий, если они еще где-то используются или для справки ---- */
-/* .finish-him-categories h3 { ... } */
-/* .finish-him-categories .button-group.vertical { ... } */
-/* .finish-him-categories .button.category-button { ... } */
-/* Убедитесь, что старые стили для .finish-him-categories и его дочерних .button.category-button удалены или закомментированы, если они больше не нужны. */
-
-
-/* ---- Стили для правой панели и оверлея таймера (без изменений) ---- */
+/* ---- Стили для правой панели и оверлея таймера ---- */
 .finish-him-right-panel {
-  position: relative;
+  position: relative; /* Фон будет от #right-panel */
 }
 
 .timer-value-overlay {
   position: absolute;
-  top: 0px;
-  left: 0;
-  width: 100%;
+  top: 0px; /* Или небольшой отступ, например 5px, если нужно */
+  left: 0px;  /* Или небольшой отступ, например 5px */
+  right: 0px; /* Добавлено для растягивания по ширине с учетом отступов */
+  /* width: 100%; -- Убрано, т.к. left/right = 0 растянут его */
   box-sizing: border-box;
-  background-color: var(--color-bg-primary); /* Изменено для соответствия общему фону */
-  color: var(--color-accent-warning);
+  background-color: var(--color-bg-primary); /* Основной темный фон для оверлея */
+  color: var(--color-accent-warning); /* Ярко-оранжевый для текста таймера */
   border-radius: var(--panel-border-radius);
-  font-family: monospace, "Courier New", Courier;
   font-size: 2em;
   font-weight: bold;
   text-align: center;
-  border: 1px solid var(--color-accent-warning);
+  border: 1px solid var(--color-accent-warning); /* Рамка в цвет текста */
   box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-  z-index: 10; /* Ниже чем дропдаун категорий */
+  z-index: 10;
   pointer-events: none;
-  padding: 4px 0; /* Небольшой вертикальный паддинг */
+  padding: 4px 0;
 }
