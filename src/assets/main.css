@@ -194,9 +194,12 @@ html, body {
   justify-content: center;
   align-items: center;
   position: relative; 
-  border-radius: var(--panel-border-radius);
   overflow: hidden; 
 }
+
+
+
+
 
 #center-panel { 
   width: 100%;

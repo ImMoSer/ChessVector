@@ -5,9 +5,10 @@
  */
 
 cg-board {
-  background-image: url('/boards/lichess_org.jpg'); /* !!! ЗАМЕНИТЕ НА ПУТЬ К ВАШЕМУ ИЗОБРАЖЕНИЮ !!! */
+  background-image: url('/board/brown.svg'); /* !!! ЗАМЕНИТЕ НА ПУТЬ К ВАШЕМУ ИЗОБРАЖЕНИЮ !!! public\board\brown.svg */
   background-size: 100% 100%; 
   background-repeat: no-repeat;
+  border-radius: 10px; /* Rounded corners */
 }
 
 cg-board square.dark {

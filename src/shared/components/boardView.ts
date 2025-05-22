@@ -95,7 +95,7 @@ export class BoardView {
                 showDests: true,
             },
             premovable: {
-                enabled: false, 
+                enabled: true, 
             },
             highlight: {
                 lastMove: true,
