@@ -12,12 +12,12 @@
   --color-text-link: var(--color-accent-info);
   --color-border: #33312e;
   --color-border-hover: #4d4a47;
-  --color-accent-primary: #bf811d;
-  --color-accent-secondary: #907bff;
-  --color-accent-success: #629924;
-  --color-accent-warning: #e46a09;
-  --color-accent-error: #cc3432;
-  --color-accent-info: #0072b1;
+  --color-accent-primary: #BF811D;
+  --color-accent-secondary: #8572FF;
+  --color-accent-success: #3D9333;
+  --color-accent-warning: #d55e00;
+  --color-accent-error: #c93d3d;
+  --color-accent-info: #0072B2;
   --color-accent-special: #b72fc6;
 
   /* Размеры для альбомного режима */
@@ -117,15 +117,22 @@ html, body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.nav-links li a:hover:not(.logout-link),
-.nav-links li a.active:not(.logout-link) {
-  background-color: var(--color-accent-warning);
+.nav-links li a:hover:not(.logout-link) {
+  background-color: #0072B2;
   color: var(--color-text-on-accent);
 }
 
+.nav-links li a.active:not(.logout-link) {
+  background-color: #262421;
+  border-style: solid; /* Добавь это */
+  border-width: 1px;   /* Добавь это (можешь выбрать другую толщину) */
+  border-color: #a0a0a0;
+  color: #a0a0a0;
+}
+
 .nav-links li a.logout-link {
-  background-color: var(--color-accent-error);
-  color: var(--color-text-on-accent);
+  background-color: #262421;
+  color: #a0a0a0;;
 }
 
 .nav-links li a.logout-link:hover {

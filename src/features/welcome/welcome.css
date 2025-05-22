@@ -14,32 +14,28 @@
 }
 
 .welcome-content {
-  max-width: 600px;
-  padding: 30px;
+  max-width: 600px; /* Можно настроить */
+  width: 100%;
+  padding: 10px;
   background-color: var(--color-bg-secondary);
-  border-radius: var(--panel-border-radius);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  border-radius: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 25px; /* Отступ между изображением и кнопкой */
 }
 
-.welcome-title {
-  font-size: 2.5em;
-  font-weight: 600;
-  color: var(--color-accent-primary);
-  margin-top: 0;
-  margin-bottom: 15px;
-}
-
-.welcome-subtitle {
-  font-size: 1.2em;
-  color: var(--color-text-muted);
-  margin-bottom: 30px;
+.welcome-image {
+  max-width: 100%; /* Максимальная ширина изображения относительно .welcome-content */
+  height: auto;   /* Сохраняем пропорции */
+  border-radius: 8px; /* Небольшое скругление углов для изображения */
 }
 
 .login-button.button-primary {
-  background-color: var(--color-accent-success);
-  color: var(--color-text-on-accent);
-  border: 1px solid var(--color-accent-success);
-  padding: 12px 25px;
+  background-color: #262421;
+  color: #a0a0a0;
+  border: 1px solid #a0a0a0;
+  padding: 12px 10px;
   font-size: 1.1em;
   font-weight: 500;
   border-radius: 6px;
@@ -49,8 +45,9 @@
 }
 
 .login-button.button-primary:hover:not(:disabled) {
-  background-color: #528a1e; /* Darker success */
-  border-color: #528a1e;
+  background-color: #FF0496; /* Darker success */
+  border-color: #FF0496;
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
@@ -72,23 +69,23 @@
   border: 1px solid var(--color-accent-error);
   padding: 10px;
   border-radius: 4px;
-  margin-bottom: 20px;
+  /* margin-bottom: 20px; Убрано, так как отступы теперь через gap */
   font-size: 0.9em;
+  width: 100%; /* Чтобы сообщение об ошибке занимало доступную ширину */
+  box-sizing: border-box;
 }
 
 /* Адаптация для мобильных устройств */
 @media (max-width: 768px) {
-  .welcome-title {
-    font-size: 2em;
+  .welcome-content {
+    padding: 20px;
+    gap: 20px;
   }
-  .welcome-subtitle {
-    font-size: 1em;
+  .welcome-image {
+    max-width: 90%;
   }
   .login-button.button-primary {
     padding: 10px 20px;
     font-size: 1em;
-  }
-  .welcome-content {
-    padding: 20px;
   }
 }

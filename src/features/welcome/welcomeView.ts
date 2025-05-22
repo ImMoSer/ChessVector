@@ -6,15 +6,21 @@ import logger from '../../utils/logger'; // Для отладки, если по
 
 export function renderWelcomePage(controller: WelcomeController): VNode {
   // Обновляем локализованные тексты перед рендерингом, если язык мог измениться
-  controller.updateLocalizedTexts();
-  const { isAuthProcessing, authError, welcomeMessage, loginButtonText } = controller.state;
+  controller.updateLocalizedTexts(); // Это вызовет t() для loginButtonText
+  const { isAuthProcessing, authError, loginButtonText } = controller.state;
 
   logger.debug('[WelcomeView] Rendering Welcome Page. isAuthProcessing:', isAuthProcessing, 'Error:', authError);
 
   return h('div.welcome-page-container', [
     h('div.welcome-content', [
-      h('h1.welcome-title', welcomeMessage),
-      h('p.welcome-subtitle', 'chessboard.fun'), // Можно также локализовать, если нужно
+      // Добавляем изображение
+      h('img.welcome-image', {
+        props: {
+          src: '/ChessBoard.png', // Путь к изображению в папке public
+          alt: 'Chessboard Image' // Альтернативный текст для изображения
+        }
+      }),
+      // Оставляем только кнопку входа и сообщение об ошибке, если оно есть
       authError ? h('p.error-message', `Error: ${authError}`) : null,
       h('button.login-button.button-primary',
         {
@@ -27,7 +33,6 @@ export function renderWelcomePage(controller: WelcomeController): VNode {
         },
         isAuthProcessing ? 'Processing...' : loginButtonText // Можно локализовать 'Processing...'
       ),
-      // Можно добавить дополнительную информацию или ссылки здесь
     ]),
   ]);
 }
