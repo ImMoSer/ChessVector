@@ -70,12 +70,26 @@ html, body {
   width: 100%;
 }
 
+/* Удаляем стили для .app-title */
+/*
 .app-title {
   font-size: 1.2em;
   font-weight: 600;
   white-space: nowrap;
   margin-right: 20px;
 }
+*/
+
+/* Добавляем стили для .app-logo */
+.app-logo {
+  height: calc(var(--header-height) * 0.6); /* Например, 70% высоты хедера */
+  width: auto; /* Сохраняем пропорции */
+  max-width: 200px; /* Ограничиваем максимальную ширину, если нужно */
+  margin-right: 20px; /* Отступ справа, как у app-title */
+  cursor: pointer; /* Указываем, что логотип кликабельный */
+  object-fit: contain; /* Чтобы изображение полностью помещалось без обрезки */
+}
+
 
 .nav-toggle-button {
   background: none;
@@ -123,8 +137,8 @@ html, body {
 
 .nav-links li a.active:not(.logout-link) {
   background-color: #262421;
-  border-style: solid; 
-  border-width: 1px;   
+  border-style: solid;
+  border-width: 1px;
   border-color: #a0a0a0;
   color: #a0a0a0;
 }
@@ -180,8 +194,8 @@ html, body {
 }
 
 #page-content-wrapper {
-  flex-grow: 1; 
-  display: flex; 
+  flex-grow: 1;
+  display: flex;
   flex-direction: column;
   align-items: center;
   overflow-y: auto;
@@ -191,13 +205,13 @@ html, body {
 
 .three-column-layout {
   display: flex;
-  flex-direction: row; 
+  flex-direction: row;
   width: 100%;
   max-width: calc( (2 * var(--panel-width)) + var(--calculated-board-size-vh) + (2 * var(--panel-gap)) );
   margin: 0 auto;
-  height: 100%; 
-  align-items: flex-start; 
-  justify-content: center; 
+  height: 100%;
+  align-items: flex-start;
+  justify-content: center;
   gap: var(--panel-gap);
   padding-left: var(--panel-gap);
   padding-right: var(--panel-gap);
@@ -208,29 +222,29 @@ html, body {
 #right-panel {
   background-color: var(--color-bg-secondary);
   padding: 15px;
-  overflow-y: auto; 
+  overflow-y: auto;
   flex-shrink: 0;
   box-shadow: 0 0 10px rgba(0,0,0,0.2);
   border-radius: var(--panel-border-radius);
   display: flex;
   flex-direction: column;
-  width: var(--panel-width); 
-  height: var(--calculated-board-size-vh); 
+  width: var(--panel-width);
+  height: var(--calculated-board-size-vh);
 }
 
-#center-panel-resizable-wrapper { 
-  width: var(--calculated-board-size-vh); 
-  height: var(--calculated-board-size-vh); 
-  min-width: 0; 
-  flex-shrink: 0; 
+#center-panel-resizable-wrapper {
+  width: var(--calculated-board-size-vh);
+  height: var(--calculated-board-size-vh);
+  min-width: 0;
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  position: relative; 
-  overflow: hidden; 
+  position: relative;
+  overflow: hidden;
 }
 
-#center-panel { 
+#center-panel {
   width: 100%;
   height: 100%;
   display: flex;
@@ -262,7 +276,7 @@ body.board-resizing * {
   -ms-user-select: none;
 }
 
-#board-wrapper { 
+#board-wrapper {
     width: 100%;
     height: 100%;
     display: flex;
@@ -270,36 +284,36 @@ body.board-resizing * {
     align-items: center;
 }
 
-#board-container { 
+#board-container {
     width: 100%;
     height: 100%;
 }
 
 @media (orientation: portrait) {
-  .three-column-layout { 
-    flex-direction: column; 
-    align-items: center;    
-    height: auto;           
+  .three-column-layout {
+    flex-direction: column;
+    align-items: center;
+    height: auto;
     width: 100%;
     max-width: 100%;
     padding-left: 0;
     padding-right: 0;
   }
 
-  .three-column-layout #center-panel-resizable-wrapper { 
-    order: 1; 
-    width: 100vw !important;  
-    height: 100vw !important; 
-    flex-shrink: 0; 
-    border-radius: 0; 
+  .three-column-layout #center-panel-resizable-wrapper {
+    order: 1;
+    width: 100vw !important;
+    height: 100vw !important;
+    flex-shrink: 0;
+    border-radius: 0;
     margin-left: calc(-1 * var(--panel-gap));
     margin-right: calc(-1 * var(--panel-gap));
   }
 
   .three-column-layout #right-panel,
-  .three-column-layout #left-panel { 
-    width: 100vw; 
-    height: auto; 
+  .three-column-layout #left-panel {
+    width: 100vw;
+    height: auto;
     min-height: 150px;
     padding: 15px;
     box-shadow: none;
@@ -307,35 +321,35 @@ body.board-resizing * {
     flex-shrink: 0;
     margin-left: calc(-1 * var(--panel-gap));
     margin-right: calc(-1 * var(--panel-gap));
-    background-color: var(--color-bg-secondary); 
-    display: flex; 
-    flex-direction: column; 
-    overflow-y: visible; 
+    background-color: var(--color-bg-secondary);
+    display: flex;
+    flex-direction: column;
+    overflow-y: visible;
   }
    .three-column-layout #right-panel { order: 2; min-height: 200px;}
    .three-column-layout #left-panel { order: 3; }
 
 
   .three-column-layout .resize-handle-center {
-    display: none; 
+    display: none;
   }
 
   .nav-toggle-button {
-    display: block; 
+    display: block;
   }
   .nav-links {
-    display: none; 
+    display: none;
     position: absolute;
-    top: var(--header-height); 
+    top: var(--header-height);
     left: 0;
     width: 100%;
     background-color: var(--color-bg-secondary);
-    flex-direction: column; 
+    flex-direction: column;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     padding: 5px 0;
   }
   #app-header.menu-open .nav-links {
-    display: flex; 
+    display: flex;
   }
   .nav-links li {
       margin-left: 0;
@@ -347,7 +361,7 @@ body.board-resizing * {
       border-bottom: 1px solid var(--color-border);
   }
    .nav-links li:last-child a {
-       border-bottom: none; 
+       border-bottom: none;
    }
 
   .nav-dropdown-list {
@@ -366,4 +380,10 @@ body.board-resizing * {
    .nav-dropdown-list li a:hover {
       background-color: var(--color-accent-info);
    }
+
+  /* Стили для логотипа в портретном режиме, если нужно */
+  .app-logo {
+    height: calc(var(--header-height) * 0.65); /* Можно немного уменьшить для портретного режима */
+    /* max-width: 150px; */ /* Если нужно ограничить ширину в портретном режиме */
+  }
 }

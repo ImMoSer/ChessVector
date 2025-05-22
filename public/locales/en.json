@@ -212,6 +212,7 @@
       "loaded": "Leaderboards",
       "error": "Error Loading Leaderboards"
     },
+    "bannerAlt": "Leaderboards Banner",
     "errors": {
       "dataLoadFailed": "Failed to load leaderboard data. Please check your connection or try again later.",
       "unknown": "An unknown error occurred while fetching leaderboard data.",
@@ -220,7 +221,8 @@
     "titles": {
       "tacticalRating": "Top Tactical Rating",
       "finishHimRating": "Top Playout Rating",
-      "mostGamesPlayed": "Most Games Played"
+      "mostGamesPlayed": "Most Games Played",
+      "highestLevel": "Highest Level Achieved"
     },
     "table": {
       "rank": "#",
@@ -230,7 +232,9 @@
       "finishHimRatingValue": "Playout Rating",
       "playoutWins": "Playout Wins",
       "tier": "Tier",
-      "noEntries": "No entries for this leaderboard yet."
+      "noEntries": "No entries for this leaderboard yet.",
+      "tacticalWins": "Tactical Wins",
+      "level": "Level (Pieces)"
     }
   }
 }

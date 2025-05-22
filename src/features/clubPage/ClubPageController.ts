@@ -1,7 +1,8 @@
 // src/features/clubPage/ClubPageController.ts
 import logger from '../../utils/logger';
 import type { AppServices } from '../../AppController';
-import type { ClubData, ClubStatsRequestPayload } from '../../core/webhook.service';
+// Изменено: ClubStatsRequestPayload больше не импортируется, т.к. метод fetchClubStats принимает club_id
+import type { ClubData } from '../../core/webhook.service';
 import { subscribeToLangChange, t } from '../../core/i18n.service';
 
 export interface ClubPageControllerState {
@@ -13,7 +14,7 @@ export interface ClubPageControllerState {
   expandedBattleId: string | null;
 }
 
-export class ClubPageController { // <<<< ДОБАВЛЕНО export
+export class ClubPageController {
   public state: ClubPageControllerState;
   private services: AppServices;
   private requestGlobalRedraw: () => void;
@@ -48,8 +49,8 @@ export class ClubPageController { // <<<< ДОБАВЛЕНО export
     this.updateLocalizedTexts();
 
     try {
-      const payload: ClubStatsRequestPayload = { club_id: this.clubId };
-      const data = await this.services.webhookService.fetchClubStats(payload);
+      // Изменено: передаем только clubId, а не объект payload
+      const data = await this.services.webhookService.fetchClubStats(this.clubId);
 
       if (data) {
         this.setState({

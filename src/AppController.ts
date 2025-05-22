@@ -2,7 +2,8 @@
 import logger from './utils/logger';
 import type { ChessboardService } from './core/chessboard.service';
 import type { StockfishService } from './core/stockfish.service';
-import { WebhookService } from './core/webhook.service';
+// Изменено: импортируем ТОЛЬКО класс WebhookServiceController для использования как тип
+import { type WebhookServiceController } from './core/webhook.service';
 import { BoardHandler } from './core/boardHandler';
 import { PgnService } from './core/pgn.service';
 import { AnalysisService } from './core/analysis.service';
@@ -12,15 +13,15 @@ import { FinishHimController } from './features/finishHim/finishHimController';
 import { WelcomeController } from './features/welcome/welcomeController';
 import { AuthService, type UserSessionProfile, type SubscriptionTier } from './core/auth.service';
 import { ClubPageController } from './features/clubPage/ClubPageController';
-import { RecordsPageController } from './features/recordsPage/RecordsPageController'; // Новый импорт
+import { RecordsPageController } from './features/recordsPage/RecordsPageController';
 
-export type AppPage = 'welcome' | 'finishHim' | 'clubPage' | 'recordsPage'; // Добавлена 'recordsPage'
+export type AppPage = 'welcome' | 'finishHim' | 'clubPage' | 'recordsPage';
 
 export interface AppServices {
   authService: typeof AuthService;
   chessboardService: ChessboardService;
   stockfishService: StockfishService;
-  webhookService: WebhookService;
+  webhookService: WebhookServiceController; // Тип для инстанса
   analysisService: AnalysisService;
   logger: typeof logger;
 }
@@ -35,7 +36,7 @@ interface AppControllerState {
   isMyClubsDropdownOpen: boolean;
 }
 
-type ActivePageController = WelcomeController | FinishHimController | ClubPageController | RecordsPageController | null; // Добавлен RecordsPageController
+type ActivePageController = WelcomeController | FinishHimController | ClubPageController | RecordsPageController | null;
 
 const BOARD_MAX_VH = 94;
 const BOARD_MIN_VH = 10;
@@ -51,7 +52,7 @@ export class AppController {
   private analysisControllerInstance: AnalysisController | null = null;
   private analysisServiceInstance: AnalysisService;
   private authServiceInstance: typeof AuthService;
-  private webhookServiceInstance: WebhookService;
+  private webhookServiceInstance: WebhookServiceController; // Тип для инстанса
 
   private unsubscribeFromLangChange: (() => void) | null = null;
   private unsubscribeFromAuthChange: (() => void) | null = null;
@@ -60,7 +61,7 @@ export class AppController {
     globalServices: {
       chessboardService: ChessboardService;
       stockfishService: StockfishService;
-      webhookService: WebhookService;
+      webhookService: WebhookServiceController; // Тип для инстанса
       logger: typeof logger;
     },
     requestGlobalRedraw: () => void
@@ -180,7 +181,7 @@ export class AppController {
             logger.warn(`[AppController] Invalid club page hash format: "${cleanHash}". Defaulting.`);
             newPageFromHash = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
         }
-    } else if (cleanHash === 'records') { // Обработка нового хеша для страницы рекордов
+    } else if (cleanHash === 'records') {
         newPageFromHash = 'recordsPage';
         logger.info(`[AppController] Parsed records page from hash: ${newPageFromHash}`);
     } else if (validAppPages.includes(cleanHash as AppPage)) {
@@ -239,9 +240,8 @@ export class AppController {
     let availableWidthForCenterPx: number;
 
     if (this.state.isPortraitMode || this.state.currentPage === 'recordsPage' || this.state.currentPage === 'clubPage' || this.state.currentPage === 'welcome') {
-      // Для recordsPage, clubPage, welcome и в портретном режиме, центральный контент может занимать больше места
       availableWidthForCenterPx = viewportWidthPx - (2 * panelGapPx);
-    } else { // Для finishHim в альбомном режиме
+    } else { 
       const actualLeftPanelWidth = document.getElementById('left-panel')?.offsetParent !== null ? leftPanelWidthPx : 0;
       const actualRightPanelWidth = document.getElementById('right-panel')?.offsetParent !== null ? rightPanelWidthPx : 0;
       
@@ -316,7 +316,6 @@ export class AppController {
         targetPage = 'finishHim';
         targetClubId = null;
     }
-    // Для 'recordsPage' специальных проверок доступа пока нет
 
     if (this.state.isMyClubsDropdownOpen && (targetPage !== 'clubPage' || targetClubId === this.state.currentClubId)) {
         this.state.isMyClubsDropdownOpen = false;
@@ -425,7 +424,7 @@ export class AppController {
             if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
         }
         break;
-      case 'recordsPage': // Новый case для страницы рекордов
+      case 'recordsPage':
         this.activePageController = new RecordsPageController(this.services, this.requestGlobalRedraw);
         (this.activePageController as RecordsPageController).initializePage();
         break;
@@ -520,5 +519,4 @@ export class AppController {
   }
 }
 
-// Обновляем validAppPages для включения 'recordsPage'
 const validAppPages: AppPage[] = ['welcome', 'finishHim', 'clubPage', 'recordsPage'];

@@ -7,12 +7,22 @@
   color: var(--color-text-default);
   display: flex;
   flex-direction: column;
-  gap: 25px; /* Отступ между заголовком страницы и сеткой таблиц, и между таблицами */
-  width: 80vw; /* Шире, чем clubPage, для потенциально большего количества таблиц */
+  gap: 25px;
+  width: 80vw;
   max-width: 1200px;
   margin: 0 auto;
   height: auto;
   overflow: visible;
+}
+
+/* Стили для нового баннера */
+.records-page-banner {
+  width: 100%;
+  height: auto; /* Сохраняем пропорции */
+  object-fit: cover; /* Масштабирует изображение, сохраняя пропорции и обрезая лишнее */
+  max-height: 250px; /* Ограничение высоты баннера, чтобы не был слишком большим */
+  border-radius: var(--panel-border-radius);
+  margin-bottom: 10px; /* Отступ после баннера, если он не последний элемент перед гридом */
 }
 
 .records-page-container.loading,
@@ -21,28 +31,15 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* justify-content: center; - убрано, чтобы баннер был сверху */
   text-align: center;
   min-height: 300px;
   width: 100%;
 }
 
-.records-page-main-title {
-  font-size: 1.8em;
-  font-weight: 600;
-  color: var(--color-accent-primary);
-  margin-bottom: 10px; /* Уменьшен отступ, так как основной отступ через gap у .records-page-container */
-  text-align: center;
-  width: 100%;
-}
+/* records-page-main-title удален из HTML, стили для него больше не нужны */
 
-.records-page-container.loading .records-page-main-title,
-.records-page-container.error .records-page-main-title,
-.records-page-container.no-data .records-page-main-title {
-  margin-bottom: 20px;
-}
-
-.records-page-container .error-message { /* Стиль из clubPage.css */
+.records-page-container .error-message {
   color: var(--color-accent-error);
   background-color: rgba(204, 52, 50, 0.1);
   border: 1px solid var(--color-accent-error);
@@ -50,13 +47,13 @@
   border-radius: var(--panel-border-radius);
   max-width: 600px;
   text-align: center;
+  margin-top: 15px; /* Добавлен отступ сверху, если баннер есть */
 }
 
 .leaderboards-grid {
   display: grid;
-  /* По умолчанию одна колонка, для мобильных */
   grid-template-columns: 1fr;
-  gap: 30px; /* Отступ между контейнерами таблиц */
+  gap: 30px;
 }
 
 .leaderboard-table-container {
@@ -64,29 +61,30 @@
   background-color: var(--color-bg-secondary);
   border-radius: var(--panel-border-radius);
   border: 1px solid var(--color-border);
-  overflow-x: auto; /* Для прокрутки таблиц на маленьких экранах, если они не помещаются */
+  overflow-x: auto; /* Важно для горизонтальной прокрутки на маленьких экранах */
   height: auto;
   overflow-y: visible;
 }
 
-.leaderboard-table-container .table-title { /* Стиль из clubPage.css */
+.leaderboard-table-container .table-title {
   font-size: 1.4em;
-  color: var(--color-text-on-accent);
-  background-color: var(--color-accent-info); /* Другой цвет для отличия от ClubPage */
+  color: var(--color-text-on-accent); /* Цвет текста на цветном фоне */
+  /* background-color: var(--color-accent-info); Убрано, так как цвет теперь динамический */
   padding: 10px 15px;
   margin-top: 0;
   margin-bottom: 20px;
-  border-radius: var(--panel-border-radius) var(--panel-border-radius) 0 0; /* Скругление только верхних углов */
+  border-radius: var(--panel-border-radius) var(--panel-border-radius) 0 0;
   display: block;
-  width: calc(100% + 40px); /* +20px padding слева и справа от родителя */
-  margin-left: -20px; /* Компенсация padding родителя */
-  margin-right: -20px; /* Компенсация padding родителя */
+  width: calc(100% + 40px);
+  margin-left: -20px;
+  margin-right: -20px;
   box-sizing: border-box;
   text-align: center;
   border-bottom: 1px solid var(--color-border-hover);
+  font-weight: 600; /* Сделаем заголовок жирнее */
 }
 
-.leaderboard-table-container .no-data-message { /* Стиль из clubPage.css */
+.leaderboard-table-container .no-data-message {
     padding: 15px;
     text-align: center;
     font-style: italic;
@@ -95,15 +93,15 @@
     border-radius: 0 0 var(--panel-border-radius) var(--panel-border-radius);
 }
 
-.styled-table.records-table { /* Общие стили из clubPage.css */
+.styled-table.records-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.95em; /* Немного крупнее для читаемости рекордов */
+  font-size: 0.95em;
 }
 
 .styled-table.records-table th,
 .styled-table.records-table td {
-  padding: 10px 14px; /* Немного больше padding */
+  padding: 10px 14px;
   text-align: left;
   border-bottom: 1px solid var(--color-border);
   border-left: 1px solid var(--color-border);
@@ -135,17 +133,16 @@
 .styled-table.records-table td a {
   color: var(--color-text-link);
   text-decoration: none;
-  font-weight: 500; /* Сделаем имена игроков чуть заметнее */
+  font-weight: 500;
 }
 .styled-table.records-table td a:hover {
   text-decoration: underline;
   color: var(--color-accent-primary);
 }
 
-/* Адаптация для экранов побольше - 2 колонки для таблиц */
 @media (min-width: 1024px) {
   .leaderboards-grid {
-    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); /* Адаптивные колонки */
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
   }
   .records-page-container {
     width: 90vw;
@@ -153,20 +150,20 @@
   }
 }
 
-/* Адаптация для мобильных (портретная ориентация) */
 @media (orientation: portrait) {
   .records-page-container {
     width: 100%;
     padding: 10px;
     gap: 20px;
   }
-  .records-page-main-title {
-    font-size: 1.5em;
+  .records-page-banner {
+    max-height: 180px; /* Уменьшаем высоту баннера для портретного режима */
+    margin-bottom: 5px;
   }
   .leaderboard-table-container .table-title {
     font-size: 1.2em;
     padding: 8px 12px;
-    width: calc(100% + 20px); /* +10px padding слева и справа от родителя */
+    width: calc(100% + 20px);
     margin-left: -10px;
     margin-right: -10px;
   }
@@ -174,14 +171,14 @@
     padding: 10px;
   }
   .styled-table.records-table {
-    font-size: 0.85em;
+    font-size: 0.85em; /* Уменьшаем шрифт таблицы для лучшего отображения */
   }
   .styled-table.records-table th,
   .styled-table.records-table td {
     padding: 8px 10px;
   }
   .leaderboards-grid {
-    grid-template-columns: 1fr; /* Всегда одна колонка в портретном режиме */
+    grid-template-columns: 1fr;
     gap: 20px;
   }
 }

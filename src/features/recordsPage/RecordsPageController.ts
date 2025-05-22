@@ -1,47 +1,45 @@
 // src/features/recordsPage/RecordsPageController.ts
 import logger from '../../utils/logger';
 import type { AppServices } from '../../AppController';
-import type { RawLeaderboardUserData } from '../../core/webhook.service'; // Удален импорт FinishHimStats отсюда
-// FinishHimStats будет неявно использоваться через RawLeaderboardUserData
+import type { RawLeaderboardUserData } from '../../core/webhook.service';
 import { subscribeToLangChange, t } from '../../core/i18n.service';
 
 // Тип для отображаемой записи в таблице рекордов
+// Удалены tacticalWinRate и playoutWinRate, так как соответствующие таблицы убраны
 export interface ProcessedLeaderboardEntry extends RawLeaderboardUserData {
   rank: number;
-  // Можно добавить сюда специфичные отформатированные значения, если потребуется
 }
 
 // Тип для конфигурации одной таблицы рекордов
 export interface LeaderboardTableConfig {
-  id: string; // Уникальный ID таблицы (например, 'tacticalRating', 'gamesPlayed')
-  titleKey: string; // Ключ для локализации заголовка таблицы
+  id: string;
+  titleKey: string;
   defaultTitle: string;
-  // Функция для извлечения значения для сортировки из RawLeaderboardUserData
   sortValueExtractor: (data: RawLeaderboardUserData) => number;
-  // Порядок сортировки: 'asc' или 'desc'
   sortOrder: 'asc' | 'desc';
-  // Конфигурация столбцов для этой таблицы
   columns: Array<{
-    headerKey: string; // Ключ для локализации заголовка столбца
+    headerKey: string;
     defaultHeader: string;
-    // Функция для извлечения и форматирования значения ячейки из ProcessedLeaderboardEntry
     cellValueExtractor: (entry: ProcessedLeaderboardEntry) => string | number;
     textAlign?: 'left' | 'center' | 'right';
   }>;
-  maxEntries?: number; // Максимальное количество записей для отображения
+  maxEntries?: number;
+  // minGamesThreshold и gameCountExtractorForThreshold больше не нужны глобально,
+  // так как таблицы, их использующие, удалены.
 }
 
 // Состояние контроллера
 export interface RecordsPageControllerState {
   isLoading: boolean;
   error: string | null;
-  // Массив обработанных данных для каждой таблицы рекордов
   leaderboardTables: Array<{
     config: LeaderboardTableConfig;
     entries: ProcessedLeaderboardEntry[];
   }> | null;
   pageTitle: string;
 }
+
+// MIN_GAMES_FOR_RATE_TABLES больше не используется
 
 // Предопределенные конфигурации для таблиц рекордов
 const LEADERBOARD_CONFIGS: LeaderboardTableConfig[] = [
@@ -87,7 +85,22 @@ const LEADERBOARD_CONFIGS: LeaderboardTableConfig[] = [
       { headerKey: 'records.table.tacticalWins', defaultHeader: 'Tactical Wins', cellValueExtractor: (entry) => entry.FinishHimStats.tacticalWins, textAlign: 'right' },
     ],
   },
-  // Можно добавить другие конфигурации здесь
+  // --- Добавлена таблица "Highest Level Achieved" ---
+  {
+    id: 'highestLevel',
+    titleKey: 'records.titles.highestLevel',
+    defaultTitle: 'Highest Level Achieved',
+    sortValueExtractor: (data) => data.FinishHimStats.currentPieceCount,
+    sortOrder: 'desc',
+    maxEntries: 20,
+    columns: [
+      { headerKey: 'records.table.rank', defaultHeader: '#', cellValueExtractor: (entry) => entry.rank, textAlign: 'center' },
+      { headerKey: 'records.table.player', defaultHeader: 'Player', cellValueExtractor: (entry) => entry.username, textAlign: 'left' },
+      { headerKey: 'records.table.level', defaultHeader: 'Level (Pieces)', cellValueExtractor: (entry) => entry.FinishHimStats.currentPieceCount, textAlign: 'right' },
+      { headerKey: 'records.table.tacticalRatingValue', defaultHeader: 'Tactical Rating', cellValueExtractor: (entry) => entry.FinishHimStats.tacticalRating, textAlign: 'right' },
+    ],
+  },
+  // --- Конфигурации для "tacticalAccuracy" и "playoutPerformance" УДАЛЕНЫ ---
 ];
 
 export class RecordsPageController {
@@ -95,7 +108,7 @@ export class RecordsPageController {
   private services: AppServices;
   private requestGlobalRedraw: () => void;
   private unsubscribeFromLangChange: (() => void) | null = null;
-  private rawUserStats: RawLeaderboardUserData[] | null = null; // Храним сырые данные
+  private rawUserStats: RawLeaderboardUserData[] | null = null;
 
   constructor(services: AppServices, requestGlobalRedraw: () => void) {
     this.services = services;
@@ -110,7 +123,7 @@ export class RecordsPageController {
 
     this.unsubscribeFromLangChange = subscribeToLangChange(() => {
       this.updateLocalizedTexts();
-      this.processAndSetLeaderboards(); // Пересчитываем таблицы с новыми заголовками
+      this.processAndSetLeaderboards();
       this.requestGlobalRedraw();
     });
 
@@ -120,14 +133,14 @@ export class RecordsPageController {
   public async initializePage(): Promise<void> {
     logger.info('[RecordsPageController] Initializing page data...');
     this.setState({ isLoading: true, error: null, leaderboardTables: null });
-    this.updateLocalizedTexts(); // Устанавливаем заголовок на время загрузки
+    this.updateLocalizedTexts();
 
     try {
       const allUserStats = await this.services.webhookService.fetchAllUserStatsForLeaderboards();
 
       if (allUserStats) {
-        this.rawUserStats = allUserStats; // Сохраняем сырые данные
-        this.processAndSetLeaderboards(); // Обрабатываем данные
+        this.rawUserStats = allUserStats;
+        this.processAndSetLeaderboards();
         this.setState({
           isLoading: false,
           error: null,
@@ -153,31 +166,34 @@ export class RecordsPageController {
       this.setState({ leaderboardTables: null });
       return;
     }
-    // Явно присваиваем this.rawUserStats новой переменной после проверки, чтобы помочь TypeScript
     const currentRawUserStats: RawLeaderboardUserData[] = this.rawUserStats;
 
     const processedTables = LEADERBOARD_CONFIGS.map(config => {
-      // 1. Фильтруем пользователей, у которых есть необходимые данные (например, >0 игр для некоторых таблиц)
-      //    Для примера, пока берем всех. Можно добавить фильтр, если нужно.
-      let filteredUsers = [...currentRawUserStats]; // Используем новую переменную
+      let filteredUsers = [...currentRawUserStats];
 
-      // 2. Сортируем
+      // Фильтрация по порогу игр больше не нужна для оставшихся таблиц,
+      // так как minGamesThreshold и gameCountExtractorForThreshold удалены из общего интерфейса
+      // и из конфигураций оставшихся таблиц.
+
       filteredUsers.sort((a, b) => {
         const valA = config.sortValueExtractor(a);
         const valB = config.sortValueExtractor(b);
         return config.sortOrder === 'desc' ? valB - valA : valA - valB;
       });
 
-      // 3. Присваиваем ранги и ограничиваем количество
       const rankedEntries: ProcessedLeaderboardEntry[] = filteredUsers
-        .slice(0, config.maxEntries || filteredUsers.length) // Ограничиваем количество, если задано
-        .map((user, index) => ({
-          ...user,
-          rank: index + 1,
-        }));
+        .slice(0, config.maxEntries || filteredUsers.length)
+        .map((user, index) => {
+          // Расчет tacticalWinRate и playoutWinRate больше не нужен здесь,
+          // так как соответствующие таблицы удалены.
+          return {
+            ...user,
+            rank: index + 1,
+          };
+        });
 
       return {
-        config: config, // Сохраняем конфигурацию для использования во View
+        config: config,
         entries: rankedEntries,
       };
     });
@@ -194,8 +210,6 @@ export class RecordsPageController {
     } else {
       this.state.pageTitle = t('records.pageTitle.loaded', { defaultValue: 'Leaderboards' });
     }
-    // Заголовки таблиц и столбцов будут локализоваться во View при рендеринге,
-    // используя ключи из LeaderboardTableConfig
   }
 
   private setState(newState: Partial<RecordsPageControllerState>): void {

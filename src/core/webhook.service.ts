@@ -1,10 +1,11 @@
 // src/core/webhook.service.ts
 import logger from '../utils/logger';
-import type { FinishHimStats, SubscriptionTier } from './auth.service'; // Импортируем нужные типы
+// Импортируем типы, которые раньше были в auth.service, но теперь нужны здесь для нового метода
+import type { FinishHimStats, SubscriptionTier, UserSessionUpsertPayload, BackendUserSessionData, LedClubs } from './auth.service';
 
-// --- Существующие интерфейсы для fetchPuzzle ---
+// --- Интерфейсы для Puzzle ---
 export interface PuzzleRequestPayload {
-  event?: string;
+  event?: string; // Это поле уже используется, например, "FinishHim"
   lichess_id: string;
   pieceCount?: number;
   rating?: number;
@@ -22,15 +23,16 @@ export interface PuzzleDataFromWebhook {
 
 export interface AppPuzzle extends PuzzleDataFromWebhook {}
 
-// --- Существующие интерфейсы для отправки статистики FinishHim ---
+// --- Интерфейсы для FinishHim Stats ---
 export interface FinishHimRatingUpdatePayload {
-    event: "finishHimRatingUpdate";
+    event: "finishHimRatingUpdate"; // Поле event уже есть
     lichess_id: string;
     finishHimStats: FinishHimStats;
 }
 
-// --- Существующие интерфейсы для Club Stats ---
+// --- Интерфейсы для Club Stats ---
 export interface ClubStatsRequestPayload {
+  event: "fetchClubStats"; // Добавлено поле event
   club_id: string;
 }
 
@@ -81,99 +83,58 @@ export interface ClubData {
 
 export type ClubStatsResponse = ClubData[] | ClubData;
 
-// --- Новые интерфейсы для Leaderboards (Страница Рекордов) ---
+// --- Интерфейсы для Leaderboards (Страница Рекордов) ---
 export interface RawLeaderboardUserData {
   lichess_id: string;
   username: string;
   FinishHimStats: FinishHimStats;
   subscriptionTier: SubscriptionTier;
+  led_clubs?: LedClubs; // Добавлено поле led_clubs, если оно приходит от бэкенда для лидербордов
 }
 
-// Ожидаемый формат ответа от бэкенда для fetchAllUserStats
-// Теперь это сам объект, а не массив с одним объектом
 export interface LeaderboardsApiResponse {
   leaderboards: { [lichess_id: string]: RawLeaderboardUserData };
 }
 
 export interface FetchLeaderboardsRequestPayload {
-  event: "fetchAllUserStats"; // Тип события для запроса всех данных пользователей
+  event: "fetchAllUserStats"; // Поле event уже есть
 }
 
+// --- URL единого бэкенд вебхука ---
+const BACKEND_URL = import.meta.env.VITE_BACKEND as string;
 
-// --- URL вебхуков ---
-const PUZZLE_FEN_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_PUZZLE_FEN as string;
-const FINISH_HIM_STATS_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_FINISH_HIM_STATS as string;
-const CLUB_STATS_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_CLUB_STATS as string;
-const LEADERBOARDS_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_LEADERBOARDS as string;
-
-if (!PUZZLE_FEN_WEBHOOK_URL) {
+if (!BACKEND_URL) {
   logger.error(
-    '[WebhookService] Critical Configuration Error: VITE_WEBHOOK_PUZZLE_FEN is not defined in your .env file.'
-  );
-}
-if (!FINISH_HIM_STATS_WEBHOOK_URL) {
-  logger.warn(
-    '[WebhookService] Configuration Warning: VITE_WEBHOOK_FINISH_HIM_STATS is not defined. FinishHim stats updates will not be sent.'
-  );
-}
-if (!CLUB_STATS_WEBHOOK_URL) {
-  logger.warn(
-    '[WebhookService] Configuration Warning: VITE_WEBHOOK_CLUB_STATS is not defined. Club stats fetching will not work.'
-  );
-}
-if (!LEADERBOARDS_WEBHOOK_URL) {
-  logger.warn(
-    '[WebhookService] Configuration Warning: VITE_WEBHOOK_LEADERBOARDS is not defined. Leaderboards fetching will not work.'
+    '[WebhookService] Critical Configuration Error: VITE_BACKEND is not defined in your .env file.'
   );
 }
 
-export class WebhookService {
-  private puzzleWebhookUrl: string;
-  private finishHimStatsWebhookUrl?: string;
-  private clubStatsWebhookUrl?: string;
-  private leaderboardsWebhookUrl?: string;
+export class WebhookServiceController {
+  private backendWebhookUrl: string;
 
   constructor() {
-    this.puzzleWebhookUrl = PUZZLE_FEN_WEBHOOK_URL;
-    if (this.puzzleWebhookUrl) {
-        logger.info(`[WebhookService] Puzzle Webhook Initialized with URL: ${this.puzzleWebhookUrl}`);
+    this.backendWebhookUrl = BACKEND_URL;
+    if (this.backendWebhookUrl) {
+        logger.info(`[WebhookService] Initialized with Backend URL: ${this.backendWebhookUrl}`);
     } else {
-        logger.error(`[WebhookService] Puzzle Webhook Initialization failed: URL is undefined. Check VITE_WEBHOOK_PUZZLE_FEN.`);
-    }
-
-    if (FINISH_HIM_STATS_WEBHOOK_URL) {
-        this.finishHimStatsWebhookUrl = FINISH_HIM_STATS_WEBHOOK_URL;
-        logger.info(`[WebhookService] FinishHim Stats Webhook Initialized with URL: ${this.finishHimStatsWebhookUrl}`);
-    } else {
-        logger.warn(`[WebhookService] FinishHim Stats Webhook not configured. Updates will not be sent.`);
-    }
-
-    if (CLUB_STATS_WEBHOOK_URL) {
-        this.clubStatsWebhookUrl = CLUB_STATS_WEBHOOK_URL;
-        logger.info(`[WebhookService] Club Stats Webhook Initialized with URL: ${this.clubStatsWebhookUrl}`);
-    } else {
-        logger.warn(`[WebhookService] Club Stats Webhook not configured. Club stats fetching will not work.`);
-    }
-
-    if (LEADERBOARDS_WEBHOOK_URL) {
-        this.leaderboardsWebhookUrl = LEADERBOARDS_WEBHOOK_URL;
-        logger.info(`[WebhookService] Leaderboards Webhook Initialized with URL: ${this.leaderboardsWebhookUrl}`);
-    } else {
-        logger.warn(`[WebhookService] Leaderboards Webhook not configured. Leaderboards fetching will not work.`);
+        logger.error(`[WebhookService] Initialization failed: Backend URL (VITE_BACKEND) is undefined.`);
     }
   }
 
-  public async fetchPuzzle(payload: PuzzleRequestPayload): Promise<AppPuzzle | null> {
-    if (!this.puzzleWebhookUrl) {
-        logger.error("[WebhookService] Cannot fetch puzzle: Puzzle Webhook URL is not configured.");
-        return null;
+  private async _postRequest<TResponse, TPayload extends { event?: string }>(
+    payload: TPayload,
+    context: string
+  ): Promise<TResponse | null> {
+    if (!this.backendWebhookUrl) {
+      logger.error(`[WebhookService ${context}] Cannot send request: Backend URL is not configured.`);
+      return null;
     }
 
-    logger.info(`[WebhookService] Sending POST request to Puzzle Webhook: ${this.puzzleWebhookUrl}`);
-    logger.debug('[WebhookService] Request payload for fetchPuzzle:', payload);
+    logger.info(`[WebhookService ${context}] Sending POST request to Backend URL: ${this.backendWebhookUrl}`);
+    logger.debug(`[WebhookService ${context}] Request payload:`, payload);
 
     try {
-      const response = await fetch(this.puzzleWebhookUrl, {
+      const response = await fetch(this.backendWebhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,7 +143,7 @@ export class WebhookService {
         body: JSON.stringify(payload),
       });
 
-      logger.info(`[WebhookService fetchPuzzle] Response status: ${response.status}`);
+      logger.info(`[WebhookService ${context}] Response status: ${response.status}`);
 
       if (!response.ok) {
         let errorText = `HTTP error! Status: ${response.status} ${response.statusText}`;
@@ -190,210 +151,112 @@ export class WebhookService {
           const responseBody = await response.text();
           if (responseBody) errorText += ` Body: ${responseBody}`;
         } catch (e) { /* ignore */ }
-        logger.error(`[WebhookService fetchPuzzle] ${errorText}`);
+        logger.error(`[WebhookService ${context}] ${errorText}`);
         return null;
       }
 
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
-        const puzzleData = (await response.json()) as PuzzleDataFromWebhook;
-        if (puzzleData && puzzleData.PuzzleId) {
-            logger.info('[WebhookService fetchPuzzle] Successfully fetched puzzle data:', puzzleData);
-            return puzzleData as AppPuzzle;
-        } else {
-            logger.warn('[WebhookService fetchPuzzle] Fetched data is missing PuzzleId or is malformed. Response:', puzzleData);
-            return null;
-        }
+        const responseData = (await response.json()) as TResponse;
+        logger.info(`[WebhookService ${context}] Successfully fetched data.`);
+        logger.debug(`[WebhookService ${context}] Response data:`, responseData);
+        return responseData;
       } else {
         const responseText = await response.text();
         logger.warn(
-          `[WebhookService fetchPuzzle] Response was not JSON. Content-Type: ${contentType}. Response text:`,
+          `[WebhookService ${context}] Response was not JSON. Content-Type: ${contentType}. Response text:`,
           responseText,
         );
         return null;
       }
     } catch (error: any) {
-      logger.error('[WebhookService fetchPuzzle] Network or fetch error:', error.message, error);
+      logger.error(`[WebhookService ${context}] Network or fetch error:`, error.message, error);
       return null;
     }
   }
 
-  public async sendFinishHimStatsUpdate(lichess_id: string, stats: FinishHimStats): Promise<boolean> {
-    if (!this.finishHimStatsWebhookUrl) {
-      logger.warn("[WebhookService] Cannot send FinishHim stats: Stats Webhook URL is not configured. Update will be skipped.");
-      return false;
+  public async fetchPuzzle(payload: PuzzleRequestPayload): Promise<AppPuzzle | null> {
+    // Убедимся, что event установлен, если он не пришел из payload
+    const finalPayload = { ...payload, event: payload.event || "FinishHim" };
+    const puzzleData = await this._postRequest<PuzzleDataFromWebhook, PuzzleRequestPayload>(finalPayload, "fetchPuzzle");
+    if (puzzleData && puzzleData.PuzzleId) {
+        return puzzleData as AppPuzzle;
+    } else if (puzzleData) { // Если puzzleData есть, но нет PuzzleId
+        logger.warn('[WebhookService fetchPuzzle] Fetched data is missing PuzzleId or is malformed. Response:', puzzleData);
     }
+    return null;
+  }
 
+  public async sendFinishHimStatsUpdate(lichess_id: string, stats: FinishHimStats): Promise<boolean> {
     const payload: FinishHimRatingUpdatePayload = {
       event: "finishHimRatingUpdate",
       lichess_id: lichess_id,
       finishHimStats: stats,
     };
-
-    logger.info(`[WebhookService] Sending POST request to FinishHim Stats Webhook: ${this.finishHimStatsWebhookUrl}`);
-    logger.debug('[WebhookService] Request payload for sendFinishHimStatsUpdate:', payload);
-
-    try {
-      const response = await fetch(this.finishHimStatsWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      logger.info(`[WebhookService sendFinishHimStatsUpdate] Response status: ${response.status}`);
-
-      if (!response.ok) {
-        let errorText = `HTTP error! Status: ${response.status} ${response.statusText}`;
-        try {
-          const responseBody = await response.text();
-          if (responseBody) errorText += ` Body: ${responseBody}`;
-        } catch (e) { /* ignore */ }
-        logger.error(`[WebhookService sendFinishHimStatsUpdate] ${errorText}`);
-        return false;
-      }
-      logger.info('[WebhookService sendFinishHimStatsUpdate] Successfully sent FinishHim stats to backend.');
-      return true;
-    } catch (error: any) {
-      logger.error('[WebhookService sendFinishHimStatsUpdate] Network or fetch error:', error.message, error);
-      return false;
-    }
+    const response = await this._postRequest<any, FinishHimRatingUpdatePayload>(payload, "sendFinishHimStatsUpdate");
+    return !!response; // Считаем успешным, если ответ не null (т.е. запрос прошел без ошибок)
   }
 
-  public async fetchClubStats(payload: ClubStatsRequestPayload): Promise<ClubData | null> {
-    if (!this.clubStatsWebhookUrl) {
-        logger.error("[WebhookService] Cannot fetch club stats: Club Stats Webhook URL is not configured.");
-        return null;
-    }
+  public async fetchClubStats(club_id: string): Promise<ClubData | null> {
+    const payload: ClubStatsRequestPayload = {
+        event: "fetchClubStats",
+        club_id: club_id
+    };
+    const responseData = await this._postRequest<ClubStatsResponse, ClubStatsRequestPayload>(payload, "fetchClubStats");
 
-    logger.info(`[WebhookService] Sending POST request to Club Stats Webhook: ${this.clubStatsWebhookUrl}`);
-    logger.debug('[WebhookService] Request payload for fetchClubStats:', payload);
-
-    try {
-      const response = await fetch(this.clubStatsWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      logger.info(`[WebhookService fetchClubStats] Response status: ${response.status}`);
-
-      if (!response.ok) {
-        let errorText = `HTTP error! Status: ${response.status} ${response.statusText}`;
-        try {
-          const responseBody = await response.text();
-          if (responseBody) errorText += ` Body: ${responseBody}`;
-        } catch (e) { /* ignore */ }
-        logger.error(`[WebhookService fetchClubStats] ${errorText}`);
-        return null;
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const responseData = (await response.json()) as ClubStatsResponse;
-
+    if (responseData) {
         if (Array.isArray(responseData)) {
-          if (responseData.length > 0 && responseData[0].club_id) {
-              logger.info('[WebhookService fetchClubStats] Successfully fetched club data (from array):', responseData[0]);
-              return responseData[0];
-          } else {
-              logger.warn('[WebhookService fetchClubStats] Fetched data is an empty array or malformed. Response:', responseData);
-              return null;
-          }
-        } else if (responseData && typeof responseData === 'object' && (responseData as ClubData).club_id) {
-          logger.info('[WebhookService fetchClubStats] Successfully fetched club data (single object):', responseData);
-          return responseData as ClubData;
+            if (responseData.length > 0 && responseData[0].club_id) {
+                return responseData[0];
+            } else {
+                logger.warn('[WebhookService fetchClubStats] Fetched data is an empty array or malformed (array). Response:', responseData);
+                return null;
+            }
+        } else if (typeof responseData === 'object' && (responseData as ClubData).club_id) {
+            return responseData as ClubData;
         } else {
-          logger.warn('[WebhookService fetchClubStats] Fetched data is not in the expected format (array or single ClubData object) or is malformed. Response:', responseData);
-          return null;
+            logger.warn('[WebhookService fetchClubStats] Fetched data is not in the expected format (array or single ClubData object) or is malformed. Response:', responseData);
+            return null;
         }
-      } else {
-        const responseText = await response.text();
-        logger.warn(
-          `[WebhookService fetchClubStats] Response was not JSON. Content-Type: ${contentType}. Response text:`,
-          responseText,
-        );
-        return null;
-      }
-    } catch (error: any) {
-      logger.error('[WebhookService fetchClubStats] Network or fetch error:', error.message, error);
-      return null;
     }
+    return null;
   }
 
   public async fetchAllUserStatsForLeaderboards(): Promise<RawLeaderboardUserData[] | null> {
-    if (!this.leaderboardsWebhookUrl) {
-        logger.error("[WebhookService fetchAllUserStatsForLeaderboards] Cannot fetch: URL not configured.");
-        return null;
-    }
-
     const payload: FetchLeaderboardsRequestPayload = {
         event: "fetchAllUserStats"
     };
+    const apiResponse = await this._postRequest<LeaderboardsApiResponse, FetchLeaderboardsRequestPayload>(payload, "fetchAllUserStatsForLeaderboards");
 
-    logger.info(`[WebhookService fetchAllUserStatsForLeaderboards] Sending POST to: ${this.leaderboardsWebhookUrl}`);
-    logger.debug('[WebhookService fetchAllUserStatsForLeaderboards] Request payload:', payload);
-
-    try {
-      const response = await fetch(this.leaderboardsWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      logger.info(`[WebhookService fetchAllUserStatsForLeaderboards] Response status: ${response.status} ${response.statusText}`);
-
-      if (!response.ok) {
-        let errorBody = "";
-        try {
-            errorBody = await response.text();
-        } catch (e) { /* ignore */ }
-        logger.error(`[WebhookService fetchAllUserStatsForLeaderboards] HTTP error! Status: ${response.status}. Body: ${errorBody}`);
-        return null;
-      }
-
-      let parsedJson: any;
-      try {
-        parsedJson = await response.json();
-      } catch (jsonError: any) {
-        logger.error('[WebhookService fetchAllUserStatsForLeaderboards] Failed to parse JSON response:', jsonError.message);
-        return null;
-      }
-
-      logger.debug('[WebhookService fetchAllUserStatsForLeaderboards] Parsed JSON response:', JSON.stringify(parsedJson));
-
-      // Новая структура ответа: {"leaderboards": { lichess_id1: UserData1, ... } }
-      // parsedJson теперь напрямую является этим объектом.
-      const apiResponse = parsedJson as LeaderboardsApiResponse;
-
-      if (apiResponse &&
-          typeof apiResponse === 'object' && // Убедимся, что это объект
-          apiResponse.hasOwnProperty('leaderboards') &&
-          typeof apiResponse.leaderboards === 'object' && // Проверяем, что leaderboards - это объект
-          apiResponse.leaderboards !== null &&
-          !Array.isArray(apiResponse.leaderboards) // И не массив
-          ) {
-
-        const leaderboardsObject = apiResponse.leaderboards as { [key: string]: RawLeaderboardUserData };
-        const dataArray: RawLeaderboardUserData[] = Object.values(leaderboardsObject); // Преобразуем объект в массив
-
-        logger.info(`[WebhookService fetchAllUserStatsForLeaderboards] Successfully fetched and transformed ${dataArray.length} user stats entries.`);
-        return dataArray;
-      } else {
-        logger.warn('[WebhookService fetchAllUserStatsForLeaderboards] Fetched data is not in the expected format `{"leaderboards": { lichess_id: UserData, ... } }`. Actual structure:', JSON.stringify(apiResponse));
-        return null;
-      }
-    } catch (error: any) {
-      logger.error('[WebhookService fetchAllUserStatsForLeaderboards] Network or fetch error:', error.message, error);
-      return null;
+    if (apiResponse &&
+        typeof apiResponse === 'object' &&
+        apiResponse.hasOwnProperty('leaderboards') &&
+        typeof apiResponse.leaderboards === 'object' &&
+        apiResponse.leaderboards !== null &&
+        !Array.isArray(apiResponse.leaderboards)
+        ) {
+      const leaderboardsObject = apiResponse.leaderboards as { [key: string]: RawLeaderboardUserData };
+      const dataArray: RawLeaderboardUserData[] = Object.values(leaderboardsObject);
+      logger.info(`[WebhookService fetchAllUserStatsForLeaderboards] Successfully fetched and transformed ${dataArray.length} user stats entries.`);
+      return dataArray;
+    } else if (apiResponse) { // Если apiResponse есть, но структура неверная
+      logger.warn('[WebhookService fetchAllUserStatsForLeaderboards] Fetched data is not in the expected format. Actual structure:', JSON.stringify(apiResponse));
     }
+    return null;
+  }
+
+  // Новый метод для обработки сессии пользователя
+  public async upsertUserSession(payload: UserSessionUpsertPayload): Promise<BackendUserSessionData | null> {
+    // Поле 'event' уже должно быть в UserSessionUpsertPayload ("userSessionUpsert" или "oAuth")
+    const sessionData = await this._postRequest<BackendUserSessionData, UserSessionUpsertPayload>(payload, "upsertUserSession");
+    if (sessionData && sessionData.lichess_id && sessionData.FinishHimStats && typeof sessionData.subscriptionTier !== 'undefined') {
+        return sessionData;
+    } else if (sessionData) { // Если sessionData есть, но неполное
+        logger.warn('[WebhookService upsertUserSession] Fetched data is missing required fields or is malformed. Response:', sessionData);
+    }
+    return null;
   }
 }
+
+// Экспортируем инстанс сервиса для использования в других модулях
+export const WebhookService = new WebhookServiceController();

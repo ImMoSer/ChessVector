@@ -1,5 +1,5 @@
 // src/AppEntry.ts
-import { init, propsModule, eventListenersModule, styleModule, classModule, attributesModule } from 'snabbdom'; // ДОБАВЛЕН attributesModule
+import { init, propsModule, eventListenersModule, styleModule, classModule, attributesModule } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 // Import main application styles
 import './assets/main.css'; // Main styles
@@ -14,6 +14,7 @@ import './features/recordsPage/recordsPage.css';
 // Import core services
 import { ChessboardService } from './core/chessboard.service';
 import { StockfishService } from './core/stockfish.service';
+// Изменено: импортируем инстанс WebhookService, а не класс
 import { WebhookService } from './core/webhook.service';
 import { initI18nService } from './core/i18n.service';
 import logger from './utils/logger';
@@ -31,7 +32,7 @@ import './vendor/chessground/chessground.cburnett.css';
 logger.info('[AppEntry] Application starting...');
 
 const patch = init([
-  attributesModule, // <--- ДОБАВЛЕН ЗДЕСЬ
+  attributesModule,
   propsModule,
   eventListenersModule,
   styleModule,
@@ -40,7 +41,8 @@ const patch = init([
 
 const chessboardService = new ChessboardService();
 const stockfishService = new StockfishService();
-const webhookService = new WebhookService();
+// Изменено: WebhookService уже является инстансом
+const webhookServiceInstance = WebhookService;
 
 let oldVNode: VNode | Element = document.getElementById('app')!;
 if (!oldVNode) {
@@ -59,7 +61,7 @@ if (!oldVNode) {
 }
 
 let isCurrentlyPatching = false;
-let appController: AppController; // Объявляем здесь
+let appController: AppController;
 
 function requestGlobalRedraw() {
   if (isCurrentlyPatching) {
@@ -91,13 +93,12 @@ async function initializeApplication() {
       {
         chessboardService,
         stockfishService,
-        webhookService,
+        webhookService: webhookServiceInstance, // Передаем инстанс
         logger
       },
       requestGlobalRedraw
     );
 
-    // initializeApp in AppController now handles auth and initial page loading
     await appController.initializeApp();
     logger.info('[AppEntry] AppController initialization sequence complete.');
 

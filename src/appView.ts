@@ -9,7 +9,7 @@ import { renderWelcomePage } from './features/welcome/welcomeView';
 import { ClubPageController } from './features/clubPage/ClubPageController';
 import { renderClubPage } from './features/clubPage/clubPageView';
 import { RecordsPageController } from './features/recordsPage/RecordsPageController';
-import { renderRecordsPage } from './features/recordsPage/RecordsPageView'; // Исправлен регистр
+import { renderRecordsPage } from './features/recordsPage/RecordsPageView';
 import logger from './utils/logger';
 import { t } from './core/i18n.service';
 import type { LedClubs } from './core/auth.service';
@@ -87,7 +87,7 @@ function renderMyClubsDropdown(controller: AppController, ledClubs: LedClubs): V
                         }
                     }
                 }
-            }, clubId) 
+            }, clubId)
         ])
     ));
 }
@@ -109,7 +109,7 @@ export function renderAppUI(controller: AppController): VNode {
     dropdownContent?: VNode | null
   }> = [
     { page: 'finishHim', textKey: 'nav.finishHim', requiresAuth: true },
-    { page: 'recordsPage', textKey: 'nav.leaderboards' }, 
+    { page: 'recordsPage', textKey: 'nav.leaderboards' },
   ];
 
   if (isAuthenticated && ledClubs && ledClubs.club_ids && ledClubs.club_ids.length > 0) {
@@ -121,7 +121,7 @@ export function renderAppUI(controller: AppController): VNode {
             isDropdownToggle: true,
             dropdownContent: renderMyClubsDropdown(controller, ledClubs)
         });
-    } else { 
+    } else {
         navLinksConfig.push({
             textKey: 'nav.myClubs',
             requiresAuth: true,
@@ -155,7 +155,7 @@ export function renderAppUI(controller: AppController): VNode {
         break;
       case 'finishHim':
         if (activePageController instanceof FinishHimController) {
-          pageSpecificContentVNode = h('div.finish-him-placeholder'); 
+          pageSpecificContentVNode = h('div.finish-him-placeholder');
         } else {
           pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
@@ -167,7 +167,7 @@ export function renderAppUI(controller: AppController): VNode {
           pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
         break;
-      case 'recordsPage': 
+      case 'recordsPage':
         if (activePageController instanceof RecordsPageController) {
           pageSpecificContentVNode = renderRecordsPage(activePageController);
         } else {
@@ -225,7 +225,16 @@ export function renderAppUI(controller: AppController): VNode {
   return h('div#app-layout', [
     h('header#app-header', { class: { 'menu-open': appState.isNavExpanded && appState.isPortraitMode } }, [
       h('div.nav-header-content', [
-        h('span.app-title', t('app.title')),
+        // Заменяем span.app-title на img.app-logo
+        h('img.app-logo', {
+          props: {
+            src: '/mini_logo.png', // Путь к вашему логотипу в папке public
+            alt: t('app.title') // Используем существующий ключ для alt текста
+          },
+          on: { // Добавляем обработчик клика для навигации на главную (или другую страницу по умолчанию)
+            click: () => controller.navigateTo('finishHim', true, null) // или 'welcome' если не аутентифицирован
+          }
+        }),
         (visibleNavLinks.length > 0 || isAuthenticated) ?
           h('button.nav-toggle-button', {
             on: { click: () => controller.toggleNav() }
@@ -235,9 +244,9 @@ export function renderAppUI(controller: AppController): VNode {
             ...visibleNavLinks.map(link =>
               h('li', { class: { 'has-dropdown': !!link.isDropdownToggle } }, [
                 h('a', {
-                  class: { 
+                  class: {
                     active: link.page ? (appState.currentPage === link.page && (link.page !== 'clubPage' || appState.currentClubId === null)) : false,
-                    'dropdown-toggle': !!link.isDropdownToggle 
+                    'dropdown-toggle': !!link.isDropdownToggle
                   },
                   props: { href: link.page ? (link.page === 'recordsPage' ? '#/records' : `#${link.page}`) : '#' },
                   on: {

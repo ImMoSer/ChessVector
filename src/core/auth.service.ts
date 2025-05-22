@@ -1,6 +1,9 @@
 // src/core/auth.service.ts
 import { OAuth2AuthCodePKCE, type AccessContext, type AccessToken } from '@bity/oauth2-auth-code-pkce';
 import logger from '../utils/logger';
+// Импортируем инстанс WebhookService и тип его контроллера
+import { WebhookService, type WebhookServiceController } from '../core/webhook.service';
+
 
 // --- Типы и Интерфейсы ---
 export type SubscriptionTier = 'none' | 'bronze' | 'silver' | 'gold' | 'platinum';
@@ -22,7 +25,6 @@ export interface LichessUserProfile {
     country?: string;
     location?: string;
   };
-  // led_clubs не добавляем сюда, так как это не стандартное поле от Lichess API /api/account
 }
 
 export interface FinishHimStats {
@@ -40,9 +42,10 @@ export interface FinishHimStats {
 export interface UserSessionProfile extends LichessUserProfile {
   subscriptionTier: SubscriptionTier;
   finishHimStats: FinishHimStats;
-  led_clubs?: LedClubs; // Добавляем опциональное поле для клубов, которыми руководит пользователь
+  led_clubs?: LedClubs;
 }
 
+// Этот payload используется для отправки данных на бэкенд через WebhookService
 export interface UserSessionUpsertPayload {
     event: "userSessionUpsert" | "oAuth";
     lichess_id: string;
@@ -50,13 +53,13 @@ export interface UserSessionUpsertPayload {
     lichessAccessToken: string;
 }
 
-// Структура ответа, ожидаемая от бэкенда на событие userSessionUpsert
+// Структура ответа, ожидаемая от бэкенда (через WebhookService)
 export interface BackendUserSessionData {
     lichess_id: string;
-    username?: string;
+    username?: string; // username может быть опциональным в ответе, если мы его уже знаем
     FinishHimStats: FinishHimStats;
     subscriptionTier: SubscriptionTier;
-    led_clubs?: LedClubs; // Ожидаем это поле от бэкенда
+    led_clubs?: LedClubs;
 }
 
 
@@ -73,14 +76,17 @@ const LICHESS_HOST = 'https://lichess.org';
 const CLIENT_ID = import.meta.env.VITE_LICHESS_CLIENT_ID || 'chesstomate.app.default';
 const REDIRECT_URI = import.meta.env.VITE_LICHESS_REDIRECT_URI || `${window.location.origin}/`;
 
-const USER_SESSION_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_USER_SESSION as string;
+// USER_SESSION_WEBHOOK_URL удалена, так как теперь используется единый VITE_BACKEND через WebhookService
 
 const TOKEN_URL = `${LICHESS_HOST}/api/token`;
-const SCOPES = [ 'preference:read'];
+const SCOPES = [ 'preference:read']; // 'email:read' можно добавить, если нужно
 
 class AuthServiceController {
   private oauthClient: OAuth2AuthCodePKCE;
   private readonly lichessTokenUrl: string;
+  // Добавляем свойство для хранения инстанса WebhookService
+  private webhookService: WebhookServiceController;
+
   private state: AuthState = {
     isAuthenticated: false,
     userProfile: null,
@@ -94,6 +100,7 @@ class AuthServiceController {
   constructor() {
     logger.info(`[AuthService] Initializing with CLIENT_ID: ${CLIENT_ID}, REDIRECT_URI: ${REDIRECT_URI}`);
     this.lichessTokenUrl = TOKEN_URL;
+    this.webhookService = WebhookService; // Присваиваем импортированный инстанс
 
     this.oauthClient = new OAuth2AuthCodePKCE({
       authorizationUrl: `${LICHESS_HOST}/oauth`,
@@ -110,7 +117,7 @@ class AuthServiceController {
           if (token?.value) {
             this.setState({ accessToken: token.value, error: null });
             localStorage.setItem('lichess_token', token.value);
-            await this._fetchAndSetUserSessionProfile(token.value, false);
+            await this._fetchAndSetUserSessionProfile(token.value, false); // isInitialAuth = false
             logger.info('[AuthService] Token refreshed successfully and user session profile re-fetched.');
           }
           return newAccessContext;
@@ -128,9 +135,7 @@ class AuthServiceController {
       },
     });
 
-    if (!USER_SESSION_WEBHOOK_URL) {
-        logger.error('[AuthService] Critical: VITE_WEBHOOK_USER_SESSION is not defined in .env file.');
-    }
+    // Проверка VITE_BACKEND теперь происходит в WebhookService
   }
 
   public getState(): Readonly<AuthState> {
@@ -183,14 +188,14 @@ class AuthServiceController {
       } else {
         logger.info('[AuthService] No OAuth callback. Checking for stored session.');
         await this._loadStoredSession();
-        return false;
+        return false; // Возвращаем false, если это не был колбэк, чтобы AppController продолжил обработку хэша
       }
     } catch (err: any) {
       const errorMessage = err.error_description || err.message || 'Unknown authentication error';
       logger.error('[AuthService] Error during handleAuthentication:', errorMessage, err);
       this.clearAuthDataLocal();
       this.setState({ isAuthenticated: false, userProfile: null, accessToken: null, error: `Authentication failed: ${errorMessage}` });
-      return true;
+      return true; // Возвращаем true, так как ошибка обработана и URL, вероятно, нужно очистить
     } finally {
         this.setState({ isProcessing: false });
     }
@@ -205,7 +210,7 @@ class AuthServiceController {
       this.setState({ accessToken: token.value, error: null });
       localStorage.setItem('lichess_token', token.value);
       this._clearAuthParamsFromUrl();
-      await this._fetchAndSetUserSessionProfile(token.value, true);
+      await this._fetchAndSetUserSessionProfile(token.value, true); // isInitialAuth = true
     } else {
       this._clearAuthParamsFromUrl();
       throw new Error('Received empty token from Lichess during callback.');
@@ -217,14 +222,14 @@ class AuthServiceController {
     if (storedToken) {
       logger.info('[AuthService] Found stored Lichess token. Validating session.');
       this.setState({ accessToken: storedToken });
-      await this._fetchAndSetUserSessionProfile(storedToken, false);
+      await this._fetchAndSetUserSessionProfile(storedToken, false); // isInitialAuth = false
       if (!this.state.isAuthenticated) {
         logger.warn('[AuthService] Stored token validation failed. User is logged out.');
-        this.clearAuthDataLocal();
+        this.clearAuthDataLocal(); // Очищаем только если сессия не подтвердилась
       }
     } else {
       logger.info('[AuthService] No stored Lichess token found.');
-      this.clearAuthDataLocal();
+      this.clearAuthDataLocal(); // Очищаем, так как токена нет
     }
   }
 
@@ -249,28 +254,18 @@ class AuthServiceController {
         event: eventType,
         lichess_id: lichessProfileData.id,
         username: lichessProfileData.username,
-        lichessAccessToken: lichessAccessToken,
+        lichessAccessToken: lichessAccessToken, // Передаем токен на бэкенд
       };
 
-      const backendResponse = await fetch(USER_SESSION_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(upsertPayload),
-      });
+      // Используем WebhookService для отправки запроса на бэкенд
+      const backendSpecificData = await this.webhookService.upsertUserSession(upsertPayload);
 
-      if (!backendResponse.ok) {
-        const errorText = await backendResponse.text().catch(() => '');
-        logger.error(`[AuthService] User session upsert to backend failed (event: ${eventType}). Status: ${backendResponse.status}. Response: ${errorText}`);
-        throw new Error(`Backend userSessionUpsert failed (event: ${eventType}): ${backendResponse.status}`);
+      if (!backendSpecificData) {
+        logger.error(`[AuthService] User session upsert to backend failed (event: ${eventType}). WebhookService returned null.`);
+        throw new Error(`Backend userSessionUpsert failed (event: ${eventType}): WebhookService returned null`);
       }
-
-      const backendSpecificData = await backendResponse.json() as Partial<BackendUserSessionData>;
-      logger.debug('[AuthService] Raw backendSpecificData from JSON parse:', JSON.stringify(backendSpecificData));
-
-      if (!backendSpecificData || typeof backendSpecificData !== 'object') {
-        logger.error('[AuthService] Backend returned invalid data (not an object). backendSpecificData:', backendSpecificData);
-        throw new Error("Backend returned invalid session data object");
-      }
+      
+      logger.debug('[AuthService] Raw backendSpecificData from WebhookService:', JSON.stringify(backendSpecificData));
 
       if (lichessProfileData.id !== backendSpecificData.lichess_id) {
         logger.error(
@@ -285,34 +280,44 @@ class AuthServiceController {
       }
 
       const finalUserSessionProfile: UserSessionProfile = {
-        ...lichessProfileData, // Данные из Lichess API
+        ...lichessProfileData,
         subscriptionTier: backendSpecificData.subscriptionTier as SubscriptionTier,
         finishHimStats: backendSpecificData.FinishHimStats as FinishHimStats,
-        led_clubs: backendSpecificData.led_clubs ? { ...backendSpecificData.led_clubs } : undefined, // Добавляем led_clubs
+        led_clubs: backendSpecificData.led_clubs ? { ...backendSpecificData.led_clubs } : undefined,
       };
 
       localStorage.setItem('lichess_user_profile', JSON.stringify(finalUserSessionProfile));
       this.setState({
         userProfile: finalUserSessionProfile,
         isAuthenticated: true,
-        accessToken: lichessAccessToken,
+        accessToken: lichessAccessToken, // Убеждаемся, что токен сохраняется в state
         error: null,
       });
 
     } catch (error: any) {
       logger.error(`[AuthService] Error in _fetchAndSetUserSessionProfile (event: ${eventType}):`, error.message, error.stack);
-      this.clearAuthDataLocal();
+      this.clearAuthDataLocal(); // Очищаем при любой ошибке здесь
       this.setState({ isAuthenticated: false, userProfile: null, accessToken: null, error: `Failed to establish session: ${error.message}` });
     }
   }
 
   private _clearAuthParamsFromUrl(): void {
-    const newUrl = window.location.pathname + window.location.hash;
-    if (window.location.search) {
-        window.history.replaceState({}, document.title, newUrl);
-        logger.info('[AuthService] OAuth parameters cleared from URL search string.');
+    // Удаляем параметры code и state из URL, если они есть
+    const url = new URL(window.location.href);
+    let paramsCleared = false;
+    if (url.searchParams.has('code')) {
+        url.searchParams.delete('code');
+        paramsCleared = true;
     }
-  }
+    if (url.searchParams.has('state')) {
+        url.searchParams.delete('state');
+        paramsCleared = true;
+    }
+    if (paramsCleared) {
+        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+        logger.info('[AuthService] OAuth parameters (code, state) cleared from URL search string.');
+    }
+}
 
   public async login(): Promise<void> {
     logger.info('[AuthService] Initiating Lichess login...');
@@ -333,26 +338,32 @@ class AuthServiceController {
 
     if (callApiRevoke && tokenToRevoke) {
       try {
-        await fetch(this.lichessTokenUrl, {
+        // Используем OAuth2AuthCodePKCE для отзыва токена, если он предоставляет такой метод,
+        // или делаем прямой запрос, как раньше.
+        // Для простоты оставляем прямой запрос, так как revokeToken может быть не всегда доступен или работать иначе.
+        await fetch(this.lichessTokenUrl, { // Убедитесь, что это правильный URL для отзыва
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${tokenToRevoke}` },
         });
         logger.info('[AuthService] Lichess token revoked successfully.');
       } catch (err) {
         logger.error('[AuthService] Error while revoking Lichess token:', err);
+        // Продолжаем выход из системы локально, даже если отзыв не удался
       }
     }
-    this.clearAuthDataLocal();
-    this.setState({ isProcessing: false, error: null });
+    this.clearAuthDataLocal(); // Это уже вызовет setState и notifySubscribers
+    this.setState({ isProcessing: false, error: null }); // Дополнительно сбрасываем isProcessing и error
   }
 
   private clearAuthDataLocal(): void {
     localStorage.removeItem('lichess_token');
     localStorage.removeItem('lichess_user_profile');
+    // Вызов setState здесь приведет к обновлению состояния и уведомлению подписчиков
     this.setState({ accessToken: null, userProfile: null, isAuthenticated: false });
     logger.info('[AuthService] Local authentication data cleared.');
   }
 
+  // --- Геттеры для доступа к состоянию ---
   public getIsAuthenticated(): boolean { return this.state.isAuthenticated; }
   public getUserProfile(): UserSessionProfile | null { return this.state.userProfile; }
   public getAccessToken(): string | null { return this.state.accessToken; }

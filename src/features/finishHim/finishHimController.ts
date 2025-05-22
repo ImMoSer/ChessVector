@@ -1,7 +1,8 @@
 // src/features/finishHim/finishHimController.ts
 import type { Key } from 'chessground/types';
 import type { ChessboardService } from '../../core/chessboard.service';
-import type { WebhookService, AppPuzzle, PuzzleRequestPayload } from '../../core/webhook.service';
+// Изменено: импортируем класс WebhookServiceController для использования как тип
+import type { WebhookServiceController, AppPuzzle, PuzzleRequestPayload } from '../../core/webhook.service';
 import type { StockfishService } from '../../core/stockfish.service';
 import { BoardHandler } from '../../core/boardHandler';
 import type { GameStatus, GameEndOutcome, AttemptMoveResult } from '../../core/boardHandler';
@@ -35,8 +36,6 @@ interface FinishHimControllerState {
   isGameEffectivelyActive: boolean;
   outplayTimerId: number | null;
   outplayTimeRemainingMs: number | null;
-
-  // Новые состояния
   isCategoriesDropdownOpen: boolean;
   tacticalRatingDelta: number | null;
   finishHimRatingDelta: number | null;
@@ -48,7 +47,8 @@ export class FinishHimController {
   public boardHandler: BoardHandler;
   public analysisController: AnalysisController;
   private authService: typeof AuthService;
-  private webhookService: WebhookService;
+  // Изменено: тип для инстанса
+  private webhookService: WebhookServiceController;
   private stockfishService: StockfishService;
 
   private readonly defaultUserRating = 1200;
@@ -58,7 +58,8 @@ export class FinishHimController {
     public chessboardService: ChessboardService,
     boardHandler: BoardHandler,
     authService: typeof AuthService,
-    webhookService: WebhookService,
+    // Изменено: тип для инстанса
+    webhookService: WebhookServiceController,
     stockfishService: StockfishService,
     analysisController: AnalysisController,
     public requestRedraw: () => void,
@@ -90,7 +91,6 @@ export class FinishHimController {
       isGameEffectivelyActive: false,
       outplayTimerId: null,
       outplayTimeRemainingMs: null,
-      // Инициализация новых состояний
       isCategoriesDropdownOpen: false,
       tacticalRatingDelta: null,
       finishHimRatingDelta: null,
@@ -174,7 +174,6 @@ export class FinishHimController {
     this.state.isGameEffectivelyActive = false;
     this._clearOutplayTimer();
     this.state.outplayTimeRemainingMs = null;
-    // Сброс дельт при инициализации
     this.state.tacticalRatingDelta = null;
     this.state.finishHimRatingDelta = null;
     this.state.pieceCountDelta = null;
@@ -260,9 +259,8 @@ export class FinishHimController {
         this.state.userStats.playoutLosses += 1;
         this.state.userStats.currentPieceCount = Math.max(7, this.state.userStats.currentPieceCount - 1);
       } else { // draw
-        this.state.userStats.finishHimRating -= 10; // Consider no change or smaller penalty for draw
+        this.state.userStats.finishHimRating -= 10; 
         this.state.userStats.playoutDraws += 1;
-        // Piece count might not change on a draw, or could be a small penalty
       }
       this.state.finishHimRatingDelta = this.state.userStats.finishHimRating - oldRating;
       this.state.pieceCountDelta = this.state.userStats.currentPieceCount - oldPieceCount;
@@ -350,10 +348,9 @@ export class FinishHimController {
       logger.info(`[FinishHimController] Active puzzle type set to: ${puzzleType}`);
       const categoryName = t(`finishHim.puzzleTypes.${puzzleType}`);
       this.state.feedbackMessage = t('finishHim.feedback.categorySelected', { category: categoryName });
-      this.state.isCategoriesDropdownOpen = false; // Закрыть выпадающий список после выбора
+      this.state.isCategoriesDropdownOpen = false; 
       this.requestRedraw();
     } else {
-      // Если кликнули на уже активную категорию, просто закрываем дропдаун (если он был открыт)
       if (this.state.isCategoriesDropdownOpen) {
         this.state.isCategoriesDropdownOpen = false;
         this.requestRedraw();
@@ -387,11 +384,10 @@ export class FinishHimController {
     this.state.currentPgnString = "";
     this.state.currentTaskPieceCount = 0;
     this.state.isGameEffectivelyActive = true;
-    // Сброс дельт при загрузке новой задачи
     this.state.tacticalRatingDelta = null;
     this.state.finishHimRatingDelta = null;
     this.state.pieceCountDelta = null;
-    this.state.isCategoriesDropdownOpen = false; // Убедиться, что дропдаун закрыт
+    this.state.isCategoriesDropdownOpen = false;
 
     this.requestRedraw();
 
@@ -759,7 +755,6 @@ export class FinishHimController {
     }
     this._clearOutplayTimer();
     this.state.outplayTimeRemainingMs = null;
-    // Сброс дельт
     this.state.tacticalRatingDelta = null;
     this.state.finishHimRatingDelta = null;
     this.state.pieceCountDelta = null;
@@ -783,7 +778,6 @@ export class FinishHimController {
     }
     this._clearOutplayTimer();
     this.state.outplayTimeRemainingMs = null;
-    // Сброс дельт
     this.state.tacticalRatingDelta = null;
     this.state.finishHimRatingDelta = null;
     this.state.pieceCountDelta = null;
