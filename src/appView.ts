@@ -8,6 +8,8 @@ import { WelcomeController } from './features/welcome/welcomeController';
 import { renderWelcomePage } from './features/welcome/welcomeView';
 import { ClubPageController } from './features/clubPage/ClubPageController';
 import { renderClubPage } from './features/clubPage/clubPageView';
+import { RecordsPageController } from './features/recordsPage/RecordsPageController';
+import { renderRecordsPage } from './features/recordsPage/RecordsPageView'; // Исправлен регистр
 import logger from './utils/logger';
 import { t } from './core/i18n.service';
 import type { LedClubs } from './core/auth.service';
@@ -70,7 +72,6 @@ function renderMyClubsDropdown(controller: AppController, ledClubs: LedClubs): V
     return h('ul.nav-dropdown-list.my-clubs-dropdown', ledClubs.club_ids.map(clubId =>
         h('li', [
             h('a', {
-                // Добавляем класс 'active', если это текущая страница клуба
                 class: { active: appState.currentPage === 'clubPage' && appState.currentClubId === clubId },
                 props: { href: `#/clubs/${clubId}` },
                 on: {
@@ -78,17 +79,15 @@ function renderMyClubsDropdown(controller: AppController, ledClubs: LedClubs): V
                         e.preventDefault();
                         e.stopPropagation();
                         controller.navigateTo('clubPage', true, clubId);
-                        // Закрываем дропдаун MyClubs после выбора, если он открыт
                         if (appState.isMyClubsDropdownOpen) {
                            controller.toggleMyClubsDropdown();
                         }
-                        // Закрываем основной nav если он был открыт в портретном режиме
                         if (appState.isPortraitMode && appState.isNavExpanded) {
                             controller.toggleNav();
                         }
                     }
                 }
-            }, clubId) // Пока используем clubId как текст ссылки. Позже можно будет получать имена клубов.
+            }, clubId) 
         ])
     ));
 }
@@ -105,23 +104,33 @@ export function renderAppUI(controller: AppController): VNode {
     textKey: string,
     requiresAuth?: boolean,
     hideWhenAuth?: boolean,
-    clubIdToMatch?: string | null, // Используется для подсветки активного клуба в "MyClubs"
+    clubIdToMatch?: string | null,
     isDropdownToggle?: boolean,
     dropdownContent?: VNode | null
   }> = [
     { page: 'finishHim', textKey: 'nav.finishHim', requiresAuth: true },
+    { page: 'recordsPage', textKey: 'nav.leaderboards' }, 
   ];
 
   if (isAuthenticated && ledClubs && ledClubs.club_ids && ledClubs.club_ids.length > 0) {
-    navLinksConfig.push({
-        textKey: 'nav.myClubs',
-        requiresAuth: true,
-        isDropdownToggle: true,
-        dropdownContent: renderMyClubsDropdown(controller, ledClubs)
-    });
+    const recordsIndex = navLinksConfig.findIndex(link => link.page === 'recordsPage');
+    if (recordsIndex !== -1) {
+        navLinksConfig.splice(recordsIndex, 0, {
+            textKey: 'nav.myClubs',
+            requiresAuth: true,
+            isDropdownToggle: true,
+            dropdownContent: renderMyClubsDropdown(controller, ledClubs)
+        });
+    } else { 
+        navLinksConfig.push({
+            textKey: 'nav.myClubs',
+            requiresAuth: true,
+            isDropdownToggle: true,
+            dropdownContent: renderMyClubsDropdown(controller, ledClubs)
+        });
+    }
   }
 
-  // Фильтруем ссылки на основе аутентификации
   const visibleNavLinks = navLinksConfig.filter(link => {
     if (link.requiresAuth && !isAuthenticated) return false;
     if (link.hideWhenAuth && isAuthenticated) return false;
@@ -146,7 +155,7 @@ export function renderAppUI(controller: AppController): VNode {
         break;
       case 'finishHim':
         if (activePageController instanceof FinishHimController) {
-          pageSpecificContentVNode = h('div.finish-him-placeholder'); // Placeholder
+          pageSpecificContentVNode = h('div.finish-him-placeholder'); 
         } else {
           pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
@@ -154,6 +163,13 @@ export function renderAppUI(controller: AppController): VNode {
       case 'clubPage':
         if (activePageController instanceof ClubPageController) {
           pageSpecificContentVNode = renderClubPage(activePageController);
+        } else {
+          pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
+        }
+        break;
+      case 'recordsPage': 
+        if (activePageController instanceof RecordsPageController) {
+          pageSpecificContentVNode = renderRecordsPage(activePageController);
         } else {
           pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
@@ -220,18 +236,17 @@ export function renderAppUI(controller: AppController): VNode {
               h('li', { class: { 'has-dropdown': !!link.isDropdownToggle } }, [
                 h('a', {
                   class: { 
-                    // Подсветка активной страницы для обычных ссылок
                     active: link.page ? (appState.currentPage === link.page && (link.page !== 'clubPage' || appState.currentClubId === null)) : false,
                     'dropdown-toggle': !!link.isDropdownToggle 
                   },
-                  props: { href: link.page ? `#${link.page}`: '#' },
+                  props: { href: link.page ? (link.page === 'recordsPage' ? '#/records' : `#${link.page}`) : '#' },
                   on: {
                     click: (e: Event) => {
                       e.preventDefault();
                       if (link.isDropdownToggle) {
                         controller.toggleMyClubsDropdown();
                       } else if (link.page) {
-                        controller.navigateTo(link.page, true, null); // clubId здесь null, так как это основные ссылки
+                        controller.navigateTo(link.page, true, null);
                         if (appState.isPortraitMode && appState.isNavExpanded) {
                             controller.toggleNav();
                         }

@@ -8,6 +8,7 @@ import './features/analysis/analysisPanel.css';
 import './features/finishHim/finishHim.css';
 import './features/welcome/welcome.css';
 import './features/clubPage/clubPage.css';
+import './features/recordsPage/recordsPage.css';
 
 
 // Import core services

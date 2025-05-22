@@ -4,6 +4,8 @@
   },
   "nav": {
     "finishHim": "FinishHim",
+    "myClubs": "My Clubs",
+    "leaderboards": "Leaderboards",
     "logout": "Logout",
     "clubPage": "Club Page"
   },
@@ -202,6 +204,33 @@
       "duration": "Duration",
       "clubRank": "Rank",
       "clubScore": "Club Score"
+    }
+  },
+  "records": {
+    "pageTitle": {
+      "loading": "Loading Leaderboards...",
+      "loaded": "Leaderboards",
+      "error": "Error Loading Leaderboards"
+    },
+    "errors": {
+      "dataLoadFailed": "Failed to load leaderboard data. Please check your connection or try again later.",
+      "unknown": "An unknown error occurred while fetching leaderboard data.",
+      "noLeaderboards": "No leaderboards available at the moment."
+    },
+    "titles": {
+      "tacticalRating": "Top Tactical Rating",
+      "finishHimRating": "Top Playout Rating",
+      "mostGamesPlayed": "Most Games Played"
+    },
+    "table": {
+      "rank": "#",
+      "player": "Player",
+      "tacticalRatingValue": "Tactical Rating",
+      "gamesPlayed": "Games Played",
+      "finishHimRatingValue": "Playout Rating",
+      "playoutWins": "Playout Wins",
+      "tier": "Tier",
+      "noEntries": "No entries for this leaderboard yet."
     }
   }
 }

@@ -10,10 +10,11 @@ import { AnalysisController } from './features/analysis/analysisController';
 import { subscribeToLangChange, getCurrentLang } from './core/i18n.service';
 import { FinishHimController } from './features/finishHim/finishHimController';
 import { WelcomeController } from './features/welcome/welcomeController';
-import { AuthService, type UserSessionProfile, type SubscriptionTier } from './core/auth.service'; // Удален импорт 'type LedClubs'
+import { AuthService, type UserSessionProfile, type SubscriptionTier } from './core/auth.service';
 import { ClubPageController } from './features/clubPage/ClubPageController';
+import { RecordsPageController } from './features/recordsPage/RecordsPageController'; // Новый импорт
 
-export type AppPage = 'welcome' | 'finishHim' | 'clubPage';
+export type AppPage = 'welcome' | 'finishHim' | 'clubPage' | 'recordsPage'; // Добавлена 'recordsPage'
 
 export interface AppServices {
   authService: typeof AuthService;
@@ -31,10 +32,10 @@ interface AppControllerState {
   isPortraitMode: boolean;
   currentUser: UserSessionProfile | null;
   isLoadingAuth: boolean;
-  isMyClubsDropdownOpen: boolean; // Новое состояние для выпадающего списка "MyClubs"
+  isMyClubsDropdownOpen: boolean;
 }
 
-type ActivePageController = WelcomeController | FinishHimController | ClubPageController | null;
+type ActivePageController = WelcomeController | FinishHimController | ClubPageController | RecordsPageController | null; // Добавлен RecordsPageController
 
 const BOARD_MAX_VH = 94;
 const BOARD_MIN_VH = 10;
@@ -89,7 +90,7 @@ export class AppController {
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
       currentUser: null,
       isLoadingAuth: true,
-      isMyClubsDropdownOpen: false, // Инициализация нового состояния
+      isMyClubsDropdownOpen: false,
     };
 
     this.unsubscribeFromLangChange = subscribeToLangChange(() => {
@@ -108,7 +109,6 @@ export class AppController {
       this.state.currentUser = authState.userProfile;
       this.state.isLoadingAuth = authState.isProcessing;
 
-      // Запрос на перерисовку, если изменился ID пользователя, состояние загрузки или список клубов
       if (
           prevUserProfileId !== authState.userProfile?.id ||
           prevIsLoadingAuth !== authState.isProcessing ||
@@ -136,12 +136,9 @@ export class AppController {
     window.addEventListener('hashchange', this.handleHashChange.bind(this));
 
     const authCallbackProcessed = await this.authServiceInstance.handleAuthentication();
-    // isLoadingAuth будет установлено в false внутри _fetchAndSetUserSessionProfile или если есть ошибка
-    // Поэтому здесь не нужно явно устанавливать в false, если только не произошла ошибка до вызова _fetchAndSetUserSessionProfile
     if (!this.authServiceInstance.getIsProcessing() && this.state.isLoadingAuth){
         this.setState({ isLoadingAuth: false });
     }
-
 
     if (authCallbackProcessed) {
         const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
@@ -163,7 +160,6 @@ export class AppController {
     this._isInitializing = false;
   }
 
-
   private handleHashChange(): void {
     const rawHash = window.location.hash.slice(1);
     logger.info(`[AppController] Hash changed. Raw hash: "${rawHash}"`);
@@ -184,6 +180,9 @@ export class AppController {
             logger.warn(`[AppController] Invalid club page hash format: "${cleanHash}". Defaulting.`);
             newPageFromHash = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
         }
+    } else if (cleanHash === 'records') { // Обработка нового хеша для страницы рекордов
+        newPageFromHash = 'recordsPage';
+        logger.info(`[AppController] Parsed records page from hash: ${newPageFromHash}`);
     } else if (validAppPages.includes(cleanHash as AppPage)) {
         newPageFromHash = cleanHash as AppPage;
         logger.info(`[AppController] Parsed standard page from hash: ${newPageFromHash}`);
@@ -239,9 +238,10 @@ export class AppController {
 
     let availableWidthForCenterPx: number;
 
-    if (this.state.isPortraitMode) {
+    if (this.state.isPortraitMode || this.state.currentPage === 'recordsPage' || this.state.currentPage === 'clubPage' || this.state.currentPage === 'welcome') {
+      // Для recordsPage, clubPage, welcome и в портретном режиме, центральный контент может занимать больше места
       availableWidthForCenterPx = viewportWidthPx - (2 * panelGapPx);
-    } else {
+    } else { // Для finishHim в альбомном режиме
       const actualLeftPanelWidth = document.getElementById('left-panel')?.offsetParent !== null ? leftPanelWidthPx : 0;
       const actualRightPanelWidth = document.getElementById('right-panel')?.offsetParent !== null ? rightPanelWidthPx : 0;
       
@@ -264,7 +264,7 @@ export class AppController {
 
     const finalBoardSizeVh = (finalBoardSizePx / viewportHeightPx) * 100;
 
-    logger.debug(`[AppController _calc] Final Board Size: ${finalBoardSizePx.toFixed(2)}px -> ${finalBoardSizeVh.toFixed(2)}vh. AvailableWidth: ${availableWidthForCenterPx.toFixed(2)}px`);
+    logger.debug(`[AppController _calc] Final Board Size: ${finalBoardSizePx.toFixed(2)}px -> ${finalBoardSizeVh.toFixed(2)}vh. AvailableWidth: ${availableWidthForCenterPx.toFixed(2)}px. Page: ${this.state.currentPage}`);
     document.documentElement.style.setProperty('--calculated-board-size-vh', `${finalBoardSizeVh.toFixed(3)}vh`);
 
     const resizeEvent = new CustomEvent('centerPanelResized', {
@@ -277,7 +277,6 @@ export class AppController {
     });
     window.dispatchEvent(resizeEvent);
   }
-
 
   public navigateTo(page: AppPage, updateHash: boolean = true, clubId: string | null = null): void {
     const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
@@ -317,15 +316,11 @@ export class AppController {
         targetPage = 'finishHim';
         targetClubId = null;
     }
-    
-    // Закрываем дропдаун "MyClubs", если переходим на другую основную страницу (не clubPage по клику из дропдауна)
-    // или если это clubPage, но не из-за клика по элементу дропдауна "MyClubs".
-    // Это более сложная логика, если мы хотим, чтобы дропдаун оставался открытым при клике на его элемент.
-    // Пока просто закрываем, если новая страница не clubPage ИЛИ если clubId не меняется (т.е. не клик по другому клубу).
+    // Для 'recordsPage' специальных проверок доступа пока нет
+
     if (this.state.isMyClubsDropdownOpen && (targetPage !== 'clubPage' || targetClubId === this.state.currentClubId)) {
         this.state.isMyClubsDropdownOpen = false;
     }
-
 
     if (this.state.currentPage === targetPage && this.state.currentClubId === targetClubId && this.activePageController) {
       logger.info(`[AppController navigateTo] Already on page: ${targetPage}${targetClubId ? ` (Club ID: ${targetClubId})` : ''}. Controller exists.`);
@@ -335,7 +330,7 @@ export class AppController {
         this.requestGlobalRedraw();
       }
       if (updateHash) {
-          const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : targetPage;
+          const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : (targetPage === 'recordsPage' ? 'records' : targetPage);
           if (window.location.hash.slice(1) !== newHashTarget) {
               window.location.hash = newHashTarget;
           }
@@ -356,7 +351,7 @@ export class AppController {
     this.state.currentClubId = targetClubId;
 
     if (updateHash) {
-        const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : targetPage;
+        const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : (targetPage === 'recordsPage' ? 'records' : targetPage);
         const currentCleanHash = window.location.hash.slice(1).startsWith('/') ? window.location.hash.slice(2) : window.location.hash.slice(1);
         if (currentCleanHash !== newHashTarget) {
             window.location.hash = newHashTarget;
@@ -430,6 +425,10 @@ export class AppController {
             if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
         }
         break;
+      case 'recordsPage': // Новый case для страницы рекордов
+        this.activePageController = new RecordsPageController(this.services, this.requestGlobalRedraw);
+        (this.activePageController as RecordsPageController).initializePage();
+        break;
       default:
         const exhaustiveCheck: never = page; 
         logger.error(`[AppController] Unknown page in loadPageController: ${exhaustiveCheck}. Defaulting to welcome.`);
@@ -442,7 +441,6 @@ export class AppController {
 
   public toggleNav(): void {
     this.state.isNavExpanded = !this.state.isNavExpanded;
-    // Если открываем основное меню, закрываем дропдаун клубов
     if (this.state.isNavExpanded && this.state.isMyClubsDropdownOpen) {
         this.state.isMyClubsDropdownOpen = false;
     }
@@ -452,7 +450,6 @@ export class AppController {
 
   public toggleMyClubsDropdown(): void {
     this.state.isMyClubsDropdownOpen = !this.state.isMyClubsDropdownOpen;
-    // Если открываем дропдаун клубов, а основное меню было открыто (в портретном режиме), закрываем основное
     if (this.state.isMyClubsDropdownOpen && this.state.isNavExpanded && this.state.isPortraitMode) {
         this.state.isNavExpanded = false;
     }
@@ -470,7 +467,6 @@ export class AppController {
       if (this.state.isNavExpanded) {
         this.state.isNavExpanded = false;
       }
-      // При смене ориентации также закрываем дропдаун клубов
       if (this.state.isMyClubsDropdownOpen) {
           this.state.isMyClubsDropdownOpen = false;
       }
@@ -524,4 +520,5 @@ export class AppController {
   }
 }
 
-const validAppPages: AppPage[] = ['welcome', 'finishHim', 'clubPage'];
+// Обновляем validAppPages для включения 'recordsPage'
+const validAppPages: AppPage[] = ['welcome', 'finishHim', 'clubPage', 'recordsPage'];

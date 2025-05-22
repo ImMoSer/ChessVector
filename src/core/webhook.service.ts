@@ -1,6 +1,6 @@
 // src/core/webhook.service.ts
 import logger from '../utils/logger';
-import type { FinishHimStats } from './auth.service';
+import type { FinishHimStats, SubscriptionTier } from './auth.service'; // Импортируем нужные типы
 
 // --- Существующие интерфейсы для fetchPuzzle ---
 export interface PuzzleRequestPayload {
@@ -29,7 +29,7 @@ export interface FinishHimRatingUpdatePayload {
     finishHimStats: FinishHimStats;
 }
 
-// --- Новые интерфейсы для Club Stats ---
+// --- Существующие интерфейсы для Club Stats ---
 export interface ClubStatsRequestPayload {
   club_id: string;
 }
@@ -73,19 +73,38 @@ export interface ClubData {
   jsonb_array_battle: ClubBattle[];
   club_name: string;
   grunder: string;
-  nb_members: string; 
+  nb_members: string;
   jsonb_array_leader: ClubLeader[];
-  club_bild?: string; 
-  topMax?: number; // Добавлено новое поле
+  club_bild?: string;
+  topMax?: number;
 }
 
 export type ClubStatsResponse = ClubData[] | ClubData;
+
+// --- Новые интерфейсы для Leaderboards (Страница Рекордов) ---
+export interface RawLeaderboardUserData {
+  lichess_id: string;
+  username: string;
+  FinishHimStats: FinishHimStats;
+  subscriptionTier: SubscriptionTier;
+}
+
+// Ожидаемый формат ответа от бэкенда для fetchAllUserStats
+// Теперь это сам объект, а не массив с одним объектом
+export interface LeaderboardsApiResponse {
+  leaderboards: { [lichess_id: string]: RawLeaderboardUserData };
+}
+
+export interface FetchLeaderboardsRequestPayload {
+  event: "fetchAllUserStats"; // Тип события для запроса всех данных пользователей
+}
 
 
 // --- URL вебхуков ---
 const PUZZLE_FEN_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_PUZZLE_FEN as string;
 const FINISH_HIM_STATS_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_FINISH_HIM_STATS as string;
 const CLUB_STATS_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_CLUB_STATS as string;
+const LEADERBOARDS_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_LEADERBOARDS as string;
 
 if (!PUZZLE_FEN_WEBHOOK_URL) {
   logger.error(
@@ -102,11 +121,17 @@ if (!CLUB_STATS_WEBHOOK_URL) {
     '[WebhookService] Configuration Warning: VITE_WEBHOOK_CLUB_STATS is not defined. Club stats fetching will not work.'
   );
 }
+if (!LEADERBOARDS_WEBHOOK_URL) {
+  logger.warn(
+    '[WebhookService] Configuration Warning: VITE_WEBHOOK_LEADERBOARDS is not defined. Leaderboards fetching will not work.'
+  );
+}
 
 export class WebhookService {
   private puzzleWebhookUrl: string;
   private finishHimStatsWebhookUrl?: string;
   private clubStatsWebhookUrl?: string;
+  private leaderboardsWebhookUrl?: string;
 
   constructor() {
     this.puzzleWebhookUrl = PUZZLE_FEN_WEBHOOK_URL;
@@ -128,6 +153,13 @@ export class WebhookService {
         logger.info(`[WebhookService] Club Stats Webhook Initialized with URL: ${this.clubStatsWebhookUrl}`);
     } else {
         logger.warn(`[WebhookService] Club Stats Webhook not configured. Club stats fetching will not work.`);
+    }
+
+    if (LEADERBOARDS_WEBHOOK_URL) {
+        this.leaderboardsWebhookUrl = LEADERBOARDS_WEBHOOK_URL;
+        logger.info(`[WebhookService] Leaderboards Webhook Initialized with URL: ${this.leaderboardsWebhookUrl}`);
+    } else {
+        logger.warn(`[WebhookService] Leaderboards Webhook not configured. Leaderboards fetching will not work.`);
     }
   }
 
@@ -264,7 +296,7 @@ export class WebhookService {
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const responseData = (await response.json()) as ClubStatsResponse;
-        
+
         if (Array.isArray(responseData)) {
           if (responseData.length > 0 && responseData[0].club_id) {
               logger.info('[WebhookService fetchClubStats] Successfully fetched club data (from array):', responseData[0]);
@@ -290,6 +322,77 @@ export class WebhookService {
       }
     } catch (error: any) {
       logger.error('[WebhookService fetchClubStats] Network or fetch error:', error.message, error);
+      return null;
+    }
+  }
+
+  public async fetchAllUserStatsForLeaderboards(): Promise<RawLeaderboardUserData[] | null> {
+    if (!this.leaderboardsWebhookUrl) {
+        logger.error("[WebhookService fetchAllUserStatsForLeaderboards] Cannot fetch: URL not configured.");
+        return null;
+    }
+
+    const payload: FetchLeaderboardsRequestPayload = {
+        event: "fetchAllUserStats"
+    };
+
+    logger.info(`[WebhookService fetchAllUserStatsForLeaderboards] Sending POST to: ${this.leaderboardsWebhookUrl}`);
+    logger.debug('[WebhookService fetchAllUserStatsForLeaderboards] Request payload:', payload);
+
+    try {
+      const response = await fetch(this.leaderboardsWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      logger.info(`[WebhookService fetchAllUserStatsForLeaderboards] Response status: ${response.status} ${response.statusText}`);
+
+      if (!response.ok) {
+        let errorBody = "";
+        try {
+            errorBody = await response.text();
+        } catch (e) { /* ignore */ }
+        logger.error(`[WebhookService fetchAllUserStatsForLeaderboards] HTTP error! Status: ${response.status}. Body: ${errorBody}`);
+        return null;
+      }
+
+      let parsedJson: any;
+      try {
+        parsedJson = await response.json();
+      } catch (jsonError: any) {
+        logger.error('[WebhookService fetchAllUserStatsForLeaderboards] Failed to parse JSON response:', jsonError.message);
+        return null;
+      }
+
+      logger.debug('[WebhookService fetchAllUserStatsForLeaderboards] Parsed JSON response:', JSON.stringify(parsedJson));
+
+      // Новая структура ответа: {"leaderboards": { lichess_id1: UserData1, ... } }
+      // parsedJson теперь напрямую является этим объектом.
+      const apiResponse = parsedJson as LeaderboardsApiResponse;
+
+      if (apiResponse &&
+          typeof apiResponse === 'object' && // Убедимся, что это объект
+          apiResponse.hasOwnProperty('leaderboards') &&
+          typeof apiResponse.leaderboards === 'object' && // Проверяем, что leaderboards - это объект
+          apiResponse.leaderboards !== null &&
+          !Array.isArray(apiResponse.leaderboards) // И не массив
+          ) {
+
+        const leaderboardsObject = apiResponse.leaderboards as { [key: string]: RawLeaderboardUserData };
+        const dataArray: RawLeaderboardUserData[] = Object.values(leaderboardsObject); // Преобразуем объект в массив
+
+        logger.info(`[WebhookService fetchAllUserStatsForLeaderboards] Successfully fetched and transformed ${dataArray.length} user stats entries.`);
+        return dataArray;
+      } else {
+        logger.warn('[WebhookService fetchAllUserStatsForLeaderboards] Fetched data is not in the expected format `{"leaderboards": { lichess_id: UserData, ... } }`. Actual structure:', JSON.stringify(apiResponse));
+        return null;
+      }
+    } catch (error: any) {
+      logger.error('[WebhookService fetchAllUserStatsForLeaderboards] Network or fetch error:', error.message, error);
       return null;
     }
   }

@@ -1,0 +1,187 @@
+/* src/features/recordsPage/recordsPage.css */
+
+.records-page-container {
+  padding: 20px;
+  box-sizing: border-box;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-default);
+  display: flex;
+  flex-direction: column;
+  gap: 25px; /* Отступ между заголовком страницы и сеткой таблиц, и между таблицами */
+  width: 80vw; /* Шире, чем clubPage, для потенциально большего количества таблиц */
+  max-width: 1200px;
+  margin: 0 auto;
+  height: auto;
+  overflow: visible;
+}
+
+.records-page-container.loading,
+.records-page-container.error,
+.records-page-container.no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 300px;
+  width: 100%;
+}
+
+.records-page-main-title {
+  font-size: 1.8em;
+  font-weight: 600;
+  color: var(--color-accent-primary);
+  margin-bottom: 10px; /* Уменьшен отступ, так как основной отступ через gap у .records-page-container */
+  text-align: center;
+  width: 100%;
+}
+
+.records-page-container.loading .records-page-main-title,
+.records-page-container.error .records-page-main-title,
+.records-page-container.no-data .records-page-main-title {
+  margin-bottom: 20px;
+}
+
+.records-page-container .error-message { /* Стиль из clubPage.css */
+  color: var(--color-accent-error);
+  background-color: rgba(204, 52, 50, 0.1);
+  border: 1px solid var(--color-accent-error);
+  padding: 10px 15px;
+  border-radius: var(--panel-border-radius);
+  max-width: 600px;
+  text-align: center;
+}
+
+.leaderboards-grid {
+  display: grid;
+  /* По умолчанию одна колонка, для мобильных */
+  grid-template-columns: 1fr;
+  gap: 30px; /* Отступ между контейнерами таблиц */
+}
+
+.leaderboard-table-container {
+  padding: 20px;
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--panel-border-radius);
+  border: 1px solid var(--color-border);
+  overflow-x: auto; /* Для прокрутки таблиц на маленьких экранах, если они не помещаются */
+  height: auto;
+  overflow-y: visible;
+}
+
+.leaderboard-table-container .table-title { /* Стиль из clubPage.css */
+  font-size: 1.4em;
+  color: var(--color-text-on-accent);
+  background-color: var(--color-accent-info); /* Другой цвет для отличия от ClubPage */
+  padding: 10px 15px;
+  margin-top: 0;
+  margin-bottom: 20px;
+  border-radius: var(--panel-border-radius) var(--panel-border-radius) 0 0; /* Скругление только верхних углов */
+  display: block;
+  width: calc(100% + 40px); /* +20px padding слева и справа от родителя */
+  margin-left: -20px; /* Компенсация padding родителя */
+  margin-right: -20px; /* Компенсация padding родителя */
+  box-sizing: border-box;
+  text-align: center;
+  border-bottom: 1px solid var(--color-border-hover);
+}
+
+.leaderboard-table-container .no-data-message { /* Стиль из clubPage.css */
+    padding: 15px;
+    text-align: center;
+    font-style: italic;
+    color: var(--color-text-muted);
+    background-color: var(--color-bg-tertiary);
+    border-radius: 0 0 var(--panel-border-radius) var(--panel-border-radius);
+}
+
+.styled-table.records-table { /* Общие стили из clubPage.css */
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em; /* Немного крупнее для читаемости рекордов */
+}
+
+.styled-table.records-table th,
+.styled-table.records-table td {
+  padding: 10px 14px; /* Немного больше padding */
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border);
+}
+.styled-table.records-table th:first-child,
+.styled-table.records-table td:first-child {
+  border-left: none;
+}
+
+.styled-table.records-table th {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  border-top: 1px solid var(--color-border);
+}
+
+.styled-table.records-table tbody tr:nth-child(even) {
+  background-color: var(--color-bg-tertiary);
+}
+.styled-table.records-table tbody tr:nth-child(odd) {
+  background-color: var(--color-bg-secondary);
+}
+
+.styled-table.records-table tbody tr:hover {
+  background-color: var(--color-border-hover);
+}
+
+.styled-table.records-table td a {
+  color: var(--color-text-link);
+  text-decoration: none;
+  font-weight: 500; /* Сделаем имена игроков чуть заметнее */
+}
+.styled-table.records-table td a:hover {
+  text-decoration: underline;
+  color: var(--color-accent-primary);
+}
+
+/* Адаптация для экранов побольше - 2 колонки для таблиц */
+@media (min-width: 1024px) {
+  .leaderboards-grid {
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); /* Адаптивные колонки */
+  }
+  .records-page-container {
+    width: 90vw;
+    max-width: 1400px;
+  }
+}
+
+/* Адаптация для мобильных (портретная ориентация) */
+@media (orientation: portrait) {
+  .records-page-container {
+    width: 100%;
+    padding: 10px;
+    gap: 20px;
+  }
+  .records-page-main-title {
+    font-size: 1.5em;
+  }
+  .leaderboard-table-container .table-title {
+    font-size: 1.2em;
+    padding: 8px 12px;
+    width: calc(100% + 20px); /* +10px padding слева и справа от родителя */
+    margin-left: -10px;
+    margin-right: -10px;
+  }
+  .leaderboard-table-container {
+    padding: 10px;
+  }
+  .styled-table.records-table {
+    font-size: 0.85em;
+  }
+  .styled-table.records-table th,
+  .styled-table.records-table td {
+    padding: 8px 10px;
+  }
+  .leaderboards-grid {
+    grid-template-columns: 1fr; /* Всегда одна колонка в портретном режиме */
+    gap: 20px;
+  }
+}
