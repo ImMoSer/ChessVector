@@ -10,6 +10,7 @@ import { ClubPageController } from './features/clubPage/ClubPageController';
 import { renderClubPage } from './features/clubPage/clubPageView';
 import logger from './utils/logger';
 import { t } from './core/i18n.service';
+import type { LedClubs } from './core/auth.service';
 
 // --- Resize logic for center panel (remains unchanged) ---
 let isResizingCenterPanel = false;
@@ -60,26 +61,67 @@ function onCenterPanelResizeEnd(_controller: AppController, moveHandler: any, en
 }
 // --- End of resize logic ---
 
+function renderMyClubsDropdown(controller: AppController, ledClubs: LedClubs): VNode | null {
+    const appState = controller.state;
+    if (!appState.isMyClubsDropdownOpen || !ledClubs.club_ids || ledClubs.club_ids.length === 0) {
+        return null;
+    }
+
+    return h('ul.nav-dropdown-list.my-clubs-dropdown', ledClubs.club_ids.map(clubId =>
+        h('li', [
+            h('a', {
+                // Добавляем класс 'active', если это текущая страница клуба
+                class: { active: appState.currentPage === 'clubPage' && appState.currentClubId === clubId },
+                props: { href: `#/clubs/${clubId}` },
+                on: {
+                    click: (e: Event) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        controller.navigateTo('clubPage', true, clubId);
+                        // Закрываем дропдаун MyClubs после выбора, если он открыт
+                        if (appState.isMyClubsDropdownOpen) {
+                           controller.toggleMyClubsDropdown();
+                        }
+                        // Закрываем основной nav если он был открыт в портретном режиме
+                        if (appState.isPortraitMode && appState.isNavExpanded) {
+                            controller.toggleNav();
+                        }
+                    }
+                }
+            }, clubId) // Пока используем clubId как текст ссылки. Позже можно будет получать имена клубов.
+        ])
+    ));
+}
+
+
 export function renderAppUI(controller: AppController): VNode {
   const appState = controller.state;
   const activePageController = controller.activePageController;
   const isAuthenticated = controller.services.authService.getIsAuthenticated();
+  const ledClubs = controller.services.authService.getLedClubs();
 
-  let navLinksConfig: Array<{ page: AppPage, textKey: string, requiresAuth?: boolean, hideWhenAuth?: boolean, clubId?: string | null }> = [
+  let navLinksConfig: Array<{
+    page?: AppPage,
+    textKey: string,
+    requiresAuth?: boolean,
+    hideWhenAuth?: boolean,
+    clubIdToMatch?: string | null, // Используется для подсветки активного клуба в "MyClubs"
+    isDropdownToggle?: boolean,
+    dropdownContent?: VNode | null
+  }> = [
     { page: 'finishHim', textKey: 'nav.finishHim', requiresAuth: true },
   ];
 
-  if (appState.currentPage === 'clubPage' && appState.currentClubId) {
-    const clubPageLink = navLinksConfig.find(link => link.page === 'clubPage' && link.clubId === appState.currentClubId);
-    if (!clubPageLink) {
-        navLinksConfig.push({
-            page: 'clubPage',
-            textKey: 'nav.clubPage', 
-            clubId: appState.currentClubId
-        });
-    }
+  if (isAuthenticated && ledClubs && ledClubs.club_ids && ledClubs.club_ids.length > 0) {
+    navLinksConfig.push({
+        textKey: 'nav.myClubs',
+        requiresAuth: true,
+        isDropdownToggle: true,
+        dropdownContent: renderMyClubsDropdown(controller, ledClubs)
+    });
   }
 
+  // Фильтруем ссылки на основе аутентификации
   const visibleNavLinks = navLinksConfig.filter(link => {
     if (link.requiresAuth && !isAuthenticated) return false;
     if (link.hideWhenAuth && isAuthenticated) return false;
@@ -104,9 +146,7 @@ export function renderAppUI(controller: AppController): VNode {
         break;
       case 'finishHim':
         if (activePageController instanceof FinishHimController) {
-          // renderFinishHimUI returns a layout object, not a single VNode
-          // We will handle its structure below
-          pageSpecificContentVNode = h('div.finish-him-placeholder'); // Placeholder, actual rendering below
+          pageSpecificContentVNode = h('div.finish-him-placeholder'); // Placeholder
         } else {
           pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
@@ -144,7 +184,7 @@ export function renderAppUI(controller: AppController): VNode {
   let mainContentStructure: VNode;
 
   if (appState.currentPage === 'finishHim' && activePageController instanceof FinishHimController) {
-    const fhLayout: FinishHimPageViewLayout = renderFinishHimUI(activePageController); // Явно указываем тип
+    const fhLayout: FinishHimPageViewLayout = renderFinishHimUI(activePageController);
     mainContentStructure = h('div.three-column-layout', {
         class: {
             'portrait-mode-layout': appState.isPortraitMode,
@@ -163,8 +203,7 @@ export function renderAppUI(controller: AppController): VNode {
         fhLayout.right ? h('aside#right-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode } }, [fhLayout.right]) : null,
       ].filter(Boolean) as VNode[]);
   } else {
-    // For 'welcome', 'clubPage', or loading/error states
-    mainContentStructure = pageSpecificContentVNode; // This is already the .club-page-container or .welcome-page-container
+    mainContentStructure = pageSpecificContentVNode;
   }
 
   return h('div#app-layout', [
@@ -178,20 +217,33 @@ export function renderAppUI(controller: AppController): VNode {
         h('ul.nav-links',
           [
             ...visibleNavLinks.map(link =>
-              h('li', [
+              h('li', { class: { 'has-dropdown': !!link.isDropdownToggle } }, [
                 h('a', {
-                  class: { active: appState.currentPage === link.page && (link.page !== 'clubPage' || (link.page === 'clubPage' && link.clubId === appState.currentClubId)) },
-                  props: { href: link.page === 'clubPage' && link.clubId ? `#/clubs/${link.clubId}` : `#${link.page}` },
+                  class: { 
+                    // Подсветка активной страницы для обычных ссылок
+                    active: link.page ? (appState.currentPage === link.page && (link.page !== 'clubPage' || appState.currentClubId === null)) : false,
+                    'dropdown-toggle': !!link.isDropdownToggle 
+                  },
+                  props: { href: link.page ? `#${link.page}`: '#' },
                   on: {
                     click: (e: Event) => {
                       e.preventDefault();
-                      controller.navigateTo(link.page, true, link.clubId);
+                      if (link.isDropdownToggle) {
+                        controller.toggleMyClubsDropdown();
+                      } else if (link.page) {
+                        controller.navigateTo(link.page, true, null); // clubId здесь null, так как это основные ссылки
+                        if (appState.isPortraitMode && appState.isNavExpanded) {
+                            controller.toggleNav();
+                        }
+                        if (appState.isMyClubsDropdownOpen) {
+                            controller.toggleMyClubsDropdown();
+                        }
+                      }
                     }
                   }
-                }, (link.page === 'clubPage' && appState.currentClubId && activePageController instanceof ClubPageController && activePageController.state.clubData?.club_name)
-                     ? activePageController.state.clubData.club_name 
-                     : t(link.textKey)
-                )
+                }, t(link.textKey)
+                ),
+                link.isDropdownToggle && link.dropdownContent ? link.dropdownContent : null
               ])
             ),
             isAuthenticated ? h('li', [
@@ -204,6 +256,7 @@ export function renderAppUI(controller: AppController): VNode {
                     logger.info('[appView] Logout button clicked.');
                     await controller.services.authService.logout();
                     if (appState.isNavExpanded) controller.toggleNav();
+                    if (appState.isMyClubsDropdownOpen) controller.toggleMyClubsDropdown();
                   }
                 }
               }, t('nav.logout'))
@@ -212,7 +265,7 @@ export function renderAppUI(controller: AppController): VNode {
         )
       ])
     ]),
-    h('main#page-content-wrapper', [ // Этот элемент теперь будет содержать либо .three-column-layout, либо напрямую .club-page-container / .welcome-page-container
+    h('main#page-content-wrapper', [
         mainContentStructure
     ])
   ]);

@@ -20,11 +20,9 @@
   --color-accent-info: #0072B2;
   --color-accent-special: #b72fc6;
 
-  /* Размеры для альбомного режима */
   --panel-width: 300px;
-  --calculated-board-size-vh: 70vh; /* JS будет обновлять это для альбомного режима */
+  --calculated-board-size-vh: 70vh;
 
-  /* Общие отступы */
   --page-vertical-padding: 10px;
   --panel-gap: 10px;
   --panel-border-radius: 8px;
@@ -39,7 +37,7 @@ html, body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-default);
   height: 100vh;
-  overflow: hidden; /* Предотвращаем прокрутку на body, управляется ниже */
+  overflow: hidden;
 }
 
 *, *::before, *::after {
@@ -49,7 +47,7 @@ html, body {
 #app-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* Занимает всю высоту окна просмотра */
+  height: 100vh;
 }
 
 #app-header {
@@ -61,8 +59,8 @@ html, body {
   height: var(--header-height);
   padding: 0 15px;
   border-bottom: 1px solid var(--color-border);
-  z-index: 1000; /* Хедер всегда сверху */
-  flex-shrink: 0; /* Хедер не должен сжиматься */
+  z-index: 1000;
+  flex-shrink: 0;
 }
 
 .nav-header-content {
@@ -87,7 +85,7 @@ html, body {
   font-size: 1.5em;
   padding: 5px;
   line-height: 1;
-  display: none; /* Показывается только в портретном режиме через медиа-запрос */
+  display: none;
   margin-left: auto;
 }
 
@@ -102,6 +100,7 @@ html, body {
 
 .nav-links li {
   margin-left: 5px;
+  position: relative;
 }
 .nav-links li:first-child {
   margin-left: 0;
@@ -124,8 +123,8 @@ html, body {
 
 .nav-links li a.active:not(.logout-link) {
   background-color: #262421;
-  border-style: solid; /* Добавь это */
-  border-width: 1px;   /* Добавь это (можешь выбрать другую толщину) */
+  border-style: solid; 
+  border-width: 1px;   
   border-color: #a0a0a0;
   color: #a0a0a0;
 }
@@ -140,34 +139,68 @@ html, body {
   color: var(--color-text-on-accent);
 }
 
+.nav-dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-hover);
+  border-top: none;
+  border-radius: 0 0 var(--panel-border-radius) var(--panel-border-radius);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  z-index: 1001;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  min-width: 180px;
+}
+
+.nav-dropdown-list li {
+  margin-left: 0;
+  width: 100%;
+}
+
+.nav-dropdown-list li a {
+  padding: 10px 15px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  display: block;
+  color: var(--color-text-muted);
+}
+
+.nav-dropdown-list li:last-child a {
+  border-bottom: none;
+  border-radius: 0 0 calc(var(--panel-border-radius) - 1px) calc(var(--panel-border-radius) - 1px);
+}
+
+.nav-dropdown-list li a:hover {
+  background-color: var(--color-accent-info);
+  color: var(--color-text-on-accent);
+}
+
 #page-content-wrapper {
   flex-grow: 1; 
   display: flex; 
-  flex-direction: column; /* Для корректного отображения clubPage, если он один */
-  align-items: center; /* Центрирует .club-page-container, если он уже чем wrapper */
-  overflow-y: auto; /* Главный скроллбар здесь */
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
   padding-top: var(--page-vertical-padding);
   padding-bottom: var(--page-vertical-padding);
-  /* Боковые padding-и теперь будут управляться дочерними элементами, 
-     такими как .three-column-layout или .club-page-container, 
-     чтобы .club-page-container мог занимать 100% ширины в портретном режиме.
-     Если для .three-column-layout нужны боковые отступы, их нужно добавить ему.
-  */
 }
 
-/* --- Стили для альбомной ориентации (по умолчанию для .three-column-layout) --- */
 .three-column-layout {
   display: flex;
   flex-direction: row; 
-  width: 100%; /* Занимает всю ширину #page-content-wrapper */
-  max-width: calc( (2 * var(--panel-width)) + var(--calculated-board-size-vh) + (2 * var(--panel-gap)) ); /* Ограничиваем максимальную ширину */
-  margin: 0 auto; /* Центрируем, если #page-content-wrapper шире */
+  width: 100%;
+  max-width: calc( (2 * var(--panel-width)) + var(--calculated-board-size-vh) + (2 * var(--panel-gap)) );
+  margin: 0 auto;
   height: 100%; 
   align-items: flex-start; 
   justify-content: center; 
   gap: var(--panel-gap);
-  padding-left: var(--panel-gap); /* Добавляем боковые отступы здесь */
-  padding-right: var(--panel-gap); /* Добавляем боковые отступы здесь */
+  padding-left: var(--panel-gap);
+  padding-right: var(--panel-gap);
   box-sizing: border-box;
 }
 
@@ -196,10 +229,6 @@ html, body {
   position: relative; 
   overflow: hidden; 
 }
-
-
-
-
 
 #center-panel { 
   width: 100%;
@@ -246,16 +275,14 @@ body.board-resizing * {
     height: 100%;
 }
 
-
-/* --- Стили для портретной ориентации --- */
 @media (orientation: portrait) {
   .three-column-layout { 
     flex-direction: column; 
     align-items: center;    
     height: auto;           
     width: 100%;
-    max-width: 100%; /* Снимаем ограничение max-width для портретного режима */
-    padding-left: 0; /* Убираем боковые отступы, так как панели будут на всю ширину */
+    max-width: 100%;
+    padding-left: 0;
     padding-right: 0;
   }
 
@@ -273,7 +300,7 @@ body.board-resizing * {
   .three-column-layout #left-panel { 
     width: 100vw; 
     height: auto; 
-    min-height: 150px; /* Adjusted min-height */
+    min-height: 150px;
     padding: 15px;
     box-shadow: none;
     border-radius: 0;
@@ -321,5 +348,22 @@ body.board-resizing * {
   }
    .nav-links li:last-child a {
        border-bottom: none; 
+   }
+
+  .nav-dropdown-list {
+    position: static;
+    box-shadow: none;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid var(--color-border);
+    min-width: 100%;
+  }
+  .nav-dropdown-list li a {
+      padding: 10px 25px;
+      background-color: var(--color-bg-tertiary);
+  }
+   .nav-dropdown-list li a:hover {
+      background-color: var(--color-accent-info);
    }
 }
