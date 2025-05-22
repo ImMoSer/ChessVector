@@ -37,8 +37,9 @@ export interface UserSessionProfile extends LichessUserProfile {
   finishHimStats: FinishHimStats;
 }
 
+// Обновленный UserSessionUpsertPayload, чтобы event мог быть 'oAuth'
 export interface UserSessionUpsertPayload {
-    event: "userSessionUpsert";
+    event: "userSessionUpsert" | "oAuth";
     lichess_id: string;
     username: string;
     lichessAccessToken: string;
@@ -88,9 +89,13 @@ class AuthServiceController {
     logger.info(`[AuthService] Initializing with CLIENT_ID: ${CLIENT_ID}, REDIRECT_URI: ${REDIRECT_URI}`);
     this.lichessTokenUrl = TOKEN_URL;
 
-    if (!REDIRECT_URI.startsWith('http://localhost') && !REDIRECT_URI.startsWith('https://')) {
-        logger.error(`[AuthService] Critical Configuration Error: VITE_LICHESS_REDIRECT_URI must be an absolute URL. Current value: "${REDIRECT_URI}"`);
-    }
+    // Важно: REDIRECT_URI должен быть абсолютным URL и совпадать с зарегистрированным в Lichess.
+    // Для продакшена это будет, например, 'https://yourdomain.com/'.
+    // Для разработки 'http://localhost:port/'.
+    // Проверка была удалена по запросу, но важно помнить об этом требовании.
+    // if (!REDIRECT_URI.startsWith('http://localhost') && !REDIRECT_URI.startsWith('https://')) {
+    //     logger.error(`[AuthService] Critical Configuration Error: VITE_LICHESS_REDIRECT_URI must be an absolute URL. Current value: "${REDIRECT_URI}"`);
+    // }
 
     this.oauthClient = new OAuth2AuthCodePKCE({
       authorizationUrl: `${LICHESS_HOST}/oauth`,
@@ -107,7 +112,8 @@ class AuthServiceController {
           if (token?.value) {
             this.setState({ accessToken: token.value, error: null });
             localStorage.setItem('lichess_token', token.value);
-            await this._fetchAndSetUserSessionProfile(token.value);
+            // При обновлении токена это не начальная аутентификация
+            await this._fetchAndSetUserSessionProfile(token.value, false);
             logger.info('[AuthService] Token refreshed successfully and user session profile re-fetched.');
           }
           return newAccessContext;
@@ -184,7 +190,7 @@ class AuthServiceController {
       logger.error('[AuthService] Error during handleAuthentication:', errorMessage, err);
       this.clearAuthDataLocal();
       this.setState({ isAuthenticated: false, userProfile: null, accessToken: null, error: `Authentication failed: ${errorMessage}` });
-      return true;
+      return true; // Возвращаем true, так как обработка callback (даже с ошибкой) произошла
     } finally {
         this.setState({ isProcessing: false });
     }
@@ -198,9 +204,13 @@ class AuthServiceController {
     if (token?.value) {
       this.setState({ accessToken: token.value, error: null });
       localStorage.setItem('lichess_token', token.value);
-      await this._fetchAndSetUserSessionProfile(token.value);
-      this._clearAuthParamsFromUrl();
+      // Очищаем параметры URL *перед* асинхронным вызовом для получения профиля
+      this._clearAuthParamsFromUrl(); 
+      // Это начальная аутентификация через OAuth
+      await this._fetchAndSetUserSessionProfile(token.value, true);
     } else {
+      // Если токен не получен, очищаем параметры URL на всякий случай, чтобы избежать повторной обработки
+      this._clearAuthParamsFromUrl();
       throw new Error('Received empty token from Lichess during callback.');
     }
   }
@@ -210,19 +220,21 @@ class AuthServiceController {
     if (storedToken) {
       logger.info('[AuthService] Found stored Lichess token. Validating session.');
       this.setState({ accessToken: storedToken });
-      await this._fetchAndSetUserSessionProfile(storedToken);
+      // Загрузка сохраненной сессии - это не начальная аутентификация
+      await this._fetchAndSetUserSessionProfile(storedToken, false);
       if (!this.state.isAuthenticated) {
         logger.warn('[AuthService] Stored token validation failed. User is logged out.');
-        this.clearAuthDataLocal();
+        this.clearAuthDataLocal(); // Очищаем данные, если профиль не загрузился
       }
     } else {
       logger.info('[AuthService] No stored Lichess token found.');
-      this.clearAuthDataLocal();
+      this.clearAuthDataLocal(); // Убеждаемся, что состояние чистое
     }
   }
 
-  private async _fetchAndSetUserSessionProfile(lichessAccessToken: string): Promise<void> {
-    logger.info('[AuthService] Fetching Lichess basic profile and then full user session from backend...');
+  private async _fetchAndSetUserSessionProfile(lichessAccessToken: string, isInitialAuth: boolean): Promise<void> {
+    const eventType = isInitialAuth ? "oAuth" : "userSessionUpsert";
+    logger.info(`[AuthService] Fetching Lichess basic profile and then full user session from backend (event: ${eventType})...`);
     try {
       const fetchWithAuth = this.oauthClient.decorateFetchHTTPClient(window.fetch);
       const lichessResponse = await fetchWithAuth(`${LICHESS_HOST}/api/account`, {
@@ -238,7 +250,7 @@ class AuthServiceController {
       logger.debug('[AuthService] Basic Lichess profile data received:', lichessProfile);
 
       const upsertPayload: UserSessionUpsertPayload = {
-        event: "userSessionUpsert",
+        event: eventType, // Используем eventType
         lichess_id: lichessProfile.id,
         username: lichessProfile.username,
         lichessAccessToken: lichessAccessToken,
@@ -252,11 +264,10 @@ class AuthServiceController {
 
       if (!backendResponse.ok) {
         const errorText = await backendResponse.text().catch(() => '');
-        logger.error(`[AuthService] User session upsert to backend failed. Status: ${backendResponse.status}. Response: ${errorText}`);
-        throw new Error(`Backend userSessionUpsert failed: ${backendResponse.status}`);
+        logger.error(`[AuthService] User session upsert to backend failed (event: ${eventType}). Status: ${backendResponse.status}. Response: ${errorText}`);
+        throw new Error(`Backend userSessionUpsert failed (event: ${eventType}): ${backendResponse.status}`);
       }
 
-      // Бэкенд возвращает ОДИН ОБЪЕКТ, а не массив
       const backendSpecificData = await backendResponse.json() as Partial<BackendUserSessionData>;
       logger.debug('[AuthService] Raw backendSpecificData from JSON parse:', JSON.stringify(backendSpecificData));
 
@@ -287,21 +298,22 @@ class AuthServiceController {
       this.setState({
         userProfile: finalUserSessionProfile,
         isAuthenticated: true,
-        accessToken: lichessAccessToken,
+        accessToken: lichessAccessToken, // Убедимся, что токен сохраняется в state
         error: null,
       });
 
     } catch (error: any) {
-      logger.error('[AuthService] Error in _fetchAndSetUserSessionProfile:', error.message, error.stack);
-      this.clearAuthDataLocal();
+      logger.error(`[AuthService] Error in _fetchAndSetUserSessionProfile (event: ${eventType}):`, error.message, error.stack);
+      this.clearAuthDataLocal(); // Очищаем данные при ошибке
       this.setState({ isAuthenticated: false, userProfile: null, accessToken: null, error: `Failed to establish session: ${error.message}` });
     }
   }
 
   private _clearAuthParamsFromUrl(): void {
-    const newUrl = window.location.pathname + window.location.hash;
-    if (window.location.search) {
+    const newUrl = window.location.pathname + window.location.hash; // Сохраняем хэш, если он есть
+    if (window.location.search) { // Очищаем только search params
         window.history.replaceState({}, document.title, newUrl);
+        logger.info('[AuthService] OAuth parameters cleared from URL search string.');
     }
   }
 
@@ -331,15 +343,17 @@ class AuthServiceController {
         logger.info('[AuthService] Lichess token revoked successfully.');
       } catch (err) {
         logger.error('[AuthService] Error while revoking Lichess token:', err);
+        // Продолжаем выход, даже если отзыв не удался
       }
     }
-    this.clearAuthDataLocal();
-    this.setState({ isProcessing: false, error: null });
+    this.clearAuthDataLocal(); // Очищаем локальные данные и обновляем состояние
+    this.setState({ isProcessing: false, error: null }); // Завершаем обработку
   }
 
   private clearAuthDataLocal(): void {
     localStorage.removeItem('lichess_token');
     localStorage.removeItem('lichess_user_profile');
+    // Устанавливаем isAuthenticated в false и сбрасываем профиль и токен
     this.setState({ accessToken: null, userProfile: null, isAuthenticated: false });
     logger.info('[AuthService] Local authentication data cleared.');
   }

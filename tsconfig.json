@@ -5,6 +5,7 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    "esModuleInterop": true, // <--- ДОБАВЛЕНО ЗДЕСЬ
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -20,8 +21,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    /* Добавляем типы Vite клиента */
-    "types": ["vite/client"] // <--- ВОТ ЭТО ИЗМЕНЕНИЕ
+    /* Добавляем типы Vite клиента и Node */
+    "types": ["vite/client", "node"]
   },
   "include": ["src"]
 }
