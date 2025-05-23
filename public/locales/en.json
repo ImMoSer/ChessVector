@@ -22,7 +22,9 @@
       "centerNotLoaded": "Center panel not loaded",
       "rightNotLoaded": "Right panel not loaded"
     },
-    "loadingController": "Loading page controller..."
+    "loadingController": "Loading page controller...",
+    "processing": "Processing...",
+    "ok": "OK"
   },
   "errorPage": {
     "invalidController": "Error: Invalid controller for page {pageName}",
@@ -204,6 +206,14 @@
       "duration": "Duration",
       "clubRank": "Rank",
       "clubScore": "Club Score"
+    },
+    "button": {
+      "follow": "Follow",
+      "unfollow": "Unfollow"
+    },
+    "follow": {
+      "successAdded": "Club successfully added to your followed list. You can see your followed clubs in your profile area.",
+      "successRemoved": "Club successfully removed from your followed list. You can see your followed clubs in your profile area."
     }
   },
   "records": {

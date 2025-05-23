@@ -66,9 +66,8 @@
 
 .club-banner {
   width: 100%;
-  border-radius: calc(var(--panel-border-radius) - 4px);
   object-fit: cover;
-  border: 1px solid var(--color-border);
+
 }
 
 .club-info .club-name-link {
@@ -76,7 +75,7 @@
 }
 
 .club-info .club-name {
-  font-size: var(--font-size-xlarge); /* Используем очень большой размер (2em) */
+  font-size: var(--font-size-xxlarge); /* Используем очень большой размер (2em) */
   font-weight: var(--font-weight-bold); /* Используем жирное начертание */
   font-family: var(--font-family-primary); /* Явно указываем шрифт */
   color: var(--color-accent-primary);
@@ -88,37 +87,80 @@
 }
 
 .club-info .club-meta {
-  font-size: var(--font-size-small); /* Используем маленький размер (было 1em, но относительно родителя с 2em это было бы много) */
-                                     /* Если нужен размер относительно body, то var(--font-size-base) */
+  font-size: var(--font-size-large);
   color: var(--color-text-muted);
   margin-top: 5px;
   padding: 5px 10px;
   background-color: var(--color-bg-tertiary);
-  border-radius: 4px;
+  border-radius: 10px;
   display: inline-block;
   border: 1px solid var(--color-border);
   /* font-family будет унаследован */
 }
 
+/* --- Стили для кнопки Follow/Unfollow --- */
+.follow-club-button {
+  padding: 8px 15px;
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-large); /* Маленький размер для кнопки */
+  font-weight: var(--font-weight-bold);
+  border-radius: var(--panel-border-radius);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  margin-top: 10px; /* Отступ сверху от названия клуба */
+  margin-right: 10px; /* Отступ справа от кнопки */
+  min-width: 120px;
+  border: 1px solid;
+}
+
+.follow-club-button.not-following {
+  background-color: var(--color-accent-success);
+  border-color: var(--color-accent-success);
+  color: var(--color-accent-error);
+}
+.follow-club-button.not-following:hover:not(:disabled) {
+  background-color: #A0D003; /* Чуть темнее --color-accent-success */
+  border-color: #A0D003;
+}
+
+.follow-club-button.following {
+  background-color: var(--color-accent-error);
+  border-color: var(--color-accent-error);
+  color: var(--color-text-on-accent);
+}
+.follow-club-button.following:hover:not(:disabled) {
+  background-color: #C4312D; /* Чуть темнее --color-accent-error */
+  border-color: #C4312D;
+}
+
+.follow-club-button:disabled {
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
 /* Секция лидеров клуба - более строгий стиль */
 .club-leaders-section {
-  padding: 15px;
+  padding: 10px;
   background-color: var(--color-bg-secondary);
   border-radius: var(--panel-border-radius);
   border: 1px solid var(--color-border-hover);
   /* font-family и font-size будут унаследованы */
 }
 
-.club-leaders-section .section-title {
-  font-size: var(--font-size-large); /* Используем большой размер (ближайший к 1.4em) */
-  font-family: var(--font-family-primary); /* Явно указываем шрифт */
-  color: var(--color-text-default);
+.club-leaders-section .table-title { /* Изменено с .section-title на .table-title для консистентности */
+  font-size: var(--font-size-xlarge);
+  font-family: var(--font-family-primary);
+  color: var(--color-text-muted);
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 5px;
   text-align: center;
-  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--color-border);
+  font-weight: var(--font-weight-bold);
+  padding-bottom: 1px;
+  border-bottom: none;
 }
 
 
@@ -133,15 +175,16 @@
 }
 
 .leaders-list li {
-  background-color: var(--color-bg-tertiary);
-  padding: 6px 12px;
+  background-color: var(--color-bg-secondary);
+  padding: 6px 18px;
   border-radius: var(--panel-border-radius);
-  font-size: var(--font-size-small); /* Используем маленький размер (ближайший к 0.95em) */
+  font-size: var(--font-size-large);
   border: 1px solid var(--color-border);
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   white-space: nowrap;
-  color: var(--color-text-default);
-  font-family: var(--font-family-primary); /* Явно указываем шрифт */
+  color: var(--color-text-muted);
+  font-family: var(--font-family-primary);
+
 }
 
 /* Общий стиль для контейнеров таблиц */
@@ -151,51 +194,59 @@
   background-color: var(--color-bg-secondary);
   border-radius: var(--panel-border-radius);
   border: 1px solid var(--color-border-hover);
-  overflow: hidden;
+  overflow: hidden; /* Важно для скругления внутренних таблиц */
   height: auto;
   /* font-family и font-size будут унаследованы */
 }
 
-.table-content-wrapper {
+.table-content-wrapper { /* Этот класс не используется в HTML, но может быть полезен, если таблицы будут иметь внутренний padding */
     padding: 15px;
     overflow-x: auto;
 }
 
 /* Заголовки таблиц - делаем их разноцветными */
 .table-title {
-  font-size: var(--font-size-large); /* Используем большой размер (ближайший к 1.4em) */
-  font-family: var(--font-family-primary); /* Явно указываем шрифт */
+  font-size: var(--font-size-large);
+  font-family: var(--font-family-primary);
   color: var(--color-text-on-accent);
   padding: 10px 15px;
   margin-top: 0;
-  margin-bottom: 0;
+  margin-bottom: 0; /* Убираем нижний отступ, так как таблица следует сразу */
   display: block;
   width: 100%;
   box-sizing: border-box;
   text-align: center;
   border-bottom: 1px solid var(--color-border-hover);
-  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
+  font-weight: var(--font-weight-bold);
 }
 
 .player-stats-table-container .table-title {
   background-color: var(--color-accent-primary);
+  color: var(--color-accent-error);
 }
+/* Для заголовка лидеров, если он тоже будет использовать .table-title */
+.club-leaders-section .table-title {
+    color: var(--color-text-muted); /* Темный текст на светлом фоне */
+}
+
 
 .tournament-history-table-container .table-title {
   background-color: var(--color-accent-success);
+  color: var(--color-bg-primary); /* Темный текст на светлом лаймовом фоне */
+  font-size: var(--font-size-xlarge);
 }
 
 .club-stats-grid {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 20px; /* Добавлен отступ снизу для сетки таблиц */
 }
 
 .styled-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--font-size-small); /* Используем маленький размер (0.9em) */
+  font-size: var(--font-size-small);
   /* font-family будет унаследован */
 }
 
@@ -221,10 +272,10 @@
 .styled-table th {
   background-color: var(--color-bg-tertiary);
   color: var(--color-text-muted);
-  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
-  font-family: var(--font-family-primary); /* Явно указываем шрифт для заголовков */
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-primary);
   white-space: nowrap;
-  border-top: none;
+  border-top: none; /* Убираем верхнюю границу у заголовков, так как она есть у .table-title */
 }
 
 .styled-table tbody tr:nth-child(even) {
@@ -254,7 +305,7 @@
 .tournament-row.expanded {
   background-color: var(--color-accent-info) !important;
   color: var(--color-text-on-accent) !important;
-  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
+  font-weight: var(--font-weight-bold);
 }
 .tournament-row.expanded td,
 .tournament-row.expanded td a {
@@ -275,15 +326,15 @@
 }
 
 .players-list-title {
-  font-size: var(--font-size-base); /* Используем базовый размер (ближайший к 1.1em) */
-  font-family: var(--font-family-primary); /* Явно указываем шрифт */
+  font-size: var(--font-size-base);
+  font-family: var(--font-family-primary);
   color: var(--color-text-muted);
   margin-top: 0;
   margin-bottom: 8px;
 }
 
 .mini-player-table {
-  font-size: var(--font-size-small); /* Используем маленький размер (ближайший к 0.95em) */
+  font-size: var(--font-size-small);
   /* font-family будет унаследован */
 }
 
@@ -301,7 +352,7 @@
   background-color: var(--color-bg-secondary);
   border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
-  font-family: var(--font-family-primary); /* Явно указываем шрифт для заголовков мини-таблицы */
+  font-family: var(--font-family-primary);
   font-weight: var(--font-weight-bold);
 }
 
@@ -318,7 +369,7 @@
 
 .player-title {
     color: var(--color-accent-warning);
-    font-weight: var(--font-weight-bold); /* Используем жирное начертание */
+    font-weight: var(--font-weight-bold);
     margin-right: 0.25em;
     /* font-family и font-size будут унаследованы */
 }
@@ -328,7 +379,7 @@
     text-align: center;
     font-style: italic;
     color: var(--color-text-muted);
-    font-size: var(--font-size-small); /* Используем маленький шрифт */
+    font-size: var(--font-size-small);
     /* font-family будет унаследован */
 }
 
@@ -343,17 +394,15 @@
     padding: 10px;
   }
   .club-info .club-name {
-    font-size: var(--font-size-large); /* Используем большой размер (1.7em), ближайший к 1.5em */
+    font-size: var(--font-size-large);
   }
   .table-title {
-    font-size: var(--font-size-base); /* Используем базовый размер (1.3em), ближайший к 1.2em */
+    font-size: var(--font-size-base);
     padding: 8px 12px;
   }
-  .table-content-wrapper {
-    padding: 10px;
-  }
+  /* .table-content-wrapper удален, так как не используется */
   .styled-table {
-    font-size: var(--font-size-small); /* Используем маленький размер (0.9em), ближайший к 0.85em */
+    font-size: var(--font-size-small);
   }
   .styled-table th,
   .styled-table td {
@@ -361,5 +410,21 @@
   }
   .club-stats-grid {
     gap: 15px;
+  }
+  .follow-club-button {
+    font-size: var(--font-size-base); /* Немного увеличим для портретного режима */
+    padding: 10px 18px;
+  }
+}
+
+/* Для случая, когда несколько таблиц статистики идут подряд */
+@media (min-width: 1024px) {
+  .club-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Адаптивные колонки */
+    gap: 20px;
+  }
+  .player-stats-table-container {
+    margin-bottom: 0; /* Убираем отступ, если он был, так как gap уже есть */
   }
 }

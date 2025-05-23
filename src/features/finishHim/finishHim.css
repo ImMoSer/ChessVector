@@ -171,13 +171,13 @@
 .games-played-info {
   font-size: var(--font-size-base); /* Используем базовый размер шрифта (соответствует предыдущим 1.3em) */
   font-weight: var(--font-weight-bold); /* Используем переменную */
-  color: var(--color-accent-success);
+  color: var(--color-accent-primary);
   text-align: center;
   margin-bottom: 12px;
   padding: 6px;
   background-color: var(--color-bg-tertiary);
   border-radius: 4px;
-  border: 1px solid var(--color-accent-success);
+  border: 1px solid var(--color-accent-primary);
   /* font-family будет унаследован */
 }
 

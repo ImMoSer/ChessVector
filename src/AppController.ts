@@ -2,7 +2,6 @@
 import logger from './utils/logger';
 import type { ChessboardService } from './core/chessboard.service';
 import type { StockfishService } from './core/stockfish.service';
-// Изменено: импортируем ТОЛЬКО класс WebhookServiceController для использования как тип
 import { type WebhookServiceController } from './core/webhook.service';
 import { BoardHandler } from './core/boardHandler';
 import { PgnService } from './core/pgn.service';
@@ -21,9 +20,11 @@ export interface AppServices {
   authService: typeof AuthService;
   chessboardService: ChessboardService;
   stockfishService: StockfishService;
-  webhookService: WebhookServiceController; // Тип для инстанса
+  webhookService: WebhookServiceController;
   analysisService: AnalysisService;
   logger: typeof logger;
+  // Добавляем AppController в сервисы, чтобы другие контроллеры могли вызывать модальное окно
+  appController: AppController;
 }
 
 interface AppControllerState {
@@ -33,7 +34,8 @@ interface AppControllerState {
   isPortraitMode: boolean;
   currentUser: UserSessionProfile | null;
   isLoadingAuth: boolean;
-  isMyClubsDropdownOpen: boolean;
+  isModalVisible: boolean; // Новое состояние для модального окна
+  modalMessage: string | null; // Новое состояние для сообщения в модальном окне
 }
 
 type ActivePageController = WelcomeController | FinishHimController | ClubPageController | RecordsPageController | null;
@@ -52,7 +54,7 @@ export class AppController {
   private analysisControllerInstance: AnalysisController | null = null;
   private analysisServiceInstance: AnalysisService;
   private authServiceInstance: typeof AuthService;
-  private webhookServiceInstance: WebhookServiceController; // Тип для инстанса
+  private webhookServiceInstance: WebhookServiceController;
 
   private unsubscribeFromLangChange: (() => void) | null = null;
   private unsubscribeFromAuthChange: (() => void) | null = null;
@@ -61,7 +63,7 @@ export class AppController {
     globalServices: {
       chessboardService: ChessboardService;
       stockfishService: StockfishService;
-      webhookService: WebhookServiceController; // Тип для инстанса
+      webhookService: WebhookServiceController;
       logger: typeof logger;
     },
     requestGlobalRedraw: () => void
@@ -77,6 +79,7 @@ export class AppController {
       logger: globalServices.logger,
       authService: this.authServiceInstance,
       analysisService: this.analysisServiceInstance,
+      appController: this, // Передаем сам AppController в сервисы
     };
     this.requestGlobalRedraw = requestGlobalRedraw;
 
@@ -91,7 +94,8 @@ export class AppController {
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
       currentUser: null,
       isLoadingAuth: true,
-      isMyClubsDropdownOpen: false,
+      isModalVisible: false, // Инициализация нового состояния
+      modalMessage: null,   // Инициализация нового состояния
     };
 
     this.unsubscribeFromLangChange = subscribeToLangChange(() => {
@@ -105,7 +109,7 @@ export class AppController {
       
       const prevUserProfileId = this.state.currentUser?.id;
       const prevIsLoadingAuth = this.state.isLoadingAuth;
-      const prevLedClubs = JSON.stringify(this.state.currentUser?.follow_clubs);
+      const prevFollowClubs = JSON.stringify(this.state.currentUser?.follow_clubs);
 
       this.state.currentUser = authState.userProfile;
       this.state.isLoadingAuth = authState.isProcessing;
@@ -113,7 +117,7 @@ export class AppController {
       if (
           prevUserProfileId !== authState.userProfile?.id ||
           prevIsLoadingAuth !== authState.isProcessing ||
-          JSON.stringify(authState.userProfile?.follow_clubs) !== prevLedClubs
+          JSON.stringify(authState.userProfile?.follow_clubs) !== prevFollowClubs
       ) {
           this.requestGlobalRedraw();
       }
@@ -132,7 +136,7 @@ export class AppController {
   public async initializeApp(): Promise<void> {
     this._isInitializing = true;
     logger.info(`[AppController] Initializing app & authentication...`);
-    this.setState({ isLoadingAuth: true, isMyClubsDropdownOpen: false });
+    this.setState({ isLoadingAuth: true });
 
     window.addEventListener('hashchange', this.handleHashChange.bind(this));
 
@@ -317,10 +321,6 @@ export class AppController {
         targetClubId = null;
     }
 
-    if (this.state.isMyClubsDropdownOpen && (targetPage !== 'clubPage' || targetClubId === this.state.currentClubId)) {
-        this.state.isMyClubsDropdownOpen = false;
-    }
-
     if (this.state.currentPage === targetPage && this.state.currentClubId === targetClubId && this.activePageController) {
       logger.info(`[AppController navigateTo] Already on page: ${targetPage}${targetClubId ? ` (Club ID: ${targetClubId})` : ''}. Controller exists.`);
       if (this.state.isPortraitMode && this.state.isNavExpanded) {
@@ -440,19 +440,7 @@ export class AppController {
 
   public toggleNav(): void {
     this.state.isNavExpanded = !this.state.isNavExpanded;
-    if (this.state.isNavExpanded && this.state.isMyClubsDropdownOpen) {
-        this.state.isMyClubsDropdownOpen = false;
-    }
     logger.info(`[AppController] Nav toggled. Expanded: ${this.state.isNavExpanded}`);
-    this.requestGlobalRedraw();
-  }
-
-  public toggleMyClubsDropdown(): void {
-    this.state.isMyClubsDropdownOpen = !this.state.isMyClubsDropdownOpen;
-    if (this.state.isMyClubsDropdownOpen && this.state.isNavExpanded && this.state.isPortraitMode) {
-        this.state.isNavExpanded = false;
-    }
-    logger.info(`[AppController] MyClubs dropdown toggled. Open: ${this.state.isMyClubsDropdownOpen}`);
     this.requestGlobalRedraw();
   }
 
@@ -466,9 +454,6 @@ export class AppController {
       if (this.state.isNavExpanded) {
         this.state.isNavExpanded = false;
       }
-      if (this.state.isMyClubsDropdownOpen) {
-          this.state.isMyClubsDropdownOpen = false;
-      }
       needsRedraw = true;
     }
 
@@ -479,6 +464,16 @@ export class AppController {
     }
   }
   
+  public showModal(message: string): void {
+    this.setState({ isModalVisible: true, modalMessage: message });
+    logger.info(`[AppController] Showing modal with message: "${message}"`);
+  }
+
+  public hideModal(): void {
+    this.setState({ isModalVisible: false, modalMessage: null });
+    logger.info(`[AppController] Hiding modal.`);
+  }
+
   private setState(newState: Partial<AppControllerState>): void {
     let changed = false;
     for (const key in newState) {

@@ -1,11 +1,10 @@
 // src/core/webhook.service.ts
 import logger from '../utils/logger';
-// Импортируем типы, которые раньше были в auth.service, но теперь нужны здесь для нового метода
-import type { FinishHimStats, SubscriptionTier, UserSessionUpsertPayload, BackendUserSessionData, LedClubs } from './auth.service';
+import type { FinishHimStats, SubscriptionTier, UserSessionUpsertPayload, FollowClubs, BackendUserSessionData } from './auth.service'; // BackendUserSessionData импортируется здесь
 
 // --- Интерфейсы для Puzzle ---
 export interface PuzzleRequestPayload {
-  event?: string; // Это поле уже используется, например, "FinishHim"
+  event?: string;
   lichess_id: string;
   pieceCount?: number;
   rating?: number;
@@ -25,14 +24,14 @@ export interface AppPuzzle extends PuzzleDataFromWebhook {}
 
 // --- Интерфейсы для FinishHim Stats ---
 export interface FinishHimRatingUpdatePayload {
-    event: "finishHimRatingUpdate"; // Поле event уже есть
+    event: "finishHimRatingUpdate";
     lichess_id: string;
     finishHimStats: FinishHimStats;
 }
 
 // --- Интерфейсы для Club Stats ---
 export interface ClubStatsRequestPayload {
-  event: "fetchClubStats"; // Добавлено поле event
+  event: "fetchClubStats";
   club_id: string;
 }
 
@@ -89,7 +88,7 @@ export interface RawLeaderboardUserData {
   username: string;
   FinishHimStats: FinishHimStats;
   subscriptionTier: SubscriptionTier;
-  follow_clubs?: LedClubs; // Добавлено поле follow_clubs, если оно приходит от бэкенда для лидербордов
+  follow_clubs?: FollowClubs;
 }
 
 export interface LeaderboardsApiResponse {
@@ -97,7 +96,15 @@ export interface LeaderboardsApiResponse {
 }
 
 export interface FetchLeaderboardsRequestPayload {
-  event: "fetchAllUserStats"; // Поле event уже есть
+  event: "fetchAllUserStats";
+}
+
+// --- Новый интерфейс для Club Follow ---
+export interface ClubFollowRequestPayload {
+  event: "clubFollow";
+  lichess_id: string;
+  club_id: string;
+  action: 'follow' | 'unfollow';
 }
 
 // --- URL единого бэкенд вебхука ---
@@ -176,12 +183,11 @@ export class WebhookServiceController {
   }
 
   public async fetchPuzzle(payload: PuzzleRequestPayload): Promise<AppPuzzle | null> {
-    // Убедимся, что event установлен, если он не пришел из payload
     const finalPayload = { ...payload, event: payload.event || "FinishHim" };
     const puzzleData = await this._postRequest<PuzzleDataFromWebhook, PuzzleRequestPayload>(finalPayload, "fetchPuzzle");
     if (puzzleData && puzzleData.PuzzleId) {
         return puzzleData as AppPuzzle;
-    } else if (puzzleData) { // Если puzzleData есть, но нет PuzzleId
+    } else if (puzzleData) {
         logger.warn('[WebhookService fetchPuzzle] Fetched data is missing PuzzleId or is malformed. Response:', puzzleData);
     }
     return null;
@@ -194,7 +200,7 @@ export class WebhookServiceController {
       finishHimStats: stats,
     };
     const response = await this._postRequest<any, FinishHimRatingUpdatePayload>(payload, "sendFinishHimStatsUpdate");
-    return !!response; // Считаем успешным, если ответ не null (т.е. запрос прошел без ошибок)
+    return !!response;
   }
 
   public async fetchClubStats(club_id: string): Promise<ClubData | null> {
@@ -239,24 +245,34 @@ export class WebhookServiceController {
       const dataArray: RawLeaderboardUserData[] = Object.values(leaderboardsObject);
       logger.info(`[WebhookService fetchAllUserStatsForLeaderboards] Successfully fetched and transformed ${dataArray.length} user stats entries.`);
       return dataArray;
-    } else if (apiResponse) { // Если apiResponse есть, но структура неверная
+    } else if (apiResponse) {
       logger.warn('[WebhookService fetchAllUserStatsForLeaderboards] Fetched data is not in the expected format. Actual structure:', JSON.stringify(apiResponse));
     }
     return null;
   }
 
-  // Новый метод для обработки сессии пользователя
   public async upsertUserSession(payload: UserSessionUpsertPayload): Promise<BackendUserSessionData | null> {
-    // Поле 'event' уже должно быть в UserSessionUpsertPayload ("userSessionUpsert" или "oAuth")
     const sessionData = await this._postRequest<BackendUserSessionData, UserSessionUpsertPayload>(payload, "upsertUserSession");
-    if (sessionData && sessionData.lichess_id && sessionData.FinishHimStats && typeof sessionData.subscriptionTier !== 'undefined') {
+    if (sessionData && !Array.isArray(sessionData) && sessionData.lichess_id && sessionData.FinishHimStats && typeof sessionData.subscriptionTier !== 'undefined') {
         return sessionData;
-    } else if (sessionData) { // Если sessionData есть, но неполное
-        logger.warn('[WebhookService upsertUserSession] Fetched data is missing required fields or is malformed. Response:', sessionData);
+    } else if (sessionData) {
+        logger.warn('[WebhookService upsertUserSession] Fetched data is malformed, an array, or missing required fields. Response:', sessionData);
+    }
+    return null;
+  }
+
+  public async updateClubFollowStatus(payload: ClubFollowRequestPayload): Promise<BackendUserSessionData | null> {
+    // Ожидаем ОДИН объект BackendUserSessionData, а не массив, согласно логам
+    const sessionData = await this._postRequest<BackendUserSessionData, ClubFollowRequestPayload>(payload, "updateClubFollowStatus");
+
+    // Проверка, что sessionData не массив и содержит необходимые поля
+    if (sessionData && !Array.isArray(sessionData) && sessionData.lichess_id && sessionData.FinishHimStats && typeof sessionData.subscriptionTier !== 'undefined') {
+        return sessionData;
+    } else if (sessionData) { // Если sessionData есть, но не соответствует ожиданиям
+        logger.warn('[WebhookService updateClubFollowStatus] Fetched data is malformed, an array, or missing required fields. Response:', sessionData);
     }
     return null;
   }
 }
 
-// Экспортируем инстанс сервиса для использования в других модулях
 export const WebhookService = new WebhookServiceController();

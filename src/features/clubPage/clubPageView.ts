@@ -6,7 +6,7 @@ import type { ClubData, ClubBattle, ClubPlayer, ClubLeader } from '../../core/we
 import { t } from '../../core/i18n.service';
 import logger from '../../utils/logger';
 
-const DEFAULT_TOP_MAX = 10; // Значение по умолчанию, если topMax не придет от бэкенда
+const DEFAULT_TOP_MAX = 10;
 
 // --- Helper Functions for Data Processing ---
 
@@ -54,7 +54,7 @@ function aggregatePlayerData(clubData: ClubData | null): AggregatedPlayerData[] 
   return Array.from(playerDataMap.values());
 }
 
-// --- Helper Functions for Rendering Tables ---
+// --- Helper Functions for Rendering Tables (без изменений) ---
 
 function renderLeaderTable(leaders: ClubLeader[]): VNode {
   if (!leaders || leaders.length === 0) {
@@ -118,7 +118,7 @@ function renderMostActivePlayersTable(aggregatedPlayers: AggregatedPlayerData[],
 
 function renderTopPerformancesInTournamentTable(aggregatedPlayers: AggregatedPlayerData[], topMax: number): VNode {
     const sortedPlayers = [...aggregatedPlayers]
-        .filter(p => p.maxScoreInOneTournament > 0) 
+        .filter(p => p.maxScoreInOneTournament > 0)
         .sort((a, b) => b.maxScoreInOneTournament - a.maxScoreInOneTournament)
         .slice(0, topMax);
 
@@ -138,10 +138,10 @@ function renderTopPerformancesInTournamentTable(aggregatedPlayers: AggregatedPla
                     h('td.text-center', (index + 1).toString()),
                     h('td.text-left', `${player.title ? player.title + ' ' : ''}${player.name}`),
                     h('td.text-right', player.maxScoreInOneTournament.toString()),
-                    h('td.text-left', 
-                      player.maxScoreTournamentName ? 
-                        (player.maxScoreTournamentArenaUrl ? 
-                          h('a', { props: { href: player.maxScoreTournamentArenaUrl, target: '_blank', rel: 'noopener noreferrer' } }, player.maxScoreTournamentName) : 
+                    h('td.text-left',
+                      player.maxScoreTournamentName ?
+                        (player.maxScoreTournamentArenaUrl ?
+                          h('a', { props: { href: player.maxScoreTournamentArenaUrl, target: '_blank', rel: 'noopener noreferrer' } }, player.maxScoreTournamentName) :
                           player.maxScoreTournamentName
                         ) : '-'
                     ),
@@ -155,15 +155,14 @@ function renderTopPerformancesInTournamentTable(aggregatedPlayers: AggregatedPla
 function renderTournamentHistoryTable(
     battles: ClubBattle[],
     expandedBattleId: string | null,
-    onToggleBattle: (arenaId: string) => void 
+    onToggleBattle: (arenaId: string) => void
 ): VNode {
-  // Сортировка: сначала по club_rank (возрастание), затем по club_score (убывание)
   const sortedBattles = [...battles].sort((a, b) => {
     if (a.club_rank !== b.club_rank) {
-      return a.club_rank - b.club_rank; // Меньший ранг лучше
+      return a.club_rank - b.club_rank;
     }
-    return b.club_score - a.club_score; // Больший счет лучше
-  }); 
+    return b.club_score - a.club_score;
+  });
 
   return h('div.tournament-history-table-container', [
     h('h3.table-title', t('clubPage.tournamentHistoryTitle', { defaultValue: 'Tournament History' })),
@@ -179,11 +178,11 @@ function renderTournamentHistoryTable(
         ]),
       ]),
       h('tbody', sortedBattles.map(battle =>
-        [ 
+        [
           h('tr.tournament-row', {
             key: battle.arena_id,
             class: { 'expandable': true, 'expanded': expandedBattleId === battle.arena_id },
-            on: { click: () => onToggleBattle(battle.arena_id) } 
+            on: { click: () => onToggleBattle(battle.arena_id) }
           }, [
             h('td.text-left', battle.startsAt_Date),
             h('td.text-left', h('a', { props: { href: battle.arena_url, target: '_blank', rel: 'noopener noreferrer' } }, battle.fullName)),
@@ -194,12 +193,12 @@ function renderTournamentHistoryTable(
           ]),
           expandedBattleId === battle.arena_id ?
             h('tr.tournament-players-details', { key: `details-${battle.arena_id}` }, [
-              h('td', { props: { colSpan: 6 } }, [ 
+              h('td', { props: { colSpan: 6 } }, [
                 renderTournamentPlayersList(battle.players)
               ])
             ]) : null
         ]
-      ).flat().filter(Boolean) as VNode[]), 
+      ).flat().filter(Boolean) as VNode[]),
     ]),
   ]);
 }
@@ -236,6 +235,32 @@ function renderTournamentPlayersList(players: ClubPlayer[]): VNode {
   ]);
 }
 
+// --- Новая функция для рендеринга кнопки Follow/Unfollow ---
+function renderFollowButton(controller: ClubPageController): VNode | null {
+    const isAuthenticated = controller.getIsUserAuthenticated(); // Используем геттер
+    if (!isAuthenticated) {
+        return null;
+    }
+
+    const state = controller.state;
+    const buttonText = state.isFollowingCurrentClub ?
+        t('clubPage.button.unfollow', { defaultValue: 'Unfollow' }) :
+        t('clubPage.button.follow', { defaultValue: 'Follow' });
+
+    return h('button.button.follow-club-button', {
+        class: {
+            'following': state.isFollowingCurrentClub,
+            'not-following': !state.isFollowingCurrentClub,
+        },
+        attrs: {
+            disabled: state.isFollowRequestProcessing,
+        },
+        on: {
+            click: () => controller.toggleFollowCurrentClub(),
+        }
+    }, state.isFollowRequestProcessing ? t('common.processing', { defaultValue: 'Processing...' }) : buttonText);
+}
+
 
 // --- Main Rendering Function ---
 export function renderClubPage(controller: ClubPageController): VNode {
@@ -258,7 +283,7 @@ export function renderClubPage(controller: ClubPageController): VNode {
 
   if (!state.clubData) {
     return h('div.club-page.no-data', [
-      h('h1', state.pageTitle), 
+      h('h1', state.pageTitle),
       h('p', t('clubPage.error.noDataFound', { clubId: state.clubId, defaultValue: `No data found for club ID: ${state.clubId}` }))
     ]);
   }
@@ -267,12 +292,10 @@ export function renderClubPage(controller: ClubPageController): VNode {
   const aggregatedPlayers = aggregatePlayerData(clubData);
   const topMaxToDisplay = clubData.topMax !== undefined && clubData.topMax > 0 ? clubData.topMax : DEFAULT_TOP_MAX;
 
-
-  const expandedBattleId = state.expandedBattleId; 
+  const expandedBattleId = state.expandedBattleId;
   const toggleBattleDetails = (arenaId: string) => {
     controller.toggleTournamentDetails(arenaId);
   };
-
 
   return h('div.club-page-container', { key: `club-page-${clubData.club_id}` }, [
     h('header.club-header', [
@@ -281,15 +304,16 @@ export function renderClubPage(controller: ClubPageController): VNode {
         h('a.club-name-link', { props: { href: `https://lichess.org/team/${clubData.club_id}`, target: '_blank', rel: 'noopener noreferrer' } }, [
             h('h1.club-name', clubData.club_name)
         ]),
+        renderFollowButton(controller),
         h('p.club-meta', `${t('clubPage.founder', { defaultValue: 'Founder' })}: ${clubData.grunder} | ${t('clubPage.members', { defaultValue: 'Members' })}: ${clubData.nb_members}`),
       ]),
     ]),
     renderLeaderTable(clubData.jsonb_array_leader),
-    h('div.club-stats-grid', [ 
+    h('div.club-stats-grid', [
         renderMostValuablePlayersTable(aggregatedPlayers, topMaxToDisplay),
         renderMostActivePlayersTable(aggregatedPlayers, topMaxToDisplay),
     ]),
-    renderTopPerformancesInTournamentTable(aggregatedPlayers, topMaxToDisplay), 
+    renderTopPerformancesInTournamentTable(aggregatedPlayers, topMaxToDisplay),
     renderTournamentHistoryTable(clubData.jsonb_array_battle, expandedBattleId, toggleBattleDetails),
   ]);
 }

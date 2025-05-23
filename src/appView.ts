@@ -12,7 +12,6 @@ import { RecordsPageController } from './features/recordsPage/RecordsPageControl
 import { renderRecordsPage } from './features/recordsPage/RecordsPageView';
 import logger from './utils/logger';
 import { t } from './core/i18n.service';
-import type { LedClubs } from './core/auth.service';
 
 // --- Resize logic for center panel (remains unchanged) ---
 let isResizingCenterPanel = false;
@@ -63,33 +62,25 @@ function onCenterPanelResizeEnd(_controller: AppController, moveHandler: any, en
 }
 // --- End of resize logic ---
 
-function renderMyClubsDropdown(controller: AppController, ledClubs: LedClubs): VNode | null {
-    const appState = controller.state;
-    if (!appState.isMyClubsDropdownOpen || !ledClubs.club_ids || ledClubs.club_ids.length === 0) {
-        return null;
-    }
+// --- Modal Rendering ---
+function renderModal(controller: AppController): VNode | null {
+  const appState = controller.state;
+  if (!appState.isModalVisible || !appState.modalMessage) {
+    return null;
+  }
 
-    return h('ul.nav-dropdown-list.my-clubs-dropdown', ledClubs.club_ids.map(clubId =>
-        h('li', [
-            h('a', {
-                class: { active: appState.currentPage === 'clubPage' && appState.currentClubId === clubId },
-                props: { href: `#/clubs/${clubId}` },
-                on: {
-                    click: (e: Event) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        controller.navigateTo('clubPage', true, clubId);
-                        if (appState.isMyClubsDropdownOpen) {
-                           controller.toggleMyClubsDropdown();
-                        }
-                        if (appState.isPortraitMode && appState.isNavExpanded) {
-                            controller.toggleNav();
-                        }
-                    }
-                }
-            }, clubId)
-        ])
-    ));
+  return h('div.modal-overlay', {
+    on: { click: () => controller.hideModal() } // Закрытие по клику на оверлей
+  }, [
+    h('div.modal-content', {
+      on: { click: (e: Event) => e.stopPropagation() } // Предотвращение закрытия при клике на контент модалки
+    }, [
+      h('p.modal-message', appState.modalMessage),
+      h('button.button.modal-ok-button', {
+        on: { click: () => controller.hideModal() }
+      }, t('common.ok', { defaultValue: 'OK' }))
+    ])
+  ]);
 }
 
 
@@ -97,7 +88,6 @@ export function renderAppUI(controller: AppController): VNode {
   const appState = controller.state;
   const activePageController = controller.activePageController;
   const isAuthenticated = controller.services.authService.getIsAuthenticated();
-  const ledClubs = controller.services.authService.getLedClubs();
 
   let navLinksConfig: Array<{
     page?: AppPage,
@@ -105,31 +95,10 @@ export function renderAppUI(controller: AppController): VNode {
     requiresAuth?: boolean,
     hideWhenAuth?: boolean,
     clubIdToMatch?: string | null,
-    isDropdownToggle?: boolean,
-    dropdownContent?: VNode | null
   }> = [
     { page: 'finishHim', textKey: 'nav.finishHim', requiresAuth: true },
     { page: 'recordsPage', textKey: 'nav.leaderboards' },
   ];
-
-  if (isAuthenticated && ledClubs && ledClubs.club_ids && ledClubs.club_ids.length > 0) {
-    const recordsIndex = navLinksConfig.findIndex(link => link.page === 'recordsPage');
-    if (recordsIndex !== -1) {
-        navLinksConfig.splice(recordsIndex, 0, {
-            textKey: 'nav.myClubs',
-            requiresAuth: true,
-            isDropdownToggle: true,
-            dropdownContent: renderMyClubsDropdown(controller, ledClubs)
-        });
-    } else {
-        navLinksConfig.push({
-            textKey: 'nav.myClubs',
-            requiresAuth: true,
-            isDropdownToggle: true,
-            dropdownContent: renderMyClubsDropdown(controller, ledClubs)
-        });
-    }
-  }
 
   const visibleNavLinks = navLinksConfig.filter(link => {
     if (link.requiresAuth && !isAuthenticated) return false;
@@ -225,14 +194,13 @@ export function renderAppUI(controller: AppController): VNode {
   return h('div#app-layout', [
     h('header#app-header', { class: { 'menu-open': appState.isNavExpanded && appState.isPortraitMode } }, [
       h('div.nav-header-content', [
-        // Заменяем span.app-title на img.app-logo
         h('img.app-logo', {
           props: {
-            src: '/svg/1920_Banner.svg', // Путь к вашему логотипу в папке public
-            alt: t('app.title') // Используем существующий ключ для alt текста
+            src: '/svg/1920_Banner.svg',
+            alt: t('app.title')
           },
-          on: { // Добавляем обработчик клика для навигации на главную (или другую страницу по умолчанию)
-            click: () => controller.navigateTo('finishHim', true, null) // или 'welcome' если не аутентифицирован
+          on: {
+            click: () => controller.navigateTo(isAuthenticated ? 'finishHim' : 'welcome', true, null)
           }
         }),
         (visibleNavLinks.length > 0 || isAuthenticated) ?
@@ -242,32 +210,25 @@ export function renderAppUI(controller: AppController): VNode {
         h('ul.nav-links',
           [
             ...visibleNavLinks.map(link =>
-              h('li', { class: { 'has-dropdown': !!link.isDropdownToggle } }, [
+              h('li', [
                 h('a', {
                   class: {
                     active: link.page ? (appState.currentPage === link.page && (link.page !== 'clubPage' || appState.currentClubId === null)) : false,
-                    'dropdown-toggle': !!link.isDropdownToggle
                   },
                   props: { href: link.page ? (link.page === 'recordsPage' ? '#/records' : `#${link.page}`) : '#' },
                   on: {
                     click: (e: Event) => {
                       e.preventDefault();
-                      if (link.isDropdownToggle) {
-                        controller.toggleMyClubsDropdown();
-                      } else if (link.page) {
+                      if (link.page) {
                         controller.navigateTo(link.page, true, null);
                         if (appState.isPortraitMode && appState.isNavExpanded) {
                             controller.toggleNav();
-                        }
-                        if (appState.isMyClubsDropdownOpen) {
-                            controller.toggleMyClubsDropdown();
                         }
                       }
                     }
                   }
                 }, t(link.textKey)
                 ),
-                link.isDropdownToggle && link.dropdownContent ? link.dropdownContent : null
               ])
             ),
             isAuthenticated ? h('li', [
@@ -280,7 +241,6 @@ export function renderAppUI(controller: AppController): VNode {
                     logger.info('[appView] Logout button clicked.');
                     await controller.services.authService.logout();
                     if (appState.isNavExpanded) controller.toggleNav();
-                    if (appState.isMyClubsDropdownOpen) controller.toggleMyClubsDropdown();
                   }
                 }
               }, t('nav.logout'))
@@ -291,6 +251,7 @@ export function renderAppUI(controller: AppController): VNode {
     ]),
     h('main#page-content-wrapper', [
         mainContentStructure
-    ])
+    ]),
+    renderModal(controller) // Рендерим модальное окно здесь
   ]);
 }

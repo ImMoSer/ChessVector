@@ -51,10 +51,11 @@
 
   /* === Размеры шрифтов === */
   --font-size-xsmall: 0.6rem;    /* Очень маленький размер шрифта */
-  --font-size-small: 0.9rem;     /* Маленький размер шрифта */
+  --font-size-small: 1.1rem;     /* Маленький размер шрифта */
   --font-size-base: 1.3rem;      /* Базовый размер шрифта для body */
   --font-size-large: 1.7rem;     /* Большой размер (можно использовать для заголовков или акцентов) */
   --font-size-xlarge: 2rem;    /* Очень большой */
+  --font-size-xxlarge: 3rem;   /* Огромный размер (для заголовков) */
 
 }
 
@@ -63,24 +64,22 @@
 html, body {
   margin: 0;
   padding: 0;
-  font-family: var(--font-family-primary); /* Используем переменную для семейства шрифтов */
-  font-weight: var(--font-weight-normal);   /* Используем переменную для жирности */
-  font-style: var(--font-style-normal);    /* Используем переменную для стиля */
-  font-size: var(--font-size-base);        /* Используем переменную для базового размера шрифта */
-  line-height: 1.6;                        /* Можно тоже вынести в переменную, например --line-height-normal */
-  background-color: var(--color-bg-primary); /* */
-  color: var(--color-text-default);        /* */
-  height: 100vh;                           /* */
-  overflow: hidden;                        /* */
+  font-family: var(--font-family-primary);
+  font-weight: var(--font-weight-normal);
+  font-style: var(--font-style-normal);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-default);
+  height: 100vh;
+  overflow: hidden;
 }
 
 button, input, select, textarea {
-  font-family: inherit; /* Заставляем наследовать семейство шрифтов от родителя (body) */
-  font-weight: inherit; /* Заставляем наследовать жирность */
-  font-style: inherit;  /* Заставляем наследовать стиль */
-  font-size: var(--font-size-normal); /* Можно установить отдельный размер или тоже inherit, если хотите, чтобы он наследовался */
-                                      /* Если хотите, чтобы у кнопок был базовый размер body, используйте var(--font-size-base) или 1em (если родитель body) */
-                                      /* Или специфичный для кнопок, например, font-size: 0.9em; */
+  font-family: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  font-size: var(--font-size-small); /* Изменено на --font-size-small для консистентности */
 }
 
 
@@ -92,6 +91,7 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  position: relative; /* Для позиционирования модального окна */
 }
 
 #app-header {
@@ -187,45 +187,7 @@ button, input, select, textarea {
   border-color: var(--color-accent-error);
 }
 
-.nav-dropdown-list {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-hover);
-  border-top: none;
-  border-radius: 0 0 var(--panel-border-radius) var(--panel-border-radius);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-  z-index: 1001;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  min-width: 180px;
-}
-
-.nav-dropdown-list li {
-  margin-left: 0;
-  width: 100%;
-}
-
-.nav-dropdown-list li a {
-  padding: 10px 15px;
-  text-align: left;
-  border-bottom: 1px solid var(--color-border);
-  border-radius: 0;
-  display: block;
-  color: var(--color-text-muted);
-}
-
-.nav-dropdown-list li:last-child a {
-  border-bottom: none;
-  border-radius: 0 0 calc(var(--panel-border-radius) - 1px) calc(var(--panel-border-radius) - 1px);
-}
-
-.nav-dropdown-list li a:hover {
-  background-color: var(--color-accent-info);
-  color: var(--color-text-on-accent);
-}
+/* Стили для выпадающего списка My Clubs удалены, так как сам список убран */
 
 #page-content-wrapper {
   flex-grow: 1;
@@ -325,6 +287,59 @@ body.board-resizing * {
     height: 100%;
 }
 
+/* --- Стили для модального окна --- */
+.modal-overlay {
+  position: fixed; /* Позиционируем относительно viewport */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.75); /* Полупрозрачный темный фон */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000; /* Выше чем header */
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.modal-content {
+  background-color: var(--color-bg-secondary);
+  padding: 25px 30px;
+  border-radius: var(--panel-border-radius);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+  text-align: center;
+  max-width: 450px;
+  width: 100%;
+  border: 1px solid var(--color-border-hover);
+}
+
+.modal-message {
+  font-size: var(--font-size-base); /* Базовый размер шрифта */
+  color: var(--color-text-default);
+  margin-top: 0;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.modal-ok-button {
+  background-color: var(--color-accent-primary);
+  color: var(--color-text-on-accent);
+  border: none;
+  padding: 10px 25px;
+  border-radius: var(--panel-border-radius);
+  font-size: var(--font-size-base); /* Базовый размер шрифта */
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  min-width: 100px;
+}
+
+.modal-ok-button:hover {
+  background-color: var(--color-text-link-hover); /* Используем цвет ховера для ссылок */
+}
+
+
 @media (orientation: portrait) {
   #page-content-wrapper {
     background-color: var(--color-bg-primary);
@@ -418,31 +433,21 @@ body.board-resizing * {
       color: var(--color-text-on-accent);
    }
 
-
-  .nav-dropdown-list { 
-    position: static;
-    box-shadow: none;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    border-top: 1px solid var(--color-border);
-    min-width: 100%;
-  }
-  .nav-dropdown-list li a {
-      padding: 10px 25px;
-      background-color: var(--color-bg-tertiary);
-      border-bottom: 1px solid var(--color-border);
-      color: var(--color-text-muted);
-  }
-   .nav-dropdown-list li a:hover {
-      background-color: var(--color-accent-info);
-      color: var(--color-text-on-accent);
-   }
-   .nav-dropdown-list li:last-child a {
-       border-bottom: none;
-   }
+  /* Стили для выпадающего списка My Clubs удалены */
 
   .app-logo {
     height: calc(var(--header-height) * 0.65);
+  }
+
+  .modal-content {
+    padding: 20px;
+    max-width: 90%;
+  }
+  .modal-message {
+    font-size: var(--font-size-small); /* Уменьшаем шрифт сообщения на мобильных */
+  }
+  .modal-ok-button {
+    font-size: var(--font-size-small); /* Уменьшаем шрифт кнопки на мобильных */
+    padding: 8px 20px;
   }
 }
