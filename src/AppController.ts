@@ -7,14 +7,15 @@ import { BoardHandler } from './core/boardHandler';
 import { PgnService } from './core/pgn.service';
 import { AnalysisService } from './core/analysis.service';
 import { AnalysisController } from './features/analysis/analysisController';
-import { subscribeToLangChange, getCurrentLang } from './core/i18n.service';
+import { subscribeToLangChange, getCurrentLang } from './core/i18n.service'; // Убрал t
 import { FinishHimController } from './features/finishHim/finishHimController';
 import { WelcomeController } from './features/welcome/welcomeController';
 import { AuthService, type UserSessionProfile, type SubscriptionTier } from './core/auth.service';
 import { ClubPageController } from './features/clubPage/ClubPageController';
 import { RecordsPageController } from './features/recordsPage/RecordsPageController';
+import { UserCabinetController } from './features/userCabinet/UserCabinetController';
 
-export type AppPage = 'welcome' | 'finishHim' | 'clubPage' | 'recordsPage';
+export type AppPage = 'welcome' | 'finishHim' | 'clubPage' | 'recordsPage' | 'userCabinet';
 
 export interface AppServices {
   authService: typeof AuthService;
@@ -23,22 +24,21 @@ export interface AppServices {
   webhookService: WebhookServiceController;
   analysisService: AnalysisService;
   logger: typeof logger;
-  // Добавляем AppController в сервисы, чтобы другие контроллеры могли вызывать модальное окно
   appController: AppController;
 }
 
 interface AppControllerState {
   currentPage: AppPage;
-  currentClubId: string | null;
+  currentClubId: string | null; 
   isNavExpanded: boolean;
   isPortraitMode: boolean;
   currentUser: UserSessionProfile | null;
   isLoadingAuth: boolean;
-  isModalVisible: boolean; // Новое состояние для модального окна
-  modalMessage: string | null; // Новое состояние для сообщения в модальном окне
+  isModalVisible: boolean; 
+  modalMessage: string | null; 
 }
 
-type ActivePageController = WelcomeController | FinishHimController | ClubPageController | RecordsPageController | null;
+type ActivePageController = WelcomeController | FinishHimController | ClubPageController | RecordsPageController | UserCabinetController | null;
 
 const BOARD_MAX_VH = 94;
 const BOARD_MIN_VH = 10;
@@ -79,7 +79,7 @@ export class AppController {
       logger: globalServices.logger,
       authService: this.authServiceInstance,
       analysisService: this.analysisServiceInstance,
-      appController: this, // Передаем сам AppController в сервисы
+      appController: this,
     };
     this.requestGlobalRedraw = requestGlobalRedraw;
 
@@ -88,14 +88,14 @@ export class AppController {
     this.userPreferredBoardSizeVh = Math.max(BOARD_MIN_VH, Math.min(BOARD_MAX_VH, this.userPreferredBoardSizeVh));
 
     this.state = {
-      currentPage: 'welcome',
+      currentPage: 'welcome', 
       currentClubId: null,
       isNavExpanded: false,
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
       currentUser: null,
       isLoadingAuth: true,
-      isModalVisible: false, // Инициализация нового состояния
-      modalMessage: null,   // Инициализация нового состояния
+      isModalVisible: false,
+      modalMessage: null,
     };
 
     this.unsubscribeFromLangChange = subscribeToLangChange(() => {
@@ -177,7 +177,7 @@ export class AppController {
 
     if (cleanHash.startsWith('clubs/')) {
         const parts = cleanHash.split('/');
-        if (parts.length === 2 && parts[1]) {
+        if (parts.length === 2 && parts[1]) { 
             clubIdFromHash = parts[1];
             newPageFromHash = 'clubPage';
             logger.info(`[AppController] Parsed club page from hash. Club ID: ${clubIdFromHash}`);
@@ -188,7 +188,7 @@ export class AppController {
     } else if (cleanHash === 'records') {
         newPageFromHash = 'recordsPage';
         logger.info(`[AppController] Parsed records page from hash: ${newPageFromHash}`);
-    } else if (validAppPages.includes(cleanHash as AppPage)) {
+    } else if (validAppPages.includes(cleanHash as AppPage) && cleanHash !== 'userCabinet') { 
         newPageFromHash = cleanHash as AppPage;
         logger.info(`[AppController] Parsed standard page from hash: ${newPageFromHash}`);
     } else if (cleanHash === '') {
@@ -201,9 +201,12 @@ export class AppController {
 
     if (newPageFromHash !== this.state.currentPage || (newPageFromHash === 'clubPage' && clubIdFromHash !== this.state.currentClubId)) {
         logger.info(`[AppController handleHashChange] Navigating due to hash change or clubId mismatch. New page: ${newPageFromHash}, Club ID: ${clubIdFromHash}`);
-        this.navigateTo(newPageFromHash, false, clubIdFromHash);
+        this.navigateTo(newPageFromHash, false, clubIdFromHash); 
     } else {
         logger.info(`[AppController handleHashChange] Hash matches current state or no navigation needed. Page: ${this.state.currentPage}, Club ID: ${this.state.currentClubId}`);
+        if (!this.activePageController) {
+            this.loadPageController(this.state.currentPage, this.state.currentClubId);
+        }
     }
   }
 
@@ -243,7 +246,7 @@ export class AppController {
 
     let availableWidthForCenterPx: number;
 
-    if (this.state.isPortraitMode || this.state.currentPage === 'recordsPage' || this.state.currentPage === 'clubPage' || this.state.currentPage === 'welcome') {
+    if (this.state.isPortraitMode || this.state.currentPage === 'recordsPage' || this.state.currentPage === 'clubPage' || this.state.currentPage === 'welcome' || this.state.currentPage === 'userCabinet') {
       availableWidthForCenterPx = viewportWidthPx - (2 * panelGapPx);
     } else { 
       const actualLeftPanelWidth = document.getElementById('left-panel')?.offsetParent !== null ? leftPanelWidthPx : 0;
@@ -282,6 +285,7 @@ export class AppController {
     window.dispatchEvent(resizeEvent);
   }
 
+
   public navigateTo(page: AppPage, updateHash: boolean = true, clubId: string | null = null): void {
     const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
     const userTier = this.authServiceInstance.getUserSubscriptionTier();
@@ -294,44 +298,54 @@ export class AppController {
     }
 
     let targetPage = page;
-    let targetClubId = clubId;
+    let targetClubId = clubId; 
 
     if (page === 'clubPage') {
-        if (!clubId) {
+        if (!clubId) { 
             logger.warn('[AppController navigateTo] Club page navigation attempted without clubId. Redirecting to welcome.');
             targetPage = 'welcome';
-            targetClubId = null;
+            targetClubId = null; 
         }
+    } else if (page === 'userCabinet') {
+        if (!isAuthenticated) {
+            logger.warn('[AppController navigateTo] Access to userCabinet denied: not authenticated. Redirecting to welcome.');
+            targetPage = 'welcome';
+        }
+        targetClubId = null; 
     } else if (page === 'finishHim') {
       if (!isAuthenticated) {
         logger.warn('[AppController navigateTo] Access to finishHim denied: not authenticated. Redirecting to welcome.');
         targetPage = 'welcome';
-        targetClubId = null;
       } else {
-        const allowedTiersForFinishHim: SubscriptionTier[] = ['bronze', 'silver', 'gold', 'platinum'];
+        const allowedTiersForFinishHim: SubscriptionTier[] = ['bronze', 'silver', 'gold', 'platinum']; 
         if (!allowedTiersForFinishHim.includes(userTier)) {
           logger.warn(`[AppController navigateTo] Access to finishHim denied: tier ${userTier} not allowed. Redirecting to welcome.`);
           targetPage = 'welcome';
-          targetClubId = null;
         }
       }
+      targetClubId = null; 
     } else if (page === 'welcome' && isAuthenticated && !this._isInitializing) {
         logger.info('[AppController navigateTo] Authenticated user attempting to navigate to welcome post-init. Redirecting to finishHim.');
         targetPage = 'finishHim';
+        targetClubId = null;
+    } else {
         targetClubId = null;
     }
 
     if (this.state.currentPage === targetPage && this.state.currentClubId === targetClubId && this.activePageController) {
       logger.info(`[AppController navigateTo] Already on page: ${targetPage}${targetClubId ? ` (Club ID: ${targetClubId})` : ''}. Controller exists.`);
       if (this.state.isPortraitMode && this.state.isNavExpanded) {
-        this.toggleNav();
+        this.toggleNav(); 
       } else {
-        this.requestGlobalRedraw();
+        this.requestGlobalRedraw(); 
       }
       if (updateHash) {
-          const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : (targetPage === 'recordsPage' ? 'records' : targetPage);
-          if (window.location.hash.slice(1) !== newHashTarget) {
+          const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : (targetPage === 'recordsPage' ? 'records' : (targetPage !== 'userCabinet' ? targetPage : ''));
+          const currentCleanHash = window.location.hash.slice(1).startsWith('/') ? window.location.hash.slice(2) : window.location.hash.slice(1);
+          if (currentCleanHash !== newHashTarget && targetPage !== 'userCabinet') { 
               window.location.hash = newHashTarget;
+          } else if (targetPage === 'userCabinet' && currentCleanHash !== '') {
+              // window.location.hash = ''; 
           }
       }
       return;
@@ -347,19 +361,22 @@ export class AppController {
     }
 
     this.state.currentPage = targetPage;
-    this.state.currentClubId = targetClubId;
+    this.state.currentClubId = targetClubId; 
 
-    if (updateHash) {
+    if (updateHash && targetPage !== 'userCabinet') {
         const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : (targetPage === 'recordsPage' ? 'records' : targetPage);
         const currentCleanHash = window.location.hash.slice(1).startsWith('/') ? window.location.hash.slice(2) : window.location.hash.slice(1);
         if (currentCleanHash !== newHashTarget) {
             window.location.hash = newHashTarget;
         }
+    } else if (updateHash && targetPage === 'userCabinet') {
+        // No hash update for userCabinet
     }
+
     this.loadPageController(targetPage, targetClubId);
 
     if (this.state.isPortraitMode && this.state.isNavExpanded) {
-      this.state.isNavExpanded = false;
+      this.state.isNavExpanded = false; 
     }
   }
 
@@ -367,14 +384,14 @@ export class AppController {
     if (this.activePageController && typeof this.activePageController.destroy === 'function') {
         this.activePageController.destroy();
     }
-    this.activePageController = null;
+    this.activePageController = null; 
 
     if (this.analysisControllerInstance && typeof this.analysisControllerInstance.destroy === 'function') {
         this.analysisControllerInstance.destroy();
         this.analysisControllerInstance = null;
     }
     
-    this._calculateAndSetBoardSize();
+    this._calculateAndSetBoardSize(); 
 
     let boardHandlerForPage: BoardHandler | undefined;
     
@@ -386,7 +403,7 @@ export class AppController {
         this.analysisControllerInstance = new AnalysisController(
             this.services.analysisService,
             boardHandlerForPage,
-            PgnService,
+            PgnService, 
             this.requestGlobalRedraw
         );
     }
@@ -398,17 +415,17 @@ export class AppController {
       case 'finishHim':
         if (!boardHandlerForPage || !this.analysisControllerInstance) {
             logger.error("[AppController] Critical error: BoardHandler or AnalysisController not initialized for FinishHim page.");
-            if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
+            if (this.state.currentPage !== 'welcome') this.navigateTo('welcome'); 
             else logger.error("[AppController] Already on welcome, cannot fallback further from FinishHim init error.");
-            return;
+            return; 
         }
         this.activePageController = new FinishHimController(
           this.services.chessboardService,
-          boardHandlerForPage,
+          boardHandlerForPage, 
           this.authServiceInstance,
           this.webhookServiceInstance,
           this.services.stockfishService,
-          this.analysisControllerInstance,
+          this.analysisControllerInstance, 
           this.requestGlobalRedraw
         );
         if (typeof (this.activePageController as FinishHimController).initializeGame === 'function') {
@@ -428,14 +445,18 @@ export class AppController {
         this.activePageController = new RecordsPageController(this.services, this.requestGlobalRedraw);
         (this.activePageController as RecordsPageController).initializePage();
         break;
+      case 'userCabinet': 
+        this.activePageController = new UserCabinetController(this.services, this.requestGlobalRedraw);
+        (this.activePageController as UserCabinetController).initializePage();
+        break;
       default:
         const exhaustiveCheck: never = page; 
         logger.error(`[AppController] Unknown page in loadPageController: ${exhaustiveCheck}. Defaulting to welcome.`);
         if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
-        return;
+        return; 
     }
     logger.info(`[AppController] Loaded controller for page: ${page}`, this.activePageController);
-    this.requestGlobalRedraw();
+    this.requestGlobalRedraw(); 
   }
 
   public toggleNav(): void {
@@ -514,4 +535,4 @@ export class AppController {
   }
 }
 
-const validAppPages: AppPage[] = ['welcome', 'finishHim', 'clubPage', 'recordsPage'];
+const validAppPages: AppPage[] = ['welcome', 'finishHim', 'clubPage', 'recordsPage', 'userCabinet'];

@@ -110,7 +110,7 @@ export interface ClubFollowRequestPayload {
   event: "clubFollow";
   lichess_id: string;
   club_id: string;
-  club_name: string; // Добавлено имя клуба
+  club_name: string; 
   action: 'follow' | 'unfollow';
 }
 
@@ -310,28 +310,26 @@ export class WebhookServiceController {
   }
 
   public async fetchUserCabinetData(payload: UserCabinetRequestPayload): Promise<UserCabinetDataFromWebhook | null> {
-    const responseDataArray = await this._postRequest<UserCabinetDataFromWebhook[], UserCabinetRequestPayload>(payload, "fetchUserCabinetData");
+    // Изменяем ожидаемый тип ответа на UserCabinetDataFromWebhook (объект), а не массив
+    const userData = await this._postRequest<UserCabinetDataFromWebhook, UserCabinetRequestPayload>(payload, "fetchUserCabinetData");
 
-    if (responseDataArray && Array.isArray(responseDataArray) && responseDataArray.length > 0) {
-        const userData = responseDataArray[0];
-        if (userData && userData.lichess_id) {
-            const fieldsToNormalize: (keyof Pick<UserCabinetDataFromWebhook, 'follow_clubs' | 'club_leader' | 'club_founder'>)[] = ['follow_clubs', 'club_leader', 'club_founder'];
-            
-            fieldsToNormalize.forEach(field => {
-                const clubAffiliation = userData[field] as FollowClubs | {} | undefined; 
-                if (clubAffiliation) { 
-                    if (typeof clubAffiliation === 'object' && !Array.isArray((clubAffiliation as FollowClubs).clubs)) {
-                        logger.debug(`[WebhookService fetchUserCabinetData] Normalizing field "${field}" from potentially empty object or missing .clubs array to { clubs: [] }. Original:`, clubAffiliation);
-                        (userData[field] as FollowClubs) = { clubs: [] };
-                    }
+    if (userData && userData.lichess_id) { // Проверяем, что userData существует и имеет lichess_id
+        const fieldsToNormalize: (keyof Pick<UserCabinetDataFromWebhook, 'follow_clubs' | 'club_leader' | 'club_founder'>)[] = ['follow_clubs', 'club_leader', 'club_founder'];
+        
+        fieldsToNormalize.forEach(field => {
+            const clubAffiliation = userData[field] as FollowClubs | {} | undefined; 
+            if (clubAffiliation) { 
+                if (typeof clubAffiliation === 'object' && !Array.isArray((clubAffiliation as FollowClubs).clubs)) {
+                    logger.debug(`[WebhookService fetchUserCabinetData] Normalizing field "${field}" from potentially empty object or missing .clubs array to { clubs: [] }. Original:`, clubAffiliation);
+                    (userData[field] as FollowClubs) = { clubs: [] };
                 }
-            });
-            return userData;
-        } else {
-            logger.warn('[WebhookService fetchUserCabinetData] Fetched array data is missing lichess_id or is malformed. Response:', responseDataArray);
-        }
-    } else if (responseDataArray) { 
-         logger.warn('[WebhookService fetchUserCabinetData] Fetched data is not a non-empty array. Response:', responseDataArray);
+            }
+        });
+        return userData;
+    } else if (userData) { // Если userData есть, но не прошел проверку lichess_id
+        logger.warn('[WebhookService fetchUserCabinetData] Fetched data is missing lichess_id or is malformed. Response:', userData);
+    } else { // Если userData равен null (например, _postRequest вернул null)
+        logger.warn('[WebhookService fetchUserCabinetData] _postRequest returned null.');
     }
     return null;
   }

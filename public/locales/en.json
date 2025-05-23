@@ -17,6 +17,7 @@
     "loading": "Loading...",
     "error": "Error",
     "na": "N/A",
+    "notAvailable": "N/A",
     "panel": {
       "leftNotLoaded": "Left panel not loaded",
       "centerNotLoaded": "Center panel not loaded",
@@ -170,7 +171,8 @@
     "levelSectionTitle": "Level"
   },
   "auth": {
-    "processingLogin": "Processing Login..."
+    "processingLogin": "Processing Login...",
+    "requiredForAction": "Please log in to perform this action."
   },
   "clubPage": {
     "title": {
@@ -192,7 +194,16 @@
     "error": {
       "dataLoadFailed": "Failed to load club data. Please check the club ID or try again later.",
       "unknown": "An unknown error occurred while fetching club data.",
-      "noDataFound": "No data found for club ID: {clubId}"
+      "noDataFound": "No data found for club ID: {clubId}",
+      "dataLoadFailedOrNotRegistered": "Failed to load data for club {clubId} or club is not registered.",
+      "clubNotRegisteredModal": {
+        "message": "Club \"{clubId}\" is not registered. For club registration, please contact the administration at",
+        "contactLink": "https://chessboard.fun"
+      },
+      "profileNotFound": "User profile not found. Please try logging in again.",
+      "clubDataMissing": "Club information is missing. Cannot process follow request.",
+      "followFailed": "Failed to update follow status. Please try again.",
+      "followRequestFailed": "An error occurred while processing your follow/unfollow request."
     },
     "table": {
       "rank": "#",
@@ -212,8 +223,8 @@
       "unfollow": "Unfollow"
     },
     "follow": {
-      "successAdded": "Club successfully added to your followed list. You can see your followed clubs in your profile area.",
-      "successRemoved": "Club successfully removed from your followed list. You can see your followed clubs in your profile area."
+      "successAdded": "Club successfully added to your followed list.",
+      "successRemoved": "Club successfully removed from your followed list."
     }
   },
   "records": {
@@ -245,6 +256,44 @@
       "noEntries": "No entries for this leaderboard yet.",
       "tacticalWins": "Tactical Wins",
       "level": "Level (Pieces)"
+    }
+  },
+  "userCabinet": {
+    "pageTitle": {
+      "loading": "Loading User Cabinet...",
+      "loaded": "{username}'s Cabinet",
+      "error": "Error Loading Cabinet"
+    },
+    "error": {
+      "notAuthenticated": "User is not authenticated. Please log in to view your cabinet.",
+      "dataLoadFailed": "Failed to load user cabinet data. Please try again later.",
+      "unknown": "An unknown error occurred while fetching your cabinet data.",
+      "noDataFound": "No data found for your cabinet."
+    },
+    "info": {
+      "lichessId": "Lichess ID",
+      "subscriptionTier": "Subscription Tier"
+    },
+    "stats": {
+      "finishHimTitle": "Finish Him Statistics",
+      "gamesPlayed": "Games Played",
+      "tacticalRating": "Tactical Rating",
+      "tacticalWins": "Tactical Wins",
+      "tacticalLosses": "Tactical Losses",
+      "finishHimRating": "Playout Rating",
+      "playoutWins": "Playout Wins",
+      "playoutDraws": "Playout Draws",
+      "playoutLosses": "Playout Losses",
+      "currentPieceCount": "Current Level (Pieces)",
+      "noStats": "Finish Him statistics are not available."
+    },
+    "clubs": {
+      "activityTitle": "Club Activity",
+      "followedClubs": "Followed Clubs",
+      "leaderInClubs": "Leader In",
+      "founderOfClubs": "Founder Of",
+      "noClubsInThisRole": "No clubs in this category.",
+      "noActivity": "No club activity to display."
     }
   }
 }

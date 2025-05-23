@@ -9,6 +9,9 @@ import './features/finishHim/finishHim.css';
 import './features/welcome/welcome.css';
 import './features/clubPage/clubPage.css';
 import './features/recordsPage/recordsPage.css';
+import './features/userCabinet/userCabinet.css';
+
+
 
 
 // Import core services
