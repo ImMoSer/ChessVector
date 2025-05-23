@@ -15,7 +15,7 @@ import { renderUserCabinetPage } from './features/userCabinet/userCabinetView';
 import logger from './utils/logger';
 import { t } from './core/i18n.service';
 
-// --- Resize logic for center panel (remains unchanged) ---
+// --- Логика изменения размера центральной панели (без изменений) ---
 let isResizingCenterPanel = false;
 let initialCenterPanelMouseX: number | null = null;
 let initialUserPreferredVh: number | null = null;
@@ -62,9 +62,9 @@ function onCenterPanelResizeEnd(_controller: AppController, moveHandler: any, en
     initialCenterPanelMouseX = null;
     initialUserPreferredVh = null;
 }
-// --- End of resize logic ---
+// --- Конец логики изменения размера ---
 
-// --- Modal Rendering ---
+// --- Рендеринг модального окна ---
 function renderModal(controller: AppController): VNode | null {
   const appState = controller.state;
   if (!appState.isModalVisible || !appState.modalMessage) {
@@ -137,6 +137,7 @@ export function renderAppUI(controller: AppController): VNode {
         break;
       case 'finishHim':
         if (activePageController instanceof FinishHimController) {
+          // Placeholder VNode; фактический рендеринг доски и панелей происходит ниже в mainContentStructure
           pageSpecificContentVNode = h('div.finish-him-placeholder'); 
         } else {
           pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
@@ -164,7 +165,7 @@ export function renderAppUI(controller: AppController): VNode {
         }
         break;
       default:
-        const exhaustiveCheck: never = appState.currentPage;
+        const exhaustiveCheck: never = appState.currentPage; // Для проверки полноты switch
         pageSpecificContentVNode = h('p', t('errorPage.unknownPage', { pageName: exhaustiveCheck }));
         logger.error(`[appView] Reached default case in page switch with page: ${exhaustiveCheck}`);
     }
@@ -184,6 +185,7 @@ export function renderAppUI(controller: AppController): VNode {
             logger.error('[appView resizeHandleHook.insert] Parent wrapper for resize handle not found!');
         }
     },
+    // destroy хук не нужен здесь, так как слушатели удаляются в onCenterPanelResizeEnd
   };
 
   let mainContentStructure: VNode;
@@ -201,12 +203,13 @@ export function renderAppUI(controller: AppController): VNode {
         h('div#center-panel-resizable-wrapper', {
             key: 'center-wrapper-fh', 
             class: { 'portrait-mode-layout': appState.isPortraitMode }
+            // Стиль для ширины/высоты этого wrapper'а теперь управляется через CSS переменную --calculated-board-size-vh
         }, [
-          h('section#center-panel', [fhLayout.center]),
+          h('section#center-panel', [fhLayout.center]), // fhLayout.center содержит #board-wrapper с хуком для BoardView
           appState.isPortraitMode ? null : h('div.resize-handle-center', { hook: resizeHandleHook, key: 'center-resize-handle-fh' })
         ]),
         fhLayout.right ? h('aside#right-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode } }, [fhLayout.right]) : null,
-      ].filter(Boolean) as VNode[]); 
+      ].filter(Boolean) as VNode[]); // filter(Boolean) для удаления null элементов, если панели отсутствуют
   } else {
     mainContentStructure = pageSpecificContentVNode;
   }
@@ -216,41 +219,46 @@ export function renderAppUI(controller: AppController): VNode {
       h('div.nav-header-content', [
         h('img.app-logo', {
           props: {
-            src: '/svg/1920_Banner.svg', 
-            alt: t('app.title') 
+            src: '/svg/1920_Banner.svg', // Убедитесь, что изображение лежит в public/
+            alt: t('app.title') // Используем ключ для локализации alt текста
           },
           on: {
+            // Навигация на главную страницу (finishHim если залогинен, welcome если нет)
             click: () => controller.navigateTo(isAuthenticated ? 'finishHim' : 'welcome', true, null)
           }
         }),
-        (visibleNavLinks.length > 0 || isAuthenticated) ?
+        // Кнопка "гамбургер" для мобильной навигации
+        (visibleNavLinks.length > 0 || isAuthenticated) ? // Показываем кнопку, если есть ссылки или пользователь залогинен (для кнопки выхода)
           h('button.nav-toggle-button', {
             on: { click: () => controller.toggleNav() }
           }, appState.isNavExpanded ? '✕' : '☰') : null,
 
+        // Навигационные ссылки
         h('ul.nav-links',
           [
             ...visibleNavLinks.map(link =>
               h('li', [
                 h('a', {
                   class: {
+                    // Активная ссылка, если текущая страница совпадает и это не страница клуба с другим ID
                     active: link.page ? (appState.currentPage === link.page && (link.page !== 'clubPage' || appState.currentClubId === null)) : false,
                   },
-                  props: { href: link.page ? (link.page === 'recordsPage' ? '#/records' : (link.page === 'userCabinet' ? '#' : `#${link.page}`)) : '#' }, 
+                  props: { href: link.page ? (link.page === 'recordsPage' ? '#/records' : (link.page === 'userCabinet' ? '#' : `#${link.page}`)) : '#' }, // Для userCabinet можно не менять hash
                   on: {
                     click: (e: Event) => {
                       e.preventDefault();
                       if (link.page) {
-                        controller.navigateTo(link.page, link.page !== 'userCabinet', null);
+                        controller.navigateTo(link.page, link.page !== 'userCabinet', null); // Для userCabinet не обновляем hash
                         if (appState.isPortraitMode && appState.isNavExpanded) {
-                            controller.toggleNav(); 
+                            controller.toggleNav(); // Закрываем меню на мобильных после клика
                         }
                       }
                     }
                   }
-                }, link.textKey ? t(link.textKey) : link.text) 
+                }, link.textKey ? t(link.textKey) : link.text) // Используем textKey для локализации или прямой текст
               ])
             ),
+            // Кнопка выхода, если пользователь аутентифицирован
             isAuthenticated ? h('li', [
               h('a', {
                 class: { 'logout-link': true },
@@ -259,19 +267,21 @@ export function renderAppUI(controller: AppController): VNode {
                   click: async (e: Event) => {
                     e.preventDefault();
                     logger.info('[appView] Logout button clicked.');
-                    await controller.services.authService.logout(); 
-                    if (appState.isNavExpanded) controller.toggleNav(); 
+                    await controller.services.authService.logout(); // Вызываем метод logout из AuthService
+                    if (appState.isNavExpanded) controller.toggleNav(); // Закрываем меню, если открыто
                   }
                 }
               }, t('nav.logout'))
             ]) : null
-          ].filter(Boolean) as VNode[] 
+          ].filter(Boolean) as VNode[] // filter(Boolean) для удаления null элементов (например, кнопки выхода)
         )
       ])
     ]),
+    // Основной контент страницы
     h('main#page-content-wrapper', [
         mainContentStructure
     ]),
+    // Модальное окно (если видимо)
     renderModal(controller) 
   ]);
 }

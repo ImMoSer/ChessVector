@@ -11,9 +11,6 @@ import './features/clubPage/clubPage.css';
 import './features/recordsPage/recordsPage.css';
 import './features/userCabinet/userCabinet.css';
 
-
-
-
 // Import core services
 import { ChessboardService } from './core/chessboard.service';
 import { StockfishService } from './core/stockfish.service';
@@ -63,28 +60,43 @@ if (!oldVNode) {
   throw new Error(errorMsg);
 }
 
-let isCurrentlyPatching = false;
+// let isCurrentlyPatching = false; // Заменено на isRedrawScheduled
 let appController: AppController;
+let isRedrawScheduled = false; // Флаг для отслеживания запланированной перерисовки
+let animationFrameId: number | null = null; // ID для requestAnimationFrame
 
 function requestGlobalRedraw() {
-  if (isCurrentlyPatching) {
-    logger.warn("[AppEntry requestGlobalRedraw] Skipped as a patch is already in progress.");
+  // Если перерисовка уже запланирована, ничего не делаем
+  if (isRedrawScheduled) {
+    logger.debug("[AppEntry requestGlobalRedraw] Skipped as a redraw is already scheduled.");
     return;
   }
+
   if (!appController) {
     logger.warn("[AppEntry requestGlobalRedraw] Skipped as appController is not yet initialized.");
     return;
   }
-  isCurrentlyPatching = true;
-  try {
-    const newVNode = renderAppUI(appController);
-    oldVNode = patch(oldVNode, newVNode);
-    logger.debug("[AppEntry requestGlobalRedraw] Main application view re-rendered and patch completed.");
-  } catch (error) {
-    logger.error("[AppEntry requestGlobalRedraw] Error during patch:", error);
-  } finally {
-    isCurrentlyPatching = false;
+
+  isRedrawScheduled = true;
+  logger.debug("[AppEntry requestGlobalRedraw] Scheduling redraw via requestAnimationFrame.");
+
+  // Отменяем предыдущий запланированный кадр, если он есть (на всякий случай, хотя логика isRedrawScheduled должна это предотвращать)
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
   }
+
+  animationFrameId = requestAnimationFrame(() => {
+    try {
+      const newVNode = renderAppUI(appController);
+      oldVNode = patch(oldVNode, newVNode);
+      logger.debug("[AppEntry requestGlobalRedraw] Main application view re-rendered and patch completed (via rAF).");
+    } catch (error) {
+      logger.error("[AppEntry requestGlobalRedraw] Error during patch (via rAF):", error);
+    } finally {
+      isRedrawScheduled = false; // Сбрасываем флаг после выполнения перерисовки
+      animationFrameId = null; // Сбрасываем ID кадра
+    }
+  });
 }
 
 async function initializeApplication() {
@@ -99,7 +111,7 @@ async function initializeApplication() {
         webhookService: webhookServiceInstance, // Передаем инстанс
         logger
       },
-      requestGlobalRedraw
+      requestGlobalRedraw // Передаем нашу обновленную функцию
     );
 
     await appController.initializeApp();

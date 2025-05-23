@@ -503,7 +503,7 @@ export class BoardHandler {
         logger.warn('[BoardHandler setDrawableShapes] Chessground not initialized.');
         return;
     }
-    this.chessboardService.drawShapes(shapes); // Assumes drawShapes in service sets the shapes directly
+    this.chessboardService.drawShapes(shapes); 
     logger.debug(`[BoardHandler setDrawableShapes] Set ${shapes.length} shapes.`);
   }
 
@@ -519,14 +519,9 @@ export class BoardHandler {
     logger.debug(`[BoardHandler clearAllDrawings] All drawings cleared.`);
   }
 
-  // Individual drawing methods are kept for convenience if needed by other parts,
-  // but AnalysisService should use setDrawableShapes for batches.
   public drawArrow(orig: Key, dest: Key, brush: string = 'green'): void {
     if (!this.chessboardService.ground) return;
     const newShape: CustomDrawShape = { orig, dest, brush };
-    // For a single arrow, we can get current shapes, add, and set.
-    // Or, if this is meant to be the *only* arrow, clear first.
-    // Let's assume it adds to existing non-analysis shapes, or is used when analysis shapes are cleared.
     const currentShapes = (this.chessboardService.ground.state.drawable.shapes || []).filter(s => s.brush !== undefined) as CustomDrawShape[];
     this.chessboardService.drawShapes([...currentShapes, newShape]);
   }
@@ -571,7 +566,7 @@ export class BoardHandler {
       this.requestRedraw();
       return true;
     }
-    logger.warn('[BoardHandler] No moves in PGN history to undo.');
+    logger.warn(`[BoardHandler] No moves in PGN history to undo.`);
     return false;
   }
 

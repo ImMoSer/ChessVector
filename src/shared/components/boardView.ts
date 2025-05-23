@@ -46,14 +46,19 @@ export class BoardView {
 
     private initBoard(): void {
         const initialConfig = this._getBoardConfig();
-        if (this.chessboardService.ground && this.chessboardService.ground.state.dom.elements.wrap.parentElement === this.container) {
+        // Check if ChessboardService has an existing ground instance AND if that instance's parent element
+        // is the same as the current BoardView's container.
+        if (this.chessboardService.ground && 
+            this.chessboardService.ground.state.dom.elements.wrap.parentElement === this.container) {
              logger.info('[BoardView] Ground already initialized for this container. Applying new config.');
              this.chessboardService.ground.set(initialConfig);
         } else if (this.chessboardService.ground) {
+            // This case means ChessboardService has a ground instance, but it's tied to a different (likely old/stale) container.
             logger.warn('[BoardView] ChessboardService has ground, but for different container. Destroying and re-initializing.');
-            this.chessboardService.destroy(); 
-            this.chessboardService.init(this.container, initialConfig);
+            this.chessboardService.destroy(); // Destroy the old ground instance
+            this.chessboardService.init(this.container, initialConfig); // Initialize with the new container
         } else {
+             // ChessboardService has no ground instance, so initialize it.
              this.chessboardService.init(this.container, initialConfig);
         }
         this.updateView(); 
@@ -112,9 +117,8 @@ export class BoardView {
             },
             drawable: {
                 enabled: true, 
-                eraseOnClick: false, // ИЗМЕНЕНИЕ: Явно отключаем стирание по клику
-                shapes: [], // Начальные shapes - пустой массив
-                // brushes: {}, // Можно определить кастомные кисти здесь, если нужно
+                eraseOnClick: false,
+                shapes: [], 
             }
         };
     }
@@ -156,7 +160,6 @@ export class BoardView {
             destsForGround = new Map();
         }
 
-        // Собираем новую конфигурацию, сохраняя существующие drawable shapes
         const newConfig: Partial<ChessgroundConfig> = {
             fen: currentFen,
             turnColor: turnColor, 
@@ -166,14 +169,11 @@ export class BoardView {
                 color: movableColor, 
                 dests: destsForGround, 
                 showDests: true,
-                // events.after не меняется, остается из initialConfig
             },
             check: gameStatus.isCheck ? true : undefined, 
             lastMove: lastMoveUciArray,
             drawable: {
-                // Распространяем существующие настройки drawable (например, enabled, eraseOnClick)
                 ...(ground.state.drawable || { enabled: true, eraseOnClick: false }), 
-                // Явно передаем текущие shapes, чтобы они не сбросились
                 shapes: ground.state.drawable.shapes || [] 
             }
         };
@@ -199,6 +199,11 @@ export class BoardView {
 
     public destroy(): void {
         window.removeEventListener('centerPanelResized', this.boundHandleAppPanelResize);
+        // Добавляем вызов destroy для chessboardService
+        if (this.chessboardService) {
+            this.chessboardService.destroy();
+            logger.info('[BoardView] Called chessboardService.destroy().');
+        }
         logger.info('[BoardView] Destroyed, removed centerPanelResized listener.');
     }
 }
