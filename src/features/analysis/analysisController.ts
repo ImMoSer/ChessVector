@@ -5,6 +5,7 @@ import type {
   AnalysisOptions,
   EvaluatedLine,
   EvaluatedLineWithSan,
+  // ScoreInfo, // Удалено, так как не используется напрямую здесь, а только в EvaluatedLineWithSan
 } from '../../core/analysis.service';
 import type { BoardHandler } from '../../core/boardHandler';
 import { PgnService, type PgnNode } from '../../core/pgn.service';
@@ -17,9 +18,9 @@ import type { Key } from 'chessground/types';
 import type { CustomDrawShape } from '../../core/chessboard.service';
 import { t } from '../../core/i18n.service';
 
-const DEFAULT_ANALYSIS_DEPTH = 10;
+const DEFAULT_ANALYSIS_DEPTH = 15; 
 const DEFAULT_ANALYSIS_LINES = 3;
-const ANALYSIS_REQUEST_TIMEOUT = 20000;
+const ANALYSIS_REQUEST_TIMEOUT = 30000; 
 
 const ARROW_BRUSHES = {
   bestLine: 'green',
@@ -38,6 +39,7 @@ export interface AnalysisPanelState {
   canSetFen: boolean;
   currentFenAnalyzed: string | null;
   isGameCurrentlyActive: boolean;
+  currentTurnForAnalysis: ChessopsColor | null; 
 }
 
 export interface GameControlCallbacks {
@@ -88,6 +90,7 @@ export class AnalysisController {
       canSetFen: true,
       currentFenAnalyzed: null,
       isGameCurrentlyActive: false,
+      currentTurnForAnalysis: null, 
     };
 
     this.boardHandler.onMoveMade(this._handleBoardOrPgnChange.bind(this));
@@ -98,15 +101,26 @@ export class AnalysisController {
 
   public getPanelState(): AnalysisPanelState {
     if (this.panelState.isGameCurrentlyActive) {
-      // If game is active, PGN navigation should be disabled
       this.panelState.canNavigatePgnBackward = false;
       this.panelState.canNavigatePgnForward = false;
     } else {
-      // Otherwise, base it on analysis state and PGN service
       this.panelState.canNavigatePgnBackward = this.panelState.isAnalysisActive && this.boardHandler.canPgnNavigateBackward();
       this.panelState.canNavigatePgnForward = this.panelState.isAnalysisActive && this.boardHandler.canPgnNavigateForward(0);
     }
     this.panelState.currentFenAnalyzed = this.currentFenForAnalysis;
+    
+    if (this.currentFenForAnalysis) {
+        try {
+            const setup = parseFen(this.currentFenForAnalysis).unwrap();
+            this.panelState.currentTurnForAnalysis = setup.turn;
+        } catch (e) {
+            logger.warn(`[AnalysisController getPanelState] Could not parse FEN ${this.currentFenForAnalysis} to determine turn.`);
+            this.panelState.currentTurnForAnalysis = null;
+        }
+    } else {
+        this.panelState.currentTurnForAnalysis = null;
+    }
+
     return { ...this.panelState };
   }
 
@@ -126,11 +140,10 @@ export class AnalysisController {
         logger.info('[AnalysisController] Game became active, stopping ongoing analysis.');
         this._internalStopAnalysis(false);
     }
-    // If game activity status changed, it might affect PGN nav button states
     if (oldIsGameActive !== state.isGameActive) {
-        this.requestGlobalRedraw(); // Ensure panel state is re-evaluated and view updates
+        this.requestGlobalRedraw(); 
     } else {
-        this.requestGlobalRedraw(); // Still redraw for other state changes
+        this.requestGlobalRedraw(); 
     }
   }
 
@@ -182,9 +195,21 @@ export class AnalysisController {
     }
 
     this.panelState.currentFenAnalyzed = this.currentFenForAnalysis;
+    if (this.currentFenForAnalysis) {
+        try {
+            const setup = parseFen(this.currentFenForAnalysis).unwrap();
+            this.panelState.currentTurnForAnalysis = setup.turn;
+        } catch (e) {
+            logger.warn(`[AnalysisController _internalStartAnalysis] Could not parse FEN ${this.currentFenForAnalysis} to determine turn.`);
+            this.panelState.currentTurnForAnalysis = null;
+        }
+    } else {
+        this.panelState.currentTurnForAnalysis = null;
+    }
+
 
     if (this.currentFenForAnalysis) {
-      logger.info(`[AnalysisController] Analysis target: PGN Path: ${this.currentAnalysisNodePath}, FEN: ${this.currentFenForAnalysis}`);
+      logger.info(`[AnalysisController] Analysis target: PGN Path: ${this.currentAnalysisNodePath}, FEN: ${this.currentFenForAnalysis}, Turn: ${this.panelState.currentTurnForAnalysis}`);
       this._requestAndProcessAnalysis();
     } else {
       logger.error('[AnalysisController] Cannot start analysis, no valid FEN found.');
@@ -211,15 +236,12 @@ export class AnalysisController {
     this.boardHandler.clearAllDrawings(); 
 
     this.panelState.analysisLines = null;
+    this.panelState.currentTurnForAnalysis = null; 
     this.requestGlobalRedraw();
   }
 
   private _handleBoardOrPgnChange(data: { currentNodePath?: string; currentFen?: string; newNodePath?: string; newFen?: string }): void {
-    // If analysis is not active, we don't need to do anything here regarding re-analysis.
-    // However, we still need to redraw to update PGN button states if they depend on PGN service directly.
     if (!this.panelState.isAnalysisActive) {
-        // Even if analysis is off, PGN navigation might have occurred (e.g. if user manually navigated history somehow)
-        // So, ensure the panel reflects the correct PGN button states.
         this.requestGlobalRedraw();
         return;
     }
@@ -227,9 +249,9 @@ export class AnalysisController {
     const path = data.currentNodePath || data.newNodePath;
     const fen = data.currentFen || data.newFen;
 
-    if (path === undefined || fen === undefined) { // path can be empty string for root
+    if (path === undefined || fen === undefined) { 
         logger.warn('[AnalysisController _handleBoardOrPgnChange] Path or FEN missing in event data.');
-        this.requestGlobalRedraw(); // Redraw to update PGN button states
+        this.requestGlobalRedraw(); 
         return;
     }
 
@@ -238,7 +260,18 @@ export class AnalysisController {
       this.currentAnalysisNodePath = path;
       this.currentFenForAnalysis = fen;
       this.panelState.currentFenAnalyzed = this.currentFenForAnalysis;
-      logger.info(`[AnalysisController] Board/PGN change detected. Requesting new analysis for PGN Path: "${this.currentAnalysisNodePath}", FEN: ${this.currentFenForAnalysis}`);
+        if (this.currentFenForAnalysis) {
+            try {
+                const setup = parseFen(this.currentFenForAnalysis).unwrap();
+                this.panelState.currentTurnForAnalysis = setup.turn;
+            } catch (e) {
+                logger.warn(`[AnalysisController _handleBoardOrPgnChange] Could not parse FEN ${this.currentFenForAnalysis} to determine turn.`);
+                this.panelState.currentTurnForAnalysis = null;
+            }
+        } else {
+            this.panelState.currentTurnForAnalysis = null;
+        }
+      logger.info(`[AnalysisController] Board/PGN change detected. Requesting new analysis for PGN Path: "${this.currentAnalysisNodePath}", FEN: ${this.currentFenForAnalysis}, Turn: ${this.panelState.currentTurnForAnalysis}`);
       this._requestAndProcessAnalysis(); 
     } else {
       this.requestGlobalRedraw(); 
@@ -269,8 +302,19 @@ export class AnalysisController {
     this.panelState.isAnalysisLoading = true;
     this.panelState.analysisLines = null; 
     this.panelState.currentFenAnalyzed = this.currentFenForAnalysis; 
+    if (this.currentFenForAnalysis) {
+        try {
+            const setup = parseFen(this.currentFenForAnalysis).unwrap();
+            this.panelState.currentTurnForAnalysis = setup.turn;
+        } catch (e) {
+            logger.warn(`[AnalysisController _requestAndProcessAnalysis] Could not parse FEN ${this.currentFenForAnalysis} to determine turn.`);
+            this.panelState.currentTurnForAnalysis = null;
+        }
+    } else {
+        this.panelState.currentTurnForAnalysis = null;
+    }
     this.requestGlobalRedraw(); 
-    logger.info(`[AnalysisController promiseId: ${promiseId}] Requesting analysis from Stockfish for FEN: ${this.currentFenForAnalysis}`);
+    logger.info(`[AnalysisController promiseId: ${promiseId}] Requesting analysis from Stockfish for FEN: ${this.currentFenForAnalysis}, Turn: ${this.panelState.currentTurnForAnalysis}`);
 
     this.boardHandler.clearAllDrawings(); 
 
@@ -283,7 +327,7 @@ export class AnalysisController {
               id: 0, depth: 0, score: {type: 'cp', value:0}, 
               pvUci: ['timeout'], pvSan: [t('analysis.timeout')], 
               startingFen: this.currentFenForAnalysis || '', 
-              initialFullMoveNumber: 1, initialTurn: 'white' 
+              initialFullMoveNumber: 1, initialTurn: this.panelState.currentTurnForAnalysis || 'white' 
           }];
           this.requestGlobalRedraw();
       }
@@ -311,8 +355,16 @@ export class AnalysisController {
         const fenForSanConversion = this.currentFenForAnalysis; 
         const linesWithSan: EvaluatedLineWithSan[] = resultLines.map((line: EvaluatedLine) => {
             const conversionResult = this._convertUciToSanForLine(fenForSanConversion, line.pvUci);
+            let correctedScore = line.score;
+            if (this.panelState.currentTurnForAnalysis === 'black' && line.score.type === 'cp') {
+                correctedScore = { ...line.score, value: -line.score.value };
+            } else if (this.panelState.currentTurnForAnalysis === 'black' && line.score.type === 'mate') {
+                correctedScore = { ...line.score, value: -line.score.value };
+            }
+
             return {
                 ...line,
+                score: correctedScore, 
                 pvSan: conversionResult.pvSan,
                 startingFen: fenForSanConversion, 
                 initialFullMoveNumber: conversionResult.initialFullMoveNumber,
@@ -320,7 +372,7 @@ export class AnalysisController {
             };
         });
         this.panelState.analysisLines = linesWithSan;
-        logger.info(`[AnalysisController promiseId: ${promiseId}] Analysis received. Lines (with SAN):`, this.panelState.analysisLines);
+        logger.info(`[AnalysisController promiseId: ${promiseId}] Analysis received. Lines (with SAN and corrected score):`, this.panelState.analysisLines);
         this._drawAnalysisResultOnBoard();
       } else {
         logger.warn(`[AnalysisController promiseId: ${promiseId}] Stockfish returned no lines or an empty result.`);
@@ -514,7 +566,7 @@ export class AnalysisController {
       logger.warn('[AnalysisController] playMoveFromAnalysisLine called, but analysis is not active.');
       return;
     }
-    if (this.currentAnalysisNodePath === null || this.currentAnalysisNodePath === undefined) { // path can be ""
+    if (this.currentAnalysisNodePath === null || this.currentAnalysisNodePath === undefined) { 
         logger.warn('[AnalysisController] playMoveFromAnalysisLine called, but no current PGN node path for analysis context.');
         return;
     }

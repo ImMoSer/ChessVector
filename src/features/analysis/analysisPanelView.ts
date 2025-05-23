@@ -2,11 +2,12 @@
 import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import type { AnalysisController, AnalysisPanelState } from './analysisController';
-import type { EvaluatedLineWithSan } from '../../core/analysis.service';
+import type { EvaluatedLineWithSan, ScoreInfo } from '../../core/analysis.service'; 
 import { t } from '../../core/i18n.service';
 import logger from '../../utils/logger';
+// import type { Color as ChessopsColor } from 'chessops/types'; // Удалено, так как не используется
 
-// --- Логика рендеринга линий анализа (без изменений) ---
+// --- Логика рендеринга линий анализа ---
 function renderAnalysisLinesContent(
   panelState: AnalysisPanelState,
   onPlayMoveFromLine: (uciMove: string) => void
@@ -22,9 +23,11 @@ function renderAnalysisLinesContent(
   }
 
   return panelState.analysisLines.map((line: EvaluatedLineWithSan, index: number) => {
-    const scoreValueDisplay = line.score.type === 'cp'
-      ? (line.score.value / 100).toFixed(2)
-      : `${t('analysis.mateInShort', { value: Math.abs(line.score.value) })}${line.score.value < 0 ? '-' : ''}`;
+    const scoreToDisplay: ScoreInfo = line.score;
+
+    const scoreValueDisplay = scoreToDisplay.type === 'cp'
+      ? (scoreToDisplay.value / 100).toFixed(2)
+      : `${t('analysis.mateInShort', { value: Math.abs(scoreToDisplay.value) })}${scoreToDisplay.value < 0 ? '-' : ''}`;
 
     let pvString = "";
     let currentMoveNumber = line.initialFullMoveNumber;
@@ -87,9 +90,7 @@ function renderAnalysisLinesContent(
 
 // Updated PGN controls
 function renderPgnControls(controller: AnalysisController, panelState: AnalysisPanelState): VNode {
-  // PGN buttons are disabled if analysis is not active OR if a game is currently active.
   const pgnNavDisabled = !panelState.isAnalysisActive || panelState.isGameCurrentlyActive;
-  // PGN buttons are styled as "active" (blue) only if analysis is active AND game is NOT active.
   const pgnNavStyledActive = panelState.isAnalysisActive && !panelState.isGameCurrentlyActive;
 
   return h('div#pgn-navigation-controls.button-group.horizontal', [
@@ -142,34 +143,32 @@ function renderMainControls(controller: AnalysisController, panelState: Analysis
     }
   }
 
-  // Buttons "Next", "Restart", "Set FEN" are disabled if a game is currently active.
   const gameControlButtonDisabled = panelState.isGameCurrentlyActive;
 
   return h('div#main-controls.button-group.vertical', [
     h('button.button.game-control-button.primary-button', {
       attrs: { 
-        disabled: gameControlButtonDisabled || !panelState.canLoadNextTask // Keep existing logic for canLoadNextTask
+        disabled: gameControlButtonDisabled || !panelState.canLoadNextTask 
       },
       on: { click: () => controller.requestNextTask() }
     }, t('puzzle.button.next')),
-    h('button.button.game-control-button', {
+    h('button.button.game-control-button.restart-button', { 
       attrs: { 
-        disabled: gameControlButtonDisabled || !panelState.canRestartTask // Keep existing logic for canRestartTask
+        disabled: gameControlButtonDisabled || !panelState.canRestartTask 
       },
       on: { click: () => controller.requestRestartTask() }
     }, t('puzzle.button.restartTask')),
-    h('button.button', { // This is the Analysis/Resign button
+    h('button.button', { 
       class: {
           'analysis-toggle-button': true,
           'active-analysis': !panelState.isGameCurrentlyActive && panelState.isAnalysisActive,
           'resign-button': panelState.isGameCurrentlyActive,
       },
-      // This button is never disabled by gameControlButtonDisabled, its state is handled by its own classes/text
       on: { click: () => controller.toggleAnalysisEngine() } 
     }, analysisResignButtonText),
-    h('button.button.game-control-button', {
+    h('button.button.game-control-button.set-fen-button', { 
       attrs: { 
-        disabled: gameControlButtonDisabled || !panelState.canSetFen // Keep existing logic for canSetFen
+        disabled: gameControlButtonDisabled || !panelState.canSetFen 
       },
       on: { click: () => controller.requestSetFen() }
     }, t('puzzle.button.setFen')),
@@ -177,13 +176,13 @@ function renderMainControls(controller: AnalysisController, panelState: Analysis
 }
 
 export function renderAnalysisPanel(controller: AnalysisController): VNode {
-  const panelState = controller.getPanelState();
+  const panelState = controller.getPanelState(); 
   logger.debug('[AnalysisPanelView] Rendering with state:', panelState);
 
   const analysisLinesSection = (panelState.isAnalysisActive || panelState.isAnalysisLoading)
     ? h('div.analysis-lines-section',
         renderAnalysisLinesContent(
-          panelState,
+          panelState, 
           (uciMove: string) => controller.playMoveFromAnalysisLine(uciMove)
         )
       )
