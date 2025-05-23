@@ -1,6 +1,12 @@
 // src/core/webhook.service.ts
 import logger from '../utils/logger';
-import type { FinishHimStats, SubscriptionTier, UserSessionUpsertPayload, FollowClubs, BackendUserSessionData } from './auth.service'; // BackendUserSessionData импортируется здесь
+import type {
+  SubscriptionTier,
+  UserSessionUpsertPayload,
+  FinishHimStats,
+  BackendUserSessionData, 
+  FollowClubs
+} from './auth.service';
 
 // --- Интерфейсы для Puzzle ---
 export interface PuzzleRequestPayload {
@@ -88,7 +94,7 @@ export interface RawLeaderboardUserData {
   username: string;
   FinishHimStats: FinishHimStats;
   subscriptionTier: SubscriptionTier;
-  follow_clubs?: FollowClubs;
+  follow_clubs?: FollowClubs; 
 }
 
 export interface LeaderboardsApiResponse {
@@ -99,13 +105,31 @@ export interface FetchLeaderboardsRequestPayload {
   event: "fetchAllUserStats";
 }
 
-// --- Новый интерфейс для Club Follow ---
+// --- Интерфейс для Club Follow ---
 export interface ClubFollowRequestPayload {
   event: "clubFollow";
   lichess_id: string;
   club_id: string;
+  club_name: string; // Добавлено имя клуба
   action: 'follow' | 'unfollow';
 }
+
+// --- Новые интерфейсы для User Cabinet ---
+export interface UserCabinetDataFromWebhook {
+  lichess_id: string;
+  username: string;
+  subscriptionTier: SubscriptionTier;
+  FinishHimStats: FinishHimStats;
+  follow_clubs?: FollowClubs; 
+  club_leader?: FollowClubs;  
+  club_founder?: FollowClubs; 
+}
+
+export interface UserCabinetRequestPayload {
+  event: "userCabinet";
+  lichess_id: string;
+}
+
 
 // --- URL единого бэкенд вебхука ---
 const BACKEND_URL = import.meta.env.VITE_BACKEND as string;
@@ -236,10 +260,10 @@ export class WebhookServiceController {
 
     if (apiResponse &&
         typeof apiResponse === 'object' &&
-        apiResponse.hasOwnProperty('leaderboards') &&
-        typeof apiResponse.leaderboards === 'object' &&
-        apiResponse.leaderboards !== null &&
-        !Array.isArray(apiResponse.leaderboards)
+        apiResponse.hasOwnProperty('leaderboards') && 
+        typeof apiResponse.leaderboards === 'object' && 
+        apiResponse.leaderboards !== null && 
+        !Array.isArray(apiResponse.leaderboards) 
         ) {
       const leaderboardsObject = apiResponse.leaderboards as { [key: string]: RawLeaderboardUserData };
       const dataArray: RawLeaderboardUserData[] = Object.values(leaderboardsObject);
@@ -254,25 +278,64 @@ export class WebhookServiceController {
   public async upsertUserSession(payload: UserSessionUpsertPayload): Promise<BackendUserSessionData | null> {
     const sessionData = await this._postRequest<BackendUserSessionData, UserSessionUpsertPayload>(payload, "upsertUserSession");
     if (sessionData && !Array.isArray(sessionData) && sessionData.lichess_id && sessionData.FinishHimStats && typeof sessionData.subscriptionTier !== 'undefined') {
+        if (sessionData.follow_clubs && typeof sessionData.follow_clubs === 'object' && Object.keys(sessionData.follow_clubs).length === 0) {
+            logger.debug('[WebhookService upsertUserSession] Normalizing empty object for follow_clubs to { clubs: [] }');
+            sessionData.follow_clubs = { clubs: [] };
+        } else if (sessionData.follow_clubs && !Array.isArray((sessionData.follow_clubs as FollowClubs).clubs)) {
+            logger.warn('[WebhookService upsertUserSession] follow_clubs received but "clubs" property is not an array. Normalizing to { clubs: [] }.', sessionData.follow_clubs);
+            sessionData.follow_clubs = { clubs: [] };
+        }
         return sessionData;
-    } else if (sessionData) {
+    } else if (sessionData) { 
         logger.warn('[WebhookService upsertUserSession] Fetched data is malformed, an array, or missing required fields. Response:', sessionData);
     }
     return null;
   }
 
   public async updateClubFollowStatus(payload: ClubFollowRequestPayload): Promise<BackendUserSessionData | null> {
-    // Ожидаем ОДИН объект BackendUserSessionData, а не массив, согласно логам
     const sessionData = await this._postRequest<BackendUserSessionData, ClubFollowRequestPayload>(payload, "updateClubFollowStatus");
-
-    // Проверка, что sessionData не массив и содержит необходимые поля
     if (sessionData && !Array.isArray(sessionData) && sessionData.lichess_id && sessionData.FinishHimStats && typeof sessionData.subscriptionTier !== 'undefined') {
+        if (sessionData.follow_clubs && typeof sessionData.follow_clubs === 'object' && Object.keys(sessionData.follow_clubs).length === 0) {
+            logger.debug('[WebhookService updateClubFollowStatus] Normalizing empty object for follow_clubs to { clubs: [] }');
+            sessionData.follow_clubs = { clubs: [] };
+        } else if (sessionData.follow_clubs && !Array.isArray((sessionData.follow_clubs as FollowClubs).clubs)) {
+            logger.warn('[WebhookService updateClubFollowStatus] follow_clubs received but "clubs" property is not an array. Normalizing to { clubs: [] }.', sessionData.follow_clubs);
+            sessionData.follow_clubs = { clubs: [] };
+        }
         return sessionData;
-    } else if (sessionData) { // Если sessionData есть, но не соответствует ожиданиям
+    } else if (sessionData) {
         logger.warn('[WebhookService updateClubFollowStatus] Fetched data is malformed, an array, or missing required fields. Response:', sessionData);
     }
     return null;
   }
+
+  public async fetchUserCabinetData(payload: UserCabinetRequestPayload): Promise<UserCabinetDataFromWebhook | null> {
+    const responseDataArray = await this._postRequest<UserCabinetDataFromWebhook[], UserCabinetRequestPayload>(payload, "fetchUserCabinetData");
+
+    if (responseDataArray && Array.isArray(responseDataArray) && responseDataArray.length > 0) {
+        const userData = responseDataArray[0];
+        if (userData && userData.lichess_id) {
+            const fieldsToNormalize: (keyof Pick<UserCabinetDataFromWebhook, 'follow_clubs' | 'club_leader' | 'club_founder'>)[] = ['follow_clubs', 'club_leader', 'club_founder'];
+            
+            fieldsToNormalize.forEach(field => {
+                const clubAffiliation = userData[field] as FollowClubs | {} | undefined; 
+                if (clubAffiliation) { 
+                    if (typeof clubAffiliation === 'object' && !Array.isArray((clubAffiliation as FollowClubs).clubs)) {
+                        logger.debug(`[WebhookService fetchUserCabinetData] Normalizing field "${field}" from potentially empty object or missing .clubs array to { clubs: [] }. Original:`, clubAffiliation);
+                        (userData[field] as FollowClubs) = { clubs: [] };
+                    }
+                }
+            });
+            return userData;
+        } else {
+            logger.warn('[WebhookService fetchUserCabinetData] Fetched array data is missing lichess_id or is malformed. Response:', responseDataArray);
+        }
+    } else if (responseDataArray) { 
+         logger.warn('[WebhookService fetchUserCabinetData] Fetched data is not a non-empty array. Response:', responseDataArray);
+    }
+    return null;
+  }
+
 }
 
 export const WebhookService = new WebhookServiceController();

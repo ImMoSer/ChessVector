@@ -8,9 +8,14 @@ import { WebhookService, type WebhookServiceController } from '../core/webhook.s
 // --- Типы и Интерфейсы ---
 export type SubscriptionTier = 'none' | 'bronze' | 'silver' | 'gold' | 'platinum';
 
-// Переименованный интерфейс
+export interface ClubIdNamePair {
+  club_id: string;
+  club_name: string;
+}
+
+// Обновленный интерфейс FollowClubs
 export interface FollowClubs {
-  club_ids: string[];
+  clubs: ClubIdNamePair[];
 }
 
 export interface LichessUserProfile {
@@ -43,7 +48,7 @@ export interface FinishHimStats {
 export interface UserSessionProfile extends LichessUserProfile {
   subscriptionTier: SubscriptionTier;
   finishHimStats: FinishHimStats;
-  follow_clubs?: FollowClubs; // Используем новый тип
+  follow_clubs?: FollowClubs; // Используем обновленный FollowClubs
 }
 
 // Этот payload используется для отправки данных на бэкенд через WebhookService
@@ -57,10 +62,10 @@ export interface UserSessionUpsertPayload {
 // Структура ответа, ожидаемая от бэкенда (через WebhookService)
 export interface BackendUserSessionData {
     lichess_id: string;
-    username?: string;
+    username?: string; // username может быть опциональным, если бэкенд его не всегда возвращает для всех событий
     FinishHimStats: FinishHimStats;
     subscriptionTier: SubscriptionTier;
-    follow_clubs?: FollowClubs; // Используем новый тип
+    follow_clubs?: FollowClubs; // Используем обновленный FollowClubs
 }
 
 
@@ -144,10 +149,13 @@ class AuthServiceController {
     const previousError = this.state.error;
     const previousUserProfileId = this.state.userProfile?.id;
     const previousFinishHimStats = JSON.stringify(this.state.userProfile?.finishHimStats);
-    const previousFollowClubs = JSON.stringify(this.state.userProfile?.follow_clubs); // Изменено
+    // Сравниваем follow_clubs по содержимому, а не по ссылке
+    const previousFollowClubsString = this.state.userProfile?.follow_clubs ? JSON.stringify(this.state.userProfile.follow_clubs.clubs) : undefined;
 
 
     this.state = { ...this.state, ...newState };
+
+    const currentFollowClubsString = this.state.userProfile?.follow_clubs ? JSON.stringify(this.state.userProfile.follow_clubs.clubs) : undefined;
 
     if (
         (newState.isAuthenticated !== undefined && newState.isAuthenticated !== previousIsAuthenticated) ||
@@ -155,7 +163,7 @@ class AuthServiceController {
         (newState.error !== undefined && newState.error !== previousError) ||
         (newState.userProfile?.id !== undefined && newState.userProfile.id !== previousUserProfileId) ||
         (newState.userProfile?.finishHimStats !== undefined && JSON.stringify(newState.userProfile.finishHimStats) !== previousFinishHimStats) ||
-        (newState.userProfile?.follow_clubs !== undefined && JSON.stringify(newState.userProfile.follow_clubs) !== previousFollowClubs) // Изменено
+        (currentFollowClubsString !== previousFollowClubsString) // Сравнение строковых представлений
     ) {
         this.notifySubscribers();
     }
@@ -191,7 +199,7 @@ class AuthServiceController {
       logger.error('[AuthService] Error during handleAuthentication:', errorMessage, err);
       this.clearAuthDataLocal();
       this.setState({ isAuthenticated: false, userProfile: null, accessToken: null, error: `Authentication failed: ${errorMessage}` });
-      return true;
+      return true; // Возвращаем true, так как URL был обработан (даже если с ошибкой)
     } finally {
         this.setState({ isProcessing: false });
     }
@@ -208,7 +216,7 @@ class AuthServiceController {
       this._clearAuthParamsFromUrl();
       await this._fetchAndSetUserSessionProfile(token.value, true);
     } else {
-      this._clearAuthParamsFromUrl();
+      this._clearAuthParamsFromUrl(); // Очищаем URL даже если токен не пришел
       throw new Error('Received empty token from Lichess during callback.');
     }
   }
@@ -217,15 +225,15 @@ class AuthServiceController {
     const storedToken = localStorage.getItem('lichess_token');
     if (storedToken) {
       logger.info('[AuthService] Found stored Lichess token. Validating session.');
-      this.setState({ accessToken: storedToken });
-      await this._fetchAndSetUserSessionProfile(storedToken, false);
-      if (!this.state.isAuthenticated) {
+      this.setState({ accessToken: storedToken }); // Устанавливаем токен в состояние до проверки
+      await this._fetchAndSetUserSessionProfile(storedToken, false); // isInitialAuth = false
+      if (!this.state.isAuthenticated) { // Проверяем, установилась ли аутентификация после fetch
         logger.warn('[AuthService] Stored token validation failed. User is logged out.');
-        this.clearAuthDataLocal();
+        this.clearAuthDataLocal(); // Очищаем данные, если профиль не загрузился
       }
     } else {
       logger.info('[AuthService] No stored Lichess token found.');
-      this.clearAuthDataLocal();
+      this.clearAuthDataLocal(); // На всякий случай, если токена нет, а профиль остался
     }
   }
 
@@ -233,6 +241,7 @@ class AuthServiceController {
     const eventType = isInitialAuth ? "oAuth" : "userSessionUpsert";
     logger.info(`[AuthService] Fetching Lichess basic profile and then full user session from backend (event: ${eventType})...`);
     try {
+      // 1. Получаем базовый профиль Lichess
       const fetchWithAuth = this.oauthClient.decorateFetchHTTPClient(window.fetch);
       const lichessResponse = await fetchWithAuth(`${LICHESS_HOST}/api/account`, {
         headers: { 'Authorization': `Bearer ${lichessAccessToken}` },
@@ -246,13 +255,15 @@ class AuthServiceController {
       const lichessProfileData: LichessUserProfile = await lichessResponse.json();
       logger.debug('[AuthService] Basic Lichess profile data received:', lichessProfileData);
 
+      // 2. Отправляем запрос на бэкенд для получения/обновления сессии пользователя с нашим Event Type
       const upsertPayload: UserSessionUpsertPayload = {
         event: eventType,
         lichess_id: lichessProfileData.id,
         username: lichessProfileData.username,
-        lichessAccessToken: lichessAccessToken,
+        lichessAccessToken: lichessAccessToken, // Передаем токен, чтобы бэкенд мог его сохранить/проверить при необходимости
       };
 
+      // Используем WebhookService для отправки данных на бэкенд
       const backendSpecificData = await this.webhookService.upsertUserSession(upsertPayload);
 
       if (!backendSpecificData) {
@@ -262,6 +273,8 @@ class AuthServiceController {
       
       logger.debug('[AuthService] Raw backendSpecificData from WebhookService:', JSON.stringify(backendSpecificData));
 
+
+      // Проверка на несоответствие lichess_id (добавлена для надежности)
       if (lichessProfileData.id !== backendSpecificData.lichess_id) {
         logger.error(
             `Lichess ID mismatch. Lichess API: ${lichessProfileData.id}, Backend: ${backendSpecificData.lichess_id}`
@@ -269,33 +282,53 @@ class AuthServiceController {
         throw new Error("Lichess ID mismatch between Lichess API and backend response");
       }
       
+      // Проверка обязательных полей от бэкенда
       if (!backendSpecificData.FinishHimStats || typeof backendSpecificData.subscriptionTier === 'undefined') {
           logger.error('[AuthService] Backend response missing required fields: FinishHimStats or subscriptionTier.', backendSpecificData);
           throw new Error('Backend response missing required fields.');
       }
 
+      // 3. Собираем полный профиль сессии пользователя
+      // Убедимся, что follow_clubs соответствует новой структуре
+      let normalizedFollowClubs: FollowClubs | undefined = undefined;
+      if (backendSpecificData.follow_clubs) {
+        if (Array.isArray((backendSpecificData.follow_clubs as FollowClubs).clubs)) {
+            normalizedFollowClubs = backendSpecificData.follow_clubs as FollowClubs;
+        } else if (typeof backendSpecificData.follow_clubs === 'object' && Object.keys(backendSpecificData.follow_clubs).length === 0) {
+            // Если пришел пустой объект {}, считаем это как отсутствие подписок
+            normalizedFollowClubs = { clubs: [] };
+            logger.debug('[AuthService] backendSpecificData.follow_clubs was empty object, normalized to { clubs: [] }');
+        } else {
+            logger.warn('[AuthService] backendSpecificData.follow_clubs has unexpected structure, treating as no followed clubs. Data:', backendSpecificData.follow_clubs);
+            normalizedFollowClubs = { clubs: [] };
+        }
+      }
+
+
       const finalUserSessionProfile: UserSessionProfile = {
-        ...lichessProfileData,
+        ...lichessProfileData, // Данные из Lichess API
         subscriptionTier: backendSpecificData.subscriptionTier as SubscriptionTier,
         finishHimStats: backendSpecificData.FinishHimStats as FinishHimStats,
-        follow_clubs: backendSpecificData.follow_clubs ? { ...backendSpecificData.follow_clubs } : undefined, // Используем follow_clubs
+        follow_clubs: normalizedFollowClubs,
       };
 
+      // Сохраняем в localStorage и обновляем состояние
       localStorage.setItem('lichess_user_profile', JSON.stringify(finalUserSessionProfile));
       this.setState({
         userProfile: finalUserSessionProfile,
         isAuthenticated: true,
-        accessToken: lichessAccessToken,
+        accessToken: lichessAccessToken, // Сохраняем токен Lichess в состоянии
         error: null,
       });
 
     } catch (error: any) {
       logger.error(`[AuthService] Error in _fetchAndSetUserSessionProfile (event: ${eventType}):`, error.message, error.stack);
-      this.clearAuthDataLocal();
+      this.clearAuthDataLocal(); // Очищаем данные при любой ошибке в этом процессе
       this.setState({ isAuthenticated: false, userProfile: null, accessToken: null, error: `Failed to establish session: ${error.message}` });
     }
   }
 
+  // Метод для очистки параметров OAuth из URL
   private _clearAuthParamsFromUrl(): void {
     const url = new URL(window.location.href);
     let paramsCleared = false;
@@ -307,18 +340,32 @@ class AuthServiceController {
         url.searchParams.delete('state');
         paramsCleared = true;
     }
+    // Добавим очистку error и error_description, если они есть от Lichess
+    if (url.searchParams.has('error')) {
+        url.searchParams.delete('error');
+        paramsCleared = true;
+    }
+    if (url.searchParams.has('error_description')) {
+        url.searchParams.delete('error_description');
+        paramsCleared = true;
+    }
+
     if (paramsCleared) {
-        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-        logger.info('[AuthService] OAuth parameters (code, state) cleared from URL search string.');
+        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash); // Используем pathname + search + hash для сохранения других параметров, если они есть
+        logger.info('[AuthService] OAuth parameters (code, state, error, error_description) cleared from URL search string.');
     }
 }
 
+
   public async login(): Promise<void> {
     logger.info('[AuthService] Initiating Lichess login...');
-    this.setState({ error: null, isProcessing: true });
+    this.setState({ error: null, isProcessing: true }); // Сбрасываем ошибку перед логином
     try {
+      // this.oauthClient.reset(); // Сброс состояния клиента перед новым запросом, если необходимо
       await this.oauthClient.fetchAuthorizationCode();
+      // Редирект произойдет здесь, если все успешно
     } catch (err: any) {
+      // Ошибки здесь обычно связаны с конфигурацией или недоступностью Lichess OAuth сервера
       const errorMessage = err.error_description || err.message || 'Unknown login initiation error';
       logger.error('[AuthService] Lichess login initiation failed:', errorMessage, err);
       this.setState({ error: `Failed to initiate login: ${errorMessage}`, isProcessing: false });
@@ -332,17 +379,22 @@ class AuthServiceController {
 
     if (callApiRevoke && tokenToRevoke) {
       try {
-        await fetch(this.lichessTokenUrl, {
+        // Используем fetch, декорированный клиентом OAuth, если это предпочтительнее,
+        // но для простого DELETE запроса с Bearer токеном обычный fetch тоже подойдет.
+        // const fetchWithAuth = this.oauthClient.decorateFetchHTTPClient(window.fetch);
+        await fetch(this.lichessTokenUrl, { // Используем this.lichessTokenUrl, который ${LICHESS_HOST}/api/token
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${tokenToRevoke}` },
         });
         logger.info('[AuthService] Lichess token revoked successfully.');
       } catch (err) {
+        // Ошибка отзыва токена не должна прерывать процесс локального выхода
         logger.error('[AuthService] Error while revoking Lichess token:', err);
       }
     }
+    // Вне зависимости от успеха отзыва токена, очищаем локальные данные
     this.clearAuthDataLocal();
-    this.setState({ isProcessing: false, error: null });
+    this.setState({ isProcessing: false, error: null }); // Сброс isProcessing и ошибки
   }
 
   private clearAuthDataLocal(): void {
@@ -352,21 +404,32 @@ class AuthServiceController {
     logger.info('[AuthService] Local authentication data cleared.');
   }
 
-  // Новый метод для обновления follow_clubs
+  // Обновленный метод для обновления follow_clubs
   public updateFollowClubs(newFollowClubs: FollowClubs | undefined): void {
     if (this.state.userProfile) {
+      // Убедимся, что newFollowClubs соответствует новой структуре или undefined
+      let normalizedNewFollowClubs: FollowClubs | undefined = undefined;
+      if (newFollowClubs && Array.isArray(newFollowClubs.clubs)) {
+        normalizedNewFollowClubs = newFollowClubs;
+      } else if (newFollowClubs) {
+        // Если пришла невалидная структура, логируем и не обновляем или ставим пустой массив
+        logger.warn('[AuthService updateFollowClubs] Received invalid structure for newFollowClubs. Setting to empty.', newFollowClubs);
+        normalizedNewFollowClubs = { clubs: [] };
+      }
+
       const updatedProfile = {
         ...this.state.userProfile,
-        follow_clubs: newFollowClubs,
+        follow_clubs: normalizedNewFollowClubs,
       };
       this.setState({ userProfile: updatedProfile });
       localStorage.setItem('lichess_user_profile', JSON.stringify(updatedProfile));
-      logger.info('[AuthService] Followed clubs updated in state and localStorage:', newFollowClubs);
+      logger.info('[AuthService] Followed clubs updated in state and localStorage:', normalizedNewFollowClubs);
     } else {
       logger.warn('[AuthService updateFollowClubs] Cannot update follow_clubs: userProfile is null.');
     }
   }
 
+  // Геттеры
   public getIsAuthenticated(): boolean { return this.state.isAuthenticated; }
   public getUserProfile(): UserSessionProfile | null { return this.state.userProfile; }
   public getAccessToken(): string | null { return this.state.accessToken; }
@@ -378,9 +441,13 @@ class AuthServiceController {
   public getFinishHimStats(): FinishHimStats | null {
     return this.state.userProfile?.finishHimStats || null;
   }
-  // Переименованный геттер
+  // Обновленный геттер
   public getFollowClubs(): FollowClubs | undefined {
-    return this.state.userProfile?.follow_clubs;
+    // Обеспечиваем возврат корректной структуры или undefined
+    if (this.state.userProfile?.follow_clubs && Array.isArray(this.state.userProfile.follow_clubs.clubs)) {
+        return this.state.userProfile.follow_clubs;
+    }
+    return undefined; // или { clubs: [] } если это предпочтительнее для потребителей
   }
 }
 
