@@ -105,7 +105,7 @@ export class AppController {
       
       const prevUserProfileId = this.state.currentUser?.id;
       const prevIsLoadingAuth = this.state.isLoadingAuth;
-      const prevLedClubs = JSON.stringify(this.state.currentUser?.led_clubs);
+      const prevLedClubs = JSON.stringify(this.state.currentUser?.follow_clubs);
 
       this.state.currentUser = authState.userProfile;
       this.state.isLoadingAuth = authState.isProcessing;
@@ -113,7 +113,7 @@ export class AppController {
       if (
           prevUserProfileId !== authState.userProfile?.id ||
           prevIsLoadingAuth !== authState.isProcessing ||
-          JSON.stringify(authState.userProfile?.led_clubs) !== prevLedClubs
+          JSON.stringify(authState.userProfile?.follow_clubs) !== prevLedClubs
       ) {
           this.requestGlobalRedraw();
       }

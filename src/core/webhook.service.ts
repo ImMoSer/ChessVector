@@ -89,7 +89,7 @@ export interface RawLeaderboardUserData {
   username: string;
   FinishHimStats: FinishHimStats;
   subscriptionTier: SubscriptionTier;
-  led_clubs?: LedClubs; // Добавлено поле led_clubs, если оно приходит от бэкенда для лидербордов
+  follow_clubs?: LedClubs; // Добавлено поле follow_clubs, если оно приходит от бэкенда для лидербордов
 }
 
 export interface LeaderboardsApiResponse {

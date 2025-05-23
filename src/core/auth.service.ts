@@ -42,7 +42,7 @@ export interface FinishHimStats {
 export interface UserSessionProfile extends LichessUserProfile {
   subscriptionTier: SubscriptionTier;
   finishHimStats: FinishHimStats;
-  led_clubs?: LedClubs;
+  follow_clubs?: LedClubs;
 }
 
 // Этот payload используется для отправки данных на бэкенд через WebhookService
@@ -59,7 +59,7 @@ export interface BackendUserSessionData {
     username?: string; // username может быть опциональным в ответе, если мы его уже знаем
     FinishHimStats: FinishHimStats;
     subscriptionTier: SubscriptionTier;
-    led_clubs?: LedClubs;
+    follow_clubs?: LedClubs;
 }
 
 
@@ -148,7 +148,7 @@ class AuthServiceController {
     const previousError = this.state.error;
     const previousUserProfileId = this.state.userProfile?.id;
     const previousFinishHimStats = JSON.stringify(this.state.userProfile?.finishHimStats);
-    const previousLedClubs = JSON.stringify(this.state.userProfile?.led_clubs);
+    const previousLedClubs = JSON.stringify(this.state.userProfile?.follow_clubs);
 
 
     this.state = { ...this.state, ...newState };
@@ -159,7 +159,7 @@ class AuthServiceController {
         (newState.error !== undefined && newState.error !== previousError) ||
         (newState.userProfile?.id !== undefined && newState.userProfile.id !== previousUserProfileId) ||
         (newState.userProfile?.finishHimStats !== undefined && JSON.stringify(newState.userProfile.finishHimStats) !== previousFinishHimStats) ||
-        (newState.userProfile?.led_clubs !== undefined && JSON.stringify(newState.userProfile.led_clubs) !== previousLedClubs)
+        (newState.userProfile?.follow_clubs !== undefined && JSON.stringify(newState.userProfile.follow_clubs) !== previousLedClubs)
     ) {
         this.notifySubscribers();
     }
@@ -283,7 +283,7 @@ class AuthServiceController {
         ...lichessProfileData,
         subscriptionTier: backendSpecificData.subscriptionTier as SubscriptionTier,
         finishHimStats: backendSpecificData.FinishHimStats as FinishHimStats,
-        led_clubs: backendSpecificData.led_clubs ? { ...backendSpecificData.led_clubs } : undefined,
+        follow_clubs: backendSpecificData.follow_clubs ? { ...backendSpecificData.follow_clubs } : undefined,
       };
 
       localStorage.setItem('lichess_user_profile', JSON.stringify(finalUserSessionProfile));
@@ -376,7 +376,7 @@ class AuthServiceController {
     return this.state.userProfile?.finishHimStats || null;
   }
   public getLedClubs(): LedClubs | undefined {
-    return this.state.userProfile?.led_clubs;
+    return this.state.userProfile?.follow_clubs;
   }
 }
 
