@@ -228,7 +228,7 @@ export function renderAppUI(controller: AppController): VNode {
         // Заменяем span.app-title на img.app-logo
         h('img.app-logo', {
           props: {
-            src: '/mini_logo.png', // Путь к вашему логотипу в папке public
+            src: '/svg/1920_Banner.svg', // Путь к вашему логотипу в папке public
             alt: t('app.title') // Используем существующий ключ для alt текста
           },
           on: { // Добавляем обработчик клика для навигации на главную (или другую страницу по умолчанию)

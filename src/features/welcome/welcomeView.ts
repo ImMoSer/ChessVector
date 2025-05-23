@@ -16,7 +16,7 @@ export function renderWelcomePage(controller: WelcomeController): VNode {
       // Добавляем изображение
       h('img.welcome-image', {
         props: {
-          src: '/ChessBoard.png', // Путь к изображению в папке public
+          src: '/svg/1920_Banner.svg', // Путь к изображению в папке public
           alt: 'Chessboard Image' // Альтернативный текст для изображения
         }
       }),

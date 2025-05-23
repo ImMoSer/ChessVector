@@ -3,36 +3,38 @@
 /* Стили для левой панели в режиме Finish Him */
 .finish-him-left-panel {
   padding: 10px;
-  font-size: 0.9em;
+  font-size: var(--font-size-small); /* Используем переменную для маленького шрифта */
   line-height: 1.6;
   display: flex;
   flex-direction: column;
-  height: 100%; /* Предполагается, что родитель имеет высоту, например, из main.css #left-panel */
+  height: 100%;
   box-sizing: border-box;
   gap: 15px;
-  /* Фон панели будет унаследован от #left-panel (var(--color-bg-secondary)) */
+  /* font-family будет унаследован от родителя (предположительно body, использующего var(--font-family-primary)) */
 }
 
 /* Блок для фидбека пользователю */
 #finish-him-feedback {
   text-align: center;
-  font-size: 1.2em;
+  font-size: var(--font-size-base); /* Используем базовый размер шрифта */
   flex-shrink: 0;
-  min-height: 2.5em; /* Минимальная высота для предотвращения "прыжков" */
-  background-color: var(--color-bg-tertiary); /* Темный фон для блока фидбека */
-  color: var(--color-text-default); /* Светлый текст */
+  min-height: 2.5em;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-default);
   border-radius: var(--panel-border-radius);
   padding: 10px;
-  border: 1px solid var(--color-border-hover); /* Граница чуть светлее фона */
-  display: flex; /* Для вертикального центрирования текста, если нужно */
+  border: 1px solid var(--color-border-hover);
+  display: flex;
   align-items: center;
   justify-content: center;
+  /* font-family будет унаследован */
 }
 
 #finish-him-feedback p {
-  font-weight: bold;
+  font-weight: var(--font-weight-bold); /* Используем переменную для жирного начертания */
   margin: 0;
   padding: 5px 0;
+  /* font-family будет унаследован */
 }
 
 /* ---- Стили для выпадающего меню категорий ---- */
@@ -45,11 +47,12 @@
 .category-toggle-button {
   width: 100%;
   padding: 10px 12px;
-  font-size: 1em;
-  font-weight: 600;
+  font-family: var(--font-family-primary); /* Явно указываем шрифт для кнопки */
+  font-size: var(--font-size-base);   /* Используем базовый размер шрифта */
+  font-weight: var(--font-weight-bold);  /* Используем переменную для жирного начертания */
   text-align: left;
-  background-color: var(--color-accent-secondary); /* Ярко-розовый для кнопки категорий */
-  color: var(--color-text-on-accent); /* Белый текст */
+  background-color: var(--color-accent-secondary);
+  color: var(--color-text-on-accent);
   border: 1px solid var(--color-accent-secondary);
   border-radius: var(--panel-border-radius);
   cursor: pointer;
@@ -60,7 +63,7 @@
 }
 
 .category-toggle-button:hover:not(:disabled) {
-  background-color: #D6037E; /* Затемненный розовый */
+  background-color: #D6037E;
   border-color: #D6037E;
 }
 .category-toggle-button:disabled {
@@ -73,10 +76,10 @@
 
 .dropdown-arrow {
   margin-left: 8px;
-  font-size: 0.8em;
+  font-size: var(--font-size-xsmall); /* Используем переменную для очень маленького шрифта */
   transition: transform 0.2s ease;
 }
-.category-toggle-button.open .dropdown-arrow { /* Если добавляется класс 'open' при открытии */
+.category-toggle-button.open .dropdown-arrow {
     transform: rotate(180deg);
 }
 
@@ -86,27 +89,28 @@
   top: calc(100% + 5px);
   left: 0;
   right: 0;
-  background-color: var(--color-bg-tertiary); /* Фон выпадающего списка */
+  background-color: var(--color-bg-tertiary);
   border: 1px solid var(--color-border-hover);
   border-radius: var(--panel-border-radius);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.35); /* Тень для темной темы */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
   z-index: 101;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  max-height: 200px; /* Ограничение высоты, если категорий много */
-  overflow-y: auto; /* Прокрутка, если категорий много */
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .category-dropdown-item {
   width: 100%;
   padding: 10px 12px;
-  font-size: 0.95em;
+  font-family: var(--font-family-primary); /* Явно указываем шрифт (если это кнопка или элемент, не наследующий шрифт) */
+  font-size: var(--font-size-small); /* Используем маленький размер шрифта */
   text-align: left;
   background-color: var(--color-bg-tertiary);
-  color: var(--color-text-default); /* Светлый текст для элементов списка */
+  color: var(--color-text-default);
   border: none;
-  border-bottom: 1px solid var(--color-border); /* Разделитель */
+  border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
@@ -115,17 +119,17 @@
 }
 
 .category-dropdown-item:hover:not(:disabled) {
-  background-color: var(--color-border-hover); /* Затемнение при наведении */
+  background-color: var(--color-border-hover);
   color: var(--color-text-default);
 }
 
 .category-dropdown-item.active {
-  background-color: var(--color-accent-primary); /* Ярко-голубой для активной категории */
-  color: var(--color-text-on-accent); /* Белый текст */
-  font-weight: bold;
+  background-color: var(--color-accent-primary);
+  color: var(--color-text-on-accent);
+  font-weight: var(--font-weight-bold); /* Используем переменную */
 }
 .category-dropdown-item.active:hover:not(:disabled) {
-  background-color: var(--color-text-link-hover); /* Затемненный голубой */
+  background-color: var(--color-text-link-hover);
 }
 
 .category-dropdown-item:disabled {
@@ -138,39 +142,43 @@
 /* ---- Стили для обновленного блока статистики пользователя ---- */
 .user-stats-container {
   padding: 12px;
-  background-color: var(--color-bg-secondary); /* Фон блока статистики */
+  background-color: var(--color-bg-secondary);
   border-radius: var(--panel-border-radius);
   border: 1px solid var(--color-border-hover);
   flex-shrink: 0;
+  /* font-family будет унаследован */
 }
 
 .user-stats-main-title {
   margin: 0 0 12px 0;
   padding-bottom: 8px;
-  color: var(--color-text-muted); /* Приглушенный светлый текст */
-  font-size: 1.1em;
-  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-large); /* Используем большой размер шрифта для заголовка */
+  font-weight: var(--font-weight-bold); /* Используем переменную */
   border-bottom: 1px solid var(--color-border);
   text-align: center;
+  /* font-family будет унаследован */
 }
 
-.user-stats-container p { /* Для сообщения "Loading stats..." */
+.user-stats-container p {
     margin: 5px 0;
     text-align: center;
     font-style: italic;
     color: var(--color-text-muted);
+    /* font-family и font-size будут унаследованы от .user-stats-container или body */
 }
 
 .games-played-info {
-  font-size: 1.3em;
-  font-weight: bold;
-  color: var(--color-accent-success); /* Ярко-салатовый для количества игр */
+  font-size: var(--font-size-base); /* Используем базовый размер шрифта (соответствует предыдущим 1.3em) */
+  font-weight: var(--font-weight-bold); /* Используем переменную */
+  color: var(--color-accent-success);
   text-align: center;
   margin-bottom: 12px;
   padding: 6px;
   background-color: var(--color-bg-tertiary);
   border-radius: 4px;
-  border: 1px solid var(--color-accent-success); /* Рамка в цвет текста */
+  border: 1px solid var(--color-accent-success);
+  /* font-family будет унаследован */
 }
 
 .stats-overview-grid {
@@ -180,69 +188,75 @@
 }
 
 .stat-block {
-  background-color: var(--color-bg-tertiary); /* Фон для блока статы */
+  background-color: var(--color-bg-tertiary);
   padding: 10px;
   border-radius: 6px;
   border: 1px solid var(--color-border);
+  /* font-family будет унаследован */
 }
 
 .stat-block-title {
-  font-size: 1.2em;
-  font-weight: bold;
-  color: var(--color-accent-warning); /* Ярко-оранжевый для заголовков статы */
+  font-size: var(--font-size-base); /* Используем базовый размер (соответствует предыдущим 1.2em-1.3em) */
+  font-weight: var(--font-weight-bold); /* Используем переменную */
+  color: var(--color-accent-success);
   margin: 0 0 8px 0;
   text-align: center;
   border-bottom: 1px dashed var(--color-border-hover);
   padding-bottom: 5px;
+  /* font-family будет унаследован */
 }
 
 .stat-block-values {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  font-size: 1.2em;
+  font-size: var(--font-size-base); /* Используем базовый размер (соответствует предыдущим 1.2em-1.3em) */
+  /* font-family будет унаследован */
 }
 
 .current-value {
-  font-weight: bold;
-  color: var(--color-text-default); /* Светлый текст для текущего значения */
+  font-weight: var(--font-weight-bold); /* Используем переменную */
+  color: var(--color-accent-primary);
+  font-size: var(--font-size-base);
+  /* font-family и font-size будут унаследованы */
 }
 
 .value-delta {
-  font-weight: bold;
-  font-size: 1.5em; /* Размер шрифта для дельты можно оставить или сделать 1em, чтобы не был слишком большим */
+  font-weight: var(--font-weight-bold); /* Используем переменную */
+  font-size: var(--font-size-xlarge); /* Используем очень большой размер шрифта */
   margin-left: 8px;
+  /* font-family будет унаследован */
 }
 
 .positive-delta {
-  color: var(--color-accent-success); /* Ярко-салатовый */
+  color: var(--color-accent-success);
 }
 
 .negative-delta {
-  color: var(--color-accent-error); /* Насыщенный красный */
+  color: var(--color-accent-error);
 }
 
 /* ---- Стили для правой панели и оверлея таймера ---- */
 .finish-him-right-panel {
-  position: relative; /* Фон будет от #right-panel */
+  position: relative;
 }
 
 .timer-value-overlay {
   position: absolute;
-  top: 0px; /* Или небольшой отступ, например 5px, если нужно */
-  left: 0px;  /* Или небольшой отступ, например 5px */
-  right: 0px; /* Добавлено для растягивания по ширине с учетом отступов */
-  /* width: 100%; -- Убрано, т.к. left/right = 0 растянут его */
+  top: 0px;
+  left: 0px;
+  right: 0px;
   box-sizing: border-box;
-  background-color: var(--color-bg-primary); /* Основной темный фон для оверлея */
-  color: var(--color-accent-warning); /* Ярко-оранжевый для текста таймера */
+  background-color: var(--color-bg-primary);
+  color: var(--color-accent-warning);
   border-radius: var(--panel-border-radius);
-  font-size: 2em;
-  font-weight: bold;
+  font-size: var(--font-size-large); /* Используем большой размер шрифта */
+  font-weight: var(--font-weight-bold); /* Используем переменную */
   text-align: center;
-  border: 1px solid var(--color-accent-warning); /* Рамка в цвет текста */
+  border: 1px solid var(--color-accent-warning);
   box-shadow: 0 2px 5px rgba(0,0,0,0.3);
   z-index: 10;
   pointer-events: none;
   padding: 4px 0;
+  /* font-family будет унаследован */
 }

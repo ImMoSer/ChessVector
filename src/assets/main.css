@@ -42,25 +42,47 @@
   --page-vertical-padding: 10px;
   --panel-gap: 10px;
   --panel-border-radius: 8px;
+
+  /* === Шрифты === */
+  --font-family-primary: "Neucha", cursive; /* Основное семейство шрифтов */
+  --font-weight-normal: 400;                /* Нормальная жирность (если Neucha ее поддерживает явно) */
+  --font-weight-bold: 600;               /* Жирный шрифт (если Neucha поддерживает) */
+  --font-style-normal: normal;                /* Нормальный стиль */
+
+  /* === Размеры шрифтов === */
+  --font-size-xsmall: 0.6rem;    /* Очень маленький размер шрифта */
+  --font-size-small: 0.9rem;     /* Маленький размер шрифта */
+  --font-size-base: 1.3rem;      /* Базовый размер шрифта для body */
+  --font-size-large: 1.7rem;     /* Большой размер (можно использовать для заголовков или акцентов) */
+  --font-size-xlarge: 2rem;    /* Очень большой */
+
 }
+
 
 /* В main.css */
-button, input, select, textarea {
-  font-family: "Comic Sans MS", cursive;
-}
-
 html, body {
   margin: 0;
   padding: 0;
-  /* Изменяем шрифт на "Comic Sans MS" с подходящими запасными вариантами */
-  font-family: "Comic Sans MS";
-  font-size: 15px; /* Базовый размер шрифта, можно немного увеличить для "комиксного" стиля, например, 16px */
-  line-height: 1.6;
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-default);
-  height: 100vh;
-  overflow: hidden;
+  font-family: var(--font-family-primary); /* Используем переменную для семейства шрифтов */
+  font-weight: var(--font-weight-normal);   /* Используем переменную для жирности */
+  font-style: var(--font-style-normal);    /* Используем переменную для стиля */
+  font-size: var(--font-size-base);        /* Используем переменную для базового размера шрифта */
+  line-height: 1.6;                        /* Можно тоже вынести в переменную, например --line-height-normal */
+  background-color: var(--color-bg-primary); /* */
+  color: var(--color-text-default);        /* */
+  height: 100vh;                           /* */
+  overflow: hidden;                        /* */
 }
+
+button, input, select, textarea {
+  font-family: inherit; /* Заставляем наследовать семейство шрифтов от родителя (body) */
+  font-weight: inherit; /* Заставляем наследовать жирность */
+  font-style: inherit;  /* Заставляем наследовать стиль */
+  font-size: var(--font-size-normal); /* Можно установить отдельный размер или тоже inherit, если хотите, чтобы он наследовался */
+                                      /* Если хотите, чтобы у кнопок был базовый размер body, используйте var(--font-size-base) или 1em (если родитель body) */
+                                      /* Или специфичный для кнопок, например, font-size: 0.9em; */
+}
+
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -93,9 +115,9 @@ html, body {
 }
 
 .app-logo {
-  height: calc(var(--header-height) * 0.6);
+  height: calc(var(--header-height) * 0.85);
   width: auto;
-  max-width: 200px;
+  max-width: 250px;
   margin-right: 20px;
   cursor: pointer;
   object-fit: contain;

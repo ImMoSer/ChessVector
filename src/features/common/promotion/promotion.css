@@ -24,24 +24,25 @@
     width: 12.5%; /* Размер одной клетки */
     height: 12.5%; /* Размер одной клетки */
     cursor: pointer;
-    background-color: var(--color-bg-tertiary); /* Темный фон для квадрата */
-    border: 2px solid var(--color-border-hover); /* Граница чуть светлее фона */
-    border-radius: 10%; /* Меньшее скругление для более "шахматного" вида */
-    box-shadow: 0 3px 8px rgba(0,0,0,0.4); /* Тень для темной темы */
+    background-color: var(--color-text-default); /* Светлый фон для круга */
+    border-radius: 45%; /* Делаем элемент круглым по умолчанию */
+    /* Внутренняя тень для эффекта глубины */
+    box-shadow: inset 0 0 15px 2px rgba(0,0,0,0.3); /* Внутренняя темная тень, создающая глубину */
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    transition: background-color 0.2s ease-in-out, border-radius 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
     pointer-events: auto;
     box-sizing: border-box;
 }
 
 .promotion-square:hover {
-    background-color: var(--color-accent-primary); /* Ярко-голубой фон при наведении */
-    border-color: var(--color-text-link-hover);    /* Темно-голубая рамка при наведении */
-    transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(var(--color-accent-primary-rgb, 19, 173, 246), 0.5); /* Тень с цветом акцента */
+    /* background-color: var(--color-accent-primary); -- Можно убрать, если свечение дает основной цвет */
+    border-radius: 35%; /* Превращается в скругленный квадрат при наведении (Lichess делает 0%) */
+    /* Яркое внутреннее свечение акцентным цветом */
+    box-shadow: inset 0 0 30px 5px rgba(var(--color-accent-primary-rgb, 19, 173, 246), 0.75); /* */
     z-index: 201; /* Чтобы был поверх других квадратов при наведении */
+    transform: scale(1.05);
 }
 
 /* Общие стили для фигур внутри диалога */

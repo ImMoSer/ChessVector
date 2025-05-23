@@ -66,7 +66,7 @@ export function renderRecordsPage(controller: RecordsPageController): VNode {
   // Добавляем баннер вместо заголовка
   const pageBanner = h('img.records-page-banner', {
     props: {
-      src: '/ChessBoard.Leader.png', // Убедитесь, что изображение лежит в public/
+      src: '/svg/ChessBoardLeader.svg', // Убедитесь, что изображение лежит в public/
       alt: t('records.bannerAlt', { defaultValue: 'Leaderboards Banner' })
     }
   });

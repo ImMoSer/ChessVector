@@ -1,0 +1,15 @@
+# Anweisung zum Setzen des korrekten MIME-Typs für .wasm-Dateien
+# Vorgeschlagen vom Hostinger-Support
+<IfModule mod_mime.c>
+  AddType application/wasm .wasm
+</IfModule>
+
+# Bestehende Regeln für Single Page Application (Vue Router)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>

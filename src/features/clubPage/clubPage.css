@@ -3,8 +3,8 @@
 .club-page-container {
   padding: 20px;
   box-sizing: border-box;
-  background-color: var(--color-bg-primary); /* Основной темный фон */
-  color: var(--color-text-default); /* Светлый текст по умолчанию */
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-default);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -13,6 +13,8 @@
   margin: 0 auto;
   height: auto;
   overflow: visible;
+  /* font-family будет унаследован от body (использующего var(--font-family-primary)) */
+  /* font-size будет унаследован от body (использующего var(--font-size-base)) */
 }
 
 .club-page.loading,
@@ -25,22 +27,28 @@
   text-align: center;
   min-height: 300px;
   width: 100%;
+  /* font-family и font-size будут унаследованы */
 }
 
-.club-page.loading h1, /* Заголовки состояния загрузки/ошибки */
+.club-page.loading h1,
 .club-page.error h1,
 .club-page.no-data h1 {
-  color: var(--color-accent-primary); /* Ярко-голубой */
+  color: var(--color-accent-primary);
   margin-bottom: 15px;
+  font-family: var(--font-family-primary); /* Явно указываем шрифт для заголовков состояний */
+  font-size: var(--font-size-xlarge);   /* Используем очень большой размер для заголовков состояний */
+  font-weight: var(--font-weight-bold);
 }
 
 .club-page.error .error-message {
-  color: var(--color-text-error); /* Светло-розовый текст ошибки */
-  background-color: rgba(229, 57, 53, 0.15); /* Полупрозрачный фон для акцента ошибки */
-  border: 1px solid var(--color-accent-error); /* Ярко-красная граница ошибки */
+  color: var(--color-text-error);
+  background-color: rgba(229, 57, 53, 0.15);
+  border: 1px solid var(--color-accent-error);
   padding: 10px 15px;
   border-radius: var(--panel-border-radius);
   max-width: 600px;
+  font-size: var(--font-size-small); /* Используем маленький шрифт для сообщения об ошибке */
+  /* font-family будет унаследован */
 }
 
 .club-header {
@@ -49,17 +57,18 @@
   align-items: center;
   gap: 15px;
   padding: 15px;
-  background-color: var(--color-bg-secondary); /* Темно-серый фон */
+  background-color: var(--color-bg-secondary);
   border-radius: var(--panel-border-radius);
-  border: 1px solid var(--color-border-hover); /* Граница */
+  border: 1px solid var(--color-border-hover);
   text-align: center;
+  /* font-family и font-size будут унаследованы */
 }
 
 .club-banner {
   width: 100%;
-  border-radius: calc(var(--panel-border-radius) - 4px); /* Чтобы вписался во внутренний padding хедера */
+  border-radius: calc(var(--panel-border-radius) - 4px);
   object-fit: cover;
-  border: 1px solid var(--color-border); /* Тонкая рамка для баннера */
+  border: 1px solid var(--color-border);
 }
 
 .club-info .club-name-link {
@@ -67,42 +76,47 @@
 }
 
 .club-info .club-name {
-  font-size: 2em;
-  font-weight: 600;
-  color: var(--color-accent-primary); /* Ярко-голубой для названия клуба */
+  font-size: var(--font-size-xlarge); /* Используем очень большой размер (2em) */
+  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
+  font-family: var(--font-family-primary); /* Явно указываем шрифт */
+  color: var(--color-accent-primary);
   margin: 0 0 5px 0;
   transition: color 0.2s ease;
 }
 .club-info .club-name-link:hover .club-name {
-  color: var(--color-accent-secondary); /* Ярко-розовый при наведении */
+  color: var(--color-accent-secondary);
 }
 
 .club-info .club-meta {
-  font-size: 1em;
-  color: var(--color-text-muted); /* Приглушенный светлый текст */
+  font-size: var(--font-size-small); /* Используем маленький размер (было 1em, но относительно родителя с 2em это было бы много) */
+                                     /* Если нужен размер относительно body, то var(--font-size-base) */
+  color: var(--color-text-muted);
   margin-top: 5px;
   padding: 5px 10px;
-  background-color: var(--color-bg-tertiary); /* Фон для мета-информации */
+  background-color: var(--color-bg-tertiary);
   border-radius: 4px;
   display: inline-block;
   border: 1px solid var(--color-border);
+  /* font-family будет унаследован */
 }
 
 /* Секция лидеров клуба - более строгий стиль */
 .club-leaders-section {
   padding: 15px;
-  background-color: var(--color-bg-secondary); /* Тот же фон, что и у хедера */
+  background-color: var(--color-bg-secondary);
   border-radius: var(--panel-border-radius);
-  border: 1px solid var(--color-border-hover); /* Стандартная граница */
+  border: 1px solid var(--color-border-hover);
+  /* font-family и font-size будут унаследованы */
 }
 
-.club-leaders-section .section-title { /* Добавим класс для заголовка этой секции, если он есть в HTML */
-  font-size: 1.4em;
-  color: var(--color-text-default); /* Обычный светлый текст */
+.club-leaders-section .section-title {
+  font-size: var(--font-size-large); /* Используем большой размер (ближайший к 1.4em) */
+  font-family: var(--font-family-primary); /* Явно указываем шрифт */
+  color: var(--color-text-default);
   margin-top: 0;
   margin-bottom: 15px;
   text-align: center;
-  font-weight: 600;
+  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
   padding-bottom: 10px;
   border-bottom: 1px solid var(--color-border);
 }
@@ -119,72 +133,57 @@
 }
 
 .leaders-list li {
-  background-color: var(--color-bg-tertiary); /* Фон для элемента списка лидеров */
+  background-color: var(--color-bg-tertiary);
   padding: 6px 12px;
   border-radius: var(--panel-border-radius);
-  font-size: 0.95em;
+  font-size: var(--font-size-small); /* Используем маленький размер (ближайший к 0.95em) */
   border: 1px solid var(--color-border);
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   white-space: nowrap;
-  color: var(--color-text-default); /* Светлый текст */
+  color: var(--color-text-default);
+  font-family: var(--font-family-primary); /* Явно указываем шрифт */
 }
 
 /* Общий стиль для контейнеров таблиц */
 .player-stats-table-container,
 .tournament-history-table-container {
-  padding: 0; /* Убираем внутренний padding */
-  background-color: var(--color-bg-secondary); /* Фон контейнера таблицы */
+  padding: 0;
+  background-color: var(--color-bg-secondary);
   border-radius: var(--panel-border-radius);
   border: 1px solid var(--color-border-hover);
-  overflow: hidden; /* Для корректного скругления с заголовком */
+  overflow: hidden;
   height: auto;
+  /* font-family и font-size будут унаследованы */
 }
 
-.table-content-wrapper { /* Обертка для самой таблицы внутри контейнера */
+.table-content-wrapper {
     padding: 15px;
     overflow-x: auto;
 }
 
 /* Заголовки таблиц - делаем их разноцветными */
 .table-title {
-  font-size: 1.4em;
-  color: var(--color-text-on-accent); /* Белый текст на ярком фоне */
+  font-size: var(--font-size-large); /* Используем большой размер (ближайший к 1.4em) */
+  font-family: var(--font-family-primary); /* Явно указываем шрифт */
+  color: var(--color-text-on-accent);
   padding: 10px 15px;
   margin-top: 0;
-  margin-bottom: 0; /* Убираем отступ, таблица идет сразу */
-  /* border-radius убран, т.к. скругление на родительском .player-stats-table-container и т.д. */
+  margin-bottom: 0;
   display: block;
   width: 100%;
   box-sizing: border-box;
   text-align: center;
-  border-bottom: 1px solid var(--color-border-hover); /* Граница под заголовком, чуть светлее фона */
-  font-weight: 600;
+  border-bottom: 1px solid var(--color-border-hover);
+  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
 }
 
-/* Назначаем разные цвета для разных таблиц */
-/* Предположим, у вас есть специфичные классы или ID для контейнеров таблиц или самих таблиц */
-/* Если нет, можно использовать :nth-of-type на .player-stats-table-container / .tournament-history-table-container */
-
-/* Пример: Таблица статистики игроков */
 .player-stats-table-container .table-title {
-  background-color: var(--color-accent-primary); /* Ярко-голубой */
+  background-color: var(--color-accent-primary);
 }
 
-/* Пример: Таблица истории турниров */
 .tournament-history-table-container .table-title {
-  background-color: var(--color-accent-success); /* Ярко-салатовый */
+  background-color: var(--color-accent-success);
 }
-
-/* Если есть еще таблицы, можно использовать --color-accent-secondary (розовый) и --color-accent-warning (оранжевый) */
-/* Например:
-.some-other-table-container .table-title {
-  background-color: var(--color-accent-secondary);
-}
-.yet-another-table-container .table-title {
-  background-color: var(--color-accent-warning);
-}
-*/
-
 
 .club-stats-grid {
     display: flex;
@@ -196,7 +195,8 @@
 .styled-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9em;
+  font-size: var(--font-size-small); /* Используем маленький размер (0.9em) */
+  /* font-family будет унаследован */
 }
 
 .styled-table th,
@@ -205,7 +205,7 @@
   text-align: left;
   border-bottom: 1px solid var(--color-border);
   border-left: 1px solid var(--color-border);
-  color: var(--color-text-default); /* Светлый текст */
+  color: var(--color-text-default);
 }
 .styled-table th:first-child,
 .styled-table td:first-child {
@@ -219,11 +219,12 @@
 
 
 .styled-table th {
-  background-color: var(--color-bg-tertiary); /* Фон заголовков столбцов */
-  color: var(--color-text-muted); /* Приглушенный светлый текст */
-  font-weight: 600;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
+  font-family: var(--font-family-primary); /* Явно указываем шрифт для заголовков */
   white-space: nowrap;
-  border-top: none; /* Убираем, т.к. есть граница у .table-title */
+  border-top: none;
 }
 
 .styled-table tbody tr:nth-child(even) {
@@ -234,12 +235,13 @@
 }
 
 .styled-table tbody tr:hover {
-  background-color: var(--color-border-hover); /* Затемнение при наведении */
+  background-color: var(--color-border-hover);
 }
 
 .styled-table td a {
-  color: var(--color-text-link); /* Яркая ссылка */
+  color: var(--color-text-link);
   text-decoration: none;
+  /* font-weight и font-family будут унаследованы от td */
 }
 .styled-table td a:hover {
   text-decoration: underline;
@@ -250,13 +252,13 @@
   cursor: pointer;
 }
 .tournament-row.expanded {
-  background-color: var(--color-accent-info) !important; /* Ярко-голубой для выделенной строки */
-  color: var(--color-text-on-accent) !important; /* Белый текст */
-  font-weight: bold;
+  background-color: var(--color-accent-info) !important;
+  color: var(--color-text-on-accent) !important;
+  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
 }
 .tournament-row.expanded td,
 .tournament-row.expanded td a {
-    color: var(--color-text-on-accent) !important; /* Белый текст для ячеек и ссылок в выделенной строке */
+    color: var(--color-text-on-accent) !important;
 }
 
 
@@ -267,19 +269,22 @@
 
 .tournament-players-list {
   padding: 10px 15px;
-  background-color: var(--color-bg-primary); /* Основной фон для списка игроков */
+  background-color: var(--color-bg-primary);
   border-top: 1px dashed var(--color-border-hover);
+  /* font-family и font-size будут унаследованы */
 }
 
 .players-list-title {
-  font-size: 1.1em;
+  font-size: var(--font-size-base); /* Используем базовый размер (ближайший к 1.1em) */
+  font-family: var(--font-family-primary); /* Явно указываем шрифт */
   color: var(--color-text-muted);
   margin-top: 0;
   margin-bottom: 8px;
 }
 
 .mini-player-table {
-  font-size: 0.95em;
+  font-size: var(--font-size-small); /* Используем маленький размер (ближайший к 0.95em) */
+  /* font-family будет унаследован */
 }
 
 .mini-player-table th,
@@ -296,6 +301,8 @@
   background-color: var(--color-bg-secondary);
   border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
+  font-family: var(--font-family-primary); /* Явно указываем шрифт для заголовков мини-таблицы */
+  font-weight: var(--font-weight-bold);
 }
 
 .mini-player-table tbody tr:nth-child(even) {
@@ -310,9 +317,10 @@
 
 
 .player-title {
-    color: var(--color-accent-warning); /* Ярко-оранжевый для титула игрока */
-    font-weight: bold;
+    color: var(--color-accent-warning);
+    font-weight: var(--font-weight-bold); /* Используем жирное начертание */
     margin-right: 0.25em;
+    /* font-family и font-size будут унаследованы */
 }
 
 .no-players-message {
@@ -320,6 +328,8 @@
     text-align: center;
     font-style: italic;
     color: var(--color-text-muted);
+    font-size: var(--font-size-small); /* Используем маленький шрифт */
+    /* font-family будет унаследован */
 }
 
 @media (orientation: portrait) {
@@ -333,17 +343,17 @@
     padding: 10px;
   }
   .club-info .club-name {
-    font-size: 1.5em;
+    font-size: var(--font-size-large); /* Используем большой размер (1.7em), ближайший к 1.5em */
   }
   .table-title {
-    font-size: 1.2em;
+    font-size: var(--font-size-base); /* Используем базовый размер (1.3em), ближайший к 1.2em */
     padding: 8px 12px;
   }
   .table-content-wrapper {
     padding: 10px;
   }
   .styled-table {
-    font-size: 0.85em;
+    font-size: var(--font-size-small); /* Используем маленький размер (0.9em), ближайший к 0.85em */
   }
   .styled-table th,
   .styled-table td {

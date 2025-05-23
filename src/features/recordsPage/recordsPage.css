@@ -3,8 +3,8 @@
 .records-page-container {
   padding: 20px;
   box-sizing: border-box;
-  background-color: var(--color-bg-primary); /* Основной темный фон */
-  color: var(--color-text-default); /* Светлый текст по умолчанию */
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-default);
   display: flex;
   flex-direction: column;
   gap: 25px;
@@ -13,6 +13,8 @@
   margin: 0 auto;
   height: auto;
   overflow: visible;
+  /* font-family будет унаследован от body (использующего var(--font-family-primary)) */
+  /* font-size будет унаследован от body (использующего var(--font-size-base)) */
 }
 
 /* Стили для нового баннера */
@@ -23,7 +25,7 @@
   max-height: 250px;
   border-radius: var(--panel-border-radius);
   margin-bottom: 10px;
-  border: 1px solid var(--color-border-hover); /* Добавим рамку, если баннер светлый */
+  border: 1px solid var(--color-border-hover);
 }
 
 .records-page-container.loading,
@@ -35,17 +37,19 @@
   text-align: center;
   min-height: 300px;
   width: 100%;
+  /* font-family и font-size будут унаследованы */
 }
 
 .records-page-container .error-message {
-  color: var(--color-text-error); /* Светло-розовый текст ошибки */
-  background-color: rgba(229, 57, 53, 0.15); /* Полупрозрачный фон для акцента ошибки */
-  border: 1px solid var(--color-accent-error); /* Ярко-красная граница ошибки */
+  color: var(--color-text-error);
+  background-color: rgba(229, 57, 53, 0.15);
+  border: 1px solid var(--color-accent-error);
   padding: 10px 15px;
   border-radius: var(--panel-border-radius);
   max-width: 600px;
   text-align: center;
   margin-top: 15px;
+  /* font-family и font-size будут унаследованы, но можно задать var(--font-size-small) или var(--font-size-base) при необходимости */
 }
 
 .leaderboards-grid {
@@ -55,34 +59,34 @@
 }
 
 .leaderboard-table-container {
-  padding: 0; /* Убираем внутренний padding, т.к. заголовок теперь часть этого блока */
-  background-color: var(--color-bg-secondary); /* Темно-серый фон для контейнера таблицы */
+  padding: 0;
+  background-color: var(--color-bg-secondary);
   border-radius: var(--panel-border-radius);
-  border: 1px solid var(--color-border-hover); /* Граница контейнера */
-  overflow: hidden; /* Чтобы скругление работало с заголовком */
+  border: 1px solid var(--color-border-hover);
+  overflow: hidden;
   height: auto;
+  /* font-family и font-size будут унаследованы */
 }
 
 .leaderboard-table-container .table-title {
-  font-size: 1.4em;
-  color: var(--color-text-on-accent); /* Белый текст на ярком фоне */
-  /* Динамический фон будет применен через JS, но можно задать один из ярких акцентов по умолчанию */
-  background-color: var(--color-accent-secondary); /* Ярко-розовый как пример */
+  font-size: var(--font-size-large); /* Используем большой размер (ближайший к 1.4em) */
+  color: var(--color-text-on-accent);
+  background-color: var(--color-accent-secondary);
   padding: 12px 15px;
   margin-top: 0;
-  margin-bottom: 0; /* Убираем нижний отступ, т.к. таблица идет сразу */
-  /* border-radius: var(--panel-border-radius) var(--panel-border-radius) 0 0; - Убрано, т.к. padding:0 у родителя */
+  margin-bottom: 0;
   display: block;
   width: 100%;
   box-sizing: border-box;
   text-align: center;
-  border-bottom: 1px solid var(--color-border-hover); /* Граница под заголовком */
-  font-weight: 600;
+  border-bottom: 1px solid var(--color-border-hover);
+  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
+  font-family: var(--font-family-primary); /* Явно указываем шрифт для заголовка */
 }
 
 .leaderboard-table-container .table-content-wrapper {
-    padding: 20px; /* Внутренний отступ для самой таблицы */
-    overflow-x: auto; /* Горизонтальная прокрутка для таблицы */
+    padding: 20px;
+    overflow-x: auto;
 }
 
 
@@ -90,16 +94,19 @@
     padding: 15px;
     text-align: center;
     font-style: italic;
-    color: var(--color-text-muted); /* Серый приглушенный текст */
-    background-color: var(--color-bg-tertiary); /* Фон чуть светлее основного фона таблицы */
+    color: var(--color-text-muted);
+    background-color: var(--color-bg-tertiary);
     border-radius: 0 0 var(--panel-border-radius) var(--panel-border-radius);
-    margin: 20px; /* Отступы, если таблица пуста, но заголовок есть */
+    margin: 20px;
+    font-size: var(--font-size-small); /* Можно использовать маленький шрифт для сообщений */
+    /* font-family будет унаследован */
 }
 
 .styled-table.records-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.95em;
+  font-size: var(--font-size-small); /* Используем маленький размер (ближайший к 0.95em) */
+  /* font-family будет унаследован */
 }
 
 .styled-table.records-table th,
@@ -108,7 +115,7 @@
   text-align: left;
   border-bottom: 1px solid var(--color-border);
   border-left: 1px solid var(--color-border);
-  color: var(--color-text-default); /* Светлый текст для ячеек */
+  color: var(--color-text-default);
 }
 .styled-table.records-table th:first-child,
 .styled-table.records-table td:first-child {
@@ -116,34 +123,36 @@
 }
 
 .styled-table.records-table th {
-  background-color: var(--color-bg-tertiary); /* Фон заголовков таблицы */
-  color: var(--color-text-muted); /* Приглушенный светлый текст для заголовков */
-  font-weight: 600;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold); /* Используем жирное начертание */
   white-space: nowrap;
-  border-top: none; /* Убираем верхнюю границу, т.к. есть граница у .table-title или .leaderboard-table-container */
+  border-top: none;
+  font-family: var(--font-family-primary); /* Явно указываем шрифт для заголовков таблицы */
 }
 
 /* Чередование цветов строк для темной темы */
 .styled-table.records-table tbody tr:nth-child(even) {
-  background-color: var(--color-bg-tertiary); /* Немного светлее основного фона таблицы */
+  background-color: var(--color-bg-tertiary);
 }
 .styled-table.records-table tbody tr:nth-child(odd) {
-  background-color: var(--color-bg-secondary); /* Основной фон таблицы */
+  background-color: var(--color-bg-secondary);
 }
 
 .styled-table.records-table tbody tr:hover {
-  background-color: var(--color-border-hover); /* Затемнение при наведении */
-  color: var(--color-text-default); /* Текст остается светлым */
+  background-color: var(--color-border-hover);
+  color: var(--color-text-default);
 }
 
 .styled-table.records-table td a {
-  color: var(--color-text-link); /* Яркий цвет ссылки */
+  color: var(--color-text-link);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: var(--font-weight-bold); /* Ссылки часто делают жирнее (было 500) */
+  /* font-family будет унаследован */
 }
 .styled-table.records-table td a:hover {
   text-decoration: underline;
-  color: var(--color-text-link-hover); /* Затемненный яркий цвет ссылки при наведении */
+  color: var(--color-text-link-hover);
 }
 
 @media (min-width: 1024px) {
@@ -167,17 +176,14 @@
     margin-bottom: 5px;
   }
   .leaderboard-table-container .table-title {
-    font-size: 1.2em;
+    font-size: var(--font-size-base); /* Используем базовый размер (1.3em), ближайший к 1.2em */
     padding: 10px 12px;
-    /* width: calc(100% + 20px); - Убрано, т.к. padding:0 у родителя */
-    /* margin-left: -10px; */
-    /* margin-right: -10px; */
   }
   .leaderboard-table-container .table-content-wrapper {
-    padding: 10px; /* Уменьшаем внутренний отступ для мобильных */
+    padding: 10px;
   }
   .styled-table.records-table {
-    font-size: 0.85em;
+    font-size: var(--font-size-small); /* Используем маленький размер (0.9em), ближайший к 0.85em */
   }
   .styled-table.records-table th,
   .styled-table.records-table td {
