@@ -20,7 +20,7 @@
   flex-shrink: 0;
   min-height: 2.5em;
   background-color: var(--color-bg-tertiary);
-  color: var(--color-text-default);
+  color: var(--color-text-muted);
   border-radius: var(--panel-border-radius);
   padding: 10px;
   border: 1px solid var(--color-border-hover);
@@ -52,7 +52,7 @@
   font-weight: var(--font-weight-bold);  /* Используем переменную для жирного начертания */
   text-align: left;
   background-color: var(--color-accent-secondary);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
   border: 1px solid var(--color-accent-secondary);
   border-radius: var(--panel-border-radius);
   cursor: pointer;
@@ -125,7 +125,7 @@
 
 .category-dropdown-item.active {
   background-color: var(--color-accent-primary);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
   font-weight: var(--font-weight-bold); /* Используем переменную */
 }
 .category-dropdown-item.active:hover:not(:disabled) {
@@ -198,7 +198,7 @@
 .stat-block-title {
   font-size: var(--font-size-base); /* Используем базовый размер (соответствует предыдущим 1.2em-1.3em) */
   font-weight: var(--font-weight-bold); /* Используем переменную */
-  color: var(--color-accent-success);
+  color: var(--color-accent-secondary);
   margin: 0 0 8px 0;
   text-align: center;
   border-bottom: 1px dashed var(--color-border-hover);

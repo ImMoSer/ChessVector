@@ -93,7 +93,7 @@
 #pgn-navigation-controls .button.pgn-nav-button.active-analysis-mode {
   background-color: var(--color-accent-info);
   border-color: var(--color-accent-info);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
 }
 #pgn-navigation-controls .button.pgn-nav-button.active-analysis-mode:hover:not(:disabled) {
   background-color: var(--color-text-link-hover);
@@ -111,7 +111,7 @@
 #main-controls .button.game-control-button.primary-button {
   background-color: var(--color-accent-success);
   border-color: var(--color-accent-success);
-  color: var(--color-accent-error);
+  color: var(--color-accent-secondary);
   font-weight: var(--font-weight-bold); /* Используем жирное начертание */
   font-size: var(--font-size-large);   /* Используем базовый размер (1.3em) */
   /* font-family унаследован от #analysis-panel-container .button */
@@ -130,7 +130,7 @@
 #main-controls .button.game-control-button.restart-button {
   background-color: var(--color-accent-warning);
   border-color: var(--color-accent-warning);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
   /* font-family, font-size, font-weight унаследованы от #analysis-panel-container .button или переопределены для .primary-button */
   /* Если нужен другой размер/вес, укажите здесь var(--font-size-...) или var(--font-weight-...) */
 }
@@ -147,7 +147,7 @@
 #main-controls .button.analysis-toggle-button {
   background-color: var(--color-accent-secondary);
   border-color: var(--color-accent-secondary);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
   /* font-family, font-size, font-weight унаследованы */
 }
 #main-controls .button.analysis-toggle-button:hover:not(:disabled) {
@@ -158,7 +158,7 @@
 #main-controls .button.analysis-toggle-button.active-analysis {
   background-color: var(--color-accent-info);
   border-color: var(--color-accent-info);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
 }
 #main-controls .button.analysis-toggle-button.active-analysis:hover:not(:disabled) {
   background-color: var(--color-text-link-hover);
@@ -168,7 +168,7 @@
 #main-controls .button.analysis-toggle-button.resign-button {
   background-color: var(--color-accent-error);
   border-color: var(--color-accent-error);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
 }
 #main-controls .button.analysis-toggle-button.resign-button:hover:not(:disabled) {
   background-color: #C4312D;
@@ -230,7 +230,7 @@
   cursor: pointer;
   border: 1px solid transparent;
   border-radius: 10px;
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
   min-width: 60px;
   text-align: center;
   flex-shrink: 0;
@@ -248,7 +248,6 @@
 .analysis-score-button.best-line-score {
   background-color: var(--color-accent-success);
   border-color: var(--color-accent-success);
-  color: var(--color-accent-error);
 }
 .analysis-score-button.best-line-score:hover:not(:disabled) {
   background-color: #A0D003;

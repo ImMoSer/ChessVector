@@ -41,7 +41,6 @@
 .cabinet-header {
   padding-bottom: 15px;
   margin-bottom: 20px;
-  border-bottom: 2px solid var(--color-accent-primary);
   text-align: center;
 }
 
@@ -107,7 +106,7 @@
 }
 
 .stat-value {
-  color: var(--color-text-default);
+  color: var(--color-accent-error);
   font-weight: var(--font-weight-bold);
 }
 

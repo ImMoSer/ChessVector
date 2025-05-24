@@ -2,59 +2,15 @@
 import { h } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 import type { ClubPageController, ClubPageControllerState } from './ClubPageController';
-import type { ClubData, ClubBattle, ClubPlayer, ClubLeader } from '../../core/webhook.service';
+// ClubData импорт удален, так как он больше не используется напрямую в этом файле.
+// Остаются импорты для ClubBattle, ClubPlayer, ClubLeader, AggregatedPlayerData, которые используются.
+import type { ClubBattle, ClubPlayer, ClubLeader, AggregatedPlayerData } from '../../core/webhook.service';
 import { t } from '../../core/i18n.service';
 import logger from '../../utils/logger';
 
 const DEFAULT_TOP_MAX = 10;
 
-// --- Helper Functions for Data Processing ---
-
-interface AggregatedPlayerData {
-  id: string;
-  name: string;
-  title?: string;
-  totalScore: number;
-  tournamentsPlayed: number;
-  maxScoreInOneTournament: number;
-  maxScoreTournamentName?: string;
-  maxScoreTournamentArenaUrl?: string;
-}
-
-function aggregatePlayerData(clubData: ClubData | null): AggregatedPlayerData[] {
-  if (!clubData) return [];
-
-  const playerDataMap = new Map<string, AggregatedPlayerData>();
-
-  clubData.jsonb_array_battle.forEach(battle => {
-    battle.players.forEach(player => {
-      const userId = player.user.id;
-      if (!playerDataMap.has(userId)) {
-        playerDataMap.set(userId, {
-          id: userId,
-          name: player.user.name,
-          title: player.user.title,
-          totalScore: 0,
-          tournamentsPlayed: 0,
-          maxScoreInOneTournament: 0,
-          maxScoreTournamentName: undefined,
-          maxScoreTournamentArenaUrl: undefined,
-        });
-      }
-      const currentPlayerData = playerDataMap.get(userId)!;
-      currentPlayerData.totalScore += player.score;
-      currentPlayerData.tournamentsPlayed += 1;
-      if (player.score > currentPlayerData.maxScoreInOneTournament) {
-        currentPlayerData.maxScoreInOneTournament = player.score;
-        currentPlayerData.maxScoreTournamentName = battle.fullName;
-        currentPlayerData.maxScoreTournamentArenaUrl = battle.arena_url;
-      }
-    });
-  });
-  return Array.from(playerDataMap.values());
-}
-
-// --- Helper Functions for Rendering Tables (без изменений) ---
+// --- Helper Functions for Rendering Tables ---
 
 function renderLeaderTable(leaders: ClubLeader[]): VNode {
   if (!leaders || leaders.length === 0) {
@@ -84,7 +40,7 @@ function renderMostValuablePlayersTable(aggregatedPlayers: AggregatedPlayerData[
       h('tbody', sortedPlayers.map((player, index) =>
         h('tr', [
           h('td.text-center', (index + 1).toString()),
-          h('td.text-left', `${player.title ? player.title + ' ' : ''}${player.name}`),
+          h('td.text-left', `${player.user.title ? player.user.title + ' ' : ''}${player.user.name}`),
           h('td.text-right', player.totalScore.toString()),
         ])
       )),
@@ -108,7 +64,7 @@ function renderMostActivePlayersTable(aggregatedPlayers: AggregatedPlayerData[],
       h('tbody', sortedPlayers.map((player, index) =>
         h('tr', [
           h('td.text-center', (index + 1).toString()),
-          h('td.text-left', `${player.title ? player.title + ' ' : ''}${player.name}`),
+          h('td.text-left', `${player.user.title ? player.user.title + ' ' : ''}${player.user.name}`),
           h('td.text-right', player.tournamentsPlayed.toString()),
         ])
       )),
@@ -136,7 +92,7 @@ function renderTopPerformancesInTournamentTable(aggregatedPlayers: AggregatedPla
             h('tbody', sortedPlayers.map((player, index) =>
                 h('tr', [
                     h('td.text-center', (index + 1).toString()),
-                    h('td.text-left', `${player.title ? player.title + ' ' : ''}${player.name}`),
+                    h('td.text-left', `${player.user.title ? player.user.title + ' ' : ''}${player.user.name}`),
                     h('td.text-right', player.maxScoreInOneTournament.toString()),
                     h('td.text-left',
                       player.maxScoreTournamentName ?
@@ -157,12 +113,8 @@ function renderTournamentHistoryTable(
     expandedBattleId: string | null,
     onToggleBattle: (arenaId: string) => void
 ): VNode {
-  const sortedBattles = [...battles].sort((a, b) => {
-    if (a.club_rank !== b.club_rank) {
-      return a.club_rank - b.club_rank;
-    }
-    return b.club_score - a.club_score;
-  });
+  // Изменена сортировка: теперь по startsAt_ms (новые турниры сверху)
+  const sortedBattles = [...battles].sort((a, b) => b.startsAt_ms - a.startsAt_ms);
 
   return h('div.tournament-history-table-container', [
     h('h3.table-title', t('clubPage.tournamentHistoryTitle', { defaultValue: 'Tournament History' })),
@@ -235,9 +187,8 @@ function renderTournamentPlayersList(players: ClubPlayer[]): VNode {
   ]);
 }
 
-// --- Новая функция для рендеринга кнопки Follow/Unfollow ---
 function renderFollowButton(controller: ClubPageController): VNode | null {
-    const isAuthenticated = controller.getIsUserAuthenticated(); // Используем геттер
+    const isAuthenticated = controller.getIsUserAuthenticated();
     if (!isAuthenticated) {
         return null;
     }
@@ -289,7 +240,7 @@ export function renderClubPage(controller: ClubPageController): VNode {
   }
 
   const clubData = state.clubData;
-  const aggregatedPlayers = aggregatePlayerData(clubData);
+  const aggregatedPlayers = clubData.aggregated_player_stats || [];
   const topMaxToDisplay = clubData.topMax !== undefined && clubData.topMax > 0 ? clubData.topMax : DEFAULT_TOP_MAX;
 
   const expandedBattleId = state.expandedBattleId;

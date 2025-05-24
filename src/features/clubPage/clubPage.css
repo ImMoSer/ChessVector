@@ -126,7 +126,7 @@
 .follow-club-button.following {
   background-color: var(--color-accent-error);
   border-color: var(--color-accent-error);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
 }
 .follow-club-button.following:hover:not(:disabled) {
   background-color: #C4312D; /* Чуть темнее --color-accent-error */
@@ -222,7 +222,7 @@
 
 .player-stats-table-container .table-title {
   background-color: var(--color-accent-primary);
-  color: var(--color-accent-error);
+  color: var(--color-text-dark);
 }
 /* Для заголовка лидеров, если он тоже будет использовать .table-title */
 .club-leaders-section .table-title {
@@ -232,7 +232,7 @@
 
 .tournament-history-table-container .table-title {
   background-color: var(--color-accent-success);
-  color: var(--color-bg-primary); /* Темный текст на светлом лаймовом фоне */
+  color: var(--color-text-dark); /* Темный текст на светлом лаймовом фоне */
   font-size: var(--font-size-xlarge);
 }
 
@@ -349,7 +349,7 @@
   border-left: none;
 }
 .mini-player-table th {
-  background-color: var(--color-bg-secondary);
+  background-color: var(--color-bg-tertiary);
   border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-family: var(--font-family-primary);

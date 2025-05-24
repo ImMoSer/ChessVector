@@ -11,10 +11,15 @@
   --color-bg-tertiary: #33312E;    /* Темно-серый (чуть светлее) */
 
   /* === Текст (Светлый для темного фона) === */
-  --color-text-default: #EAEAEA;  /* Очень светло-серый */
+  --color-text-default: #A0A0A0;  /* Очень светло-серый */
   --color-text-muted: #A0A0A0;    /* Серый */
   --color-text-on-accent: #FFFFFF;/* Белый (для текста на ярких акцентах) */
   --color-text-error: #ffcdd2;    /* Светло-розовый (для текста ошибок на темном фоне) */
+
+    /* === Текст (Темный для светлого фона) === */
+  --color-text-dark: #161512; /* Очень темный (почти черный) */
+
+
 
   /* === Границы (Для темного фона) === */
   --color-border: #33312E;       /* Темно-серый (как фон tertiary) */
@@ -165,13 +170,13 @@ button, input, select, textarea {
 
 .nav-links li a:hover:not(.logout-link) {
   background-color: var(--color-accent-primary);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
   border-color: var(--color-accent-primary);
 }
 
 .nav-links li a.active:not(.logout-link) {
   background-color: var(--color-accent-primary);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-dark);
   border: 1px solid var(--color-accent-primary);
 }
 

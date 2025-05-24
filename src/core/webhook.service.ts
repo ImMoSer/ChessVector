@@ -4,8 +4,8 @@ import type {
   SubscriptionTier,
   UserSessionUpsertPayload,
   FinishHimStats,
-  BackendUserSessionData, 
-  FollowClubs
+  BackendUserSessionData,
+  FollowClubs // FollowClubs теперь включает ClubIdNamePair
 } from './auth.service';
 
 // --- Интерфейсы для Puzzle ---
@@ -41,6 +41,7 @@ export interface ClubStatsRequestPayload {
   club_id: string;
 }
 
+// Этот интерфейс остается для структуры данных внутри ClubBattle
 export interface ClubPlayer {
   user: {
     id: string;
@@ -52,20 +53,20 @@ export interface ClubPlayer {
 }
 
 export interface ClubBattle {
-  club_id: string;
+  // club_id: string; // Поле club_id здесь избыточно, если оно есть на верхнем уровне ClubData
   players: ClubPlayer[];
   arena_id: string;
-  duration: number;
+  duration: number; // В минутах
   fullName: string;
   arena_url: string;
   club_rank: number;
   club_score: number;
   startsAt_ms: number;
   clock_control: {
-    limit: number;
-    increment: number;
+    limit: number; // в секундах
+    increment: number; // в секундах
   };
-  startsAt_Date: string;
+  startsAt_Date: string; // "YYYY/MM/DD"
 }
 
 export interface ClubLeader {
@@ -75,18 +76,37 @@ export interface ClubLeader {
   title?: string;
 }
 
-export interface ClubData {
-  club_id: string;
-  jsonb_array_battle: ClubBattle[];
-  club_name: string;
-  grunder: string;
-  nb_members: string;
-  jsonb_array_leader: ClubLeader[];
-  club_bild?: string;
-  topMax?: number;
+// НОВЫЙ ИНТЕРФЕЙС для агрегированной статистики игроков
+export interface AggregatedPlayerData {
+  user: {
+    id: string;
+    name: string;
+    title?: string;
+    flair?: string;
+  };
+  totalScore: number;
+  tournamentsPlayed: number;
+  maxScoreInOneTournament: number;
+  maxScoreTournamentName?: string;
+  maxScoreTournamentArenaUrl?: string;
 }
 
-export type ClubStatsResponse = ClubData[] | ClubData;
+// ОБНОВЛЕННЫЙ ИНТЕРФЕЙС ClubData
+export interface ClubData {
+  club_id: string;
+  club_name: string;
+  grunder: string;
+  nb_members: number; // Изменено на number
+  club_bild?: string | null; // Может быть null
+  topMax?: number;
+  jsonb_array_leader: ClubLeader[];
+  jsonb_array_battle: ClubBattle[];
+  aggregated_player_stats: AggregatedPlayerData[]; // НОВОЕ ПОЛЕ
+  last_update?: string; // Опционально, если используется
+  last_arena?: string;  // Опционально, если используется
+}
+
+export type ClubStatsResponse = ClubData[] | ClubData; // Ответ может быть массивом или одним объектом
 
 // --- Интерфейсы для Leaderboards (Страница Рекордов) ---
 export interface RawLeaderboardUserData {
@@ -94,7 +114,7 @@ export interface RawLeaderboardUserData {
   username: string;
   FinishHimStats: FinishHimStats;
   subscriptionTier: SubscriptionTier;
-  follow_clubs?: FollowClubs; 
+  follow_clubs?: FollowClubs;
 }
 
 export interface LeaderboardsApiResponse {
@@ -110,7 +130,7 @@ export interface ClubFollowRequestPayload {
   event: "clubFollow";
   lichess_id: string;
   club_id: string;
-  club_name: string; 
+  club_name: string;
   action: 'follow' | 'unfollow';
 }
 
@@ -120,9 +140,9 @@ export interface UserCabinetDataFromWebhook {
   username: string;
   subscriptionTier: SubscriptionTier;
   FinishHimStats: FinishHimStats;
-  follow_clubs?: FollowClubs; 
-  club_leader?: FollowClubs;  
-  club_founder?: FollowClubs; 
+  follow_clubs?: FollowClubs;
+  club_leader?: FollowClubs;
+  club_founder?: FollowClubs;
 }
 
 export interface UserCabinetRequestPayload {
@@ -198,7 +218,13 @@ export class WebhookServiceController {
           `[WebhookService ${context}] Response was not JSON. Content-Type: ${contentType}. Response text:`,
           responseText,
         );
-        return null;
+        // Попытка распарсить как JSON, если это возможно, но с предупреждением
+        try {
+            return JSON.parse(responseText) as TResponse;
+        } catch (e) {
+            logger.error(`[WebhookService ${context}] Failed to parse non-JSON response as JSON.`);
+            return null;
+        }
       }
     } catch (error: any) {
       logger.error(`[WebhookService ${context}] Network or fetch error:`, error.message, error);
@@ -237,12 +263,23 @@ export class WebhookServiceController {
     if (responseData) {
         if (Array.isArray(responseData)) {
             if (responseData.length > 0 && responseData[0].club_id) {
+                 // Проверяем наличие нового обязательного поля
+                if (!responseData[0].aggregated_player_stats) {
+                    logger.warn('[WebhookService fetchClubStats] Fetched ClubData (array) is missing aggregated_player_stats. Response:', responseData[0]);
+                    // Можно вернуть null или попытаться заполнить значениями по умолчанию, если это допустимо
+                    // responseData[0].aggregated_player_stats = []; // Пример
+                }
                 return responseData[0];
             } else {
                 logger.warn('[WebhookService fetchClubStats] Fetched data is an empty array or malformed (array). Response:', responseData);
                 return null;
             }
         } else if (typeof responseData === 'object' && (responseData as ClubData).club_id) {
+            // Проверяем наличие нового обязательного поля
+            if (!(responseData as ClubData).aggregated_player_stats) {
+                logger.warn('[WebhookService fetchClubStats] Fetched ClubData (object) is missing aggregated_player_stats. Response:', responseData);
+                // (responseData as ClubData).aggregated_player_stats = []; // Пример
+            }
             return responseData as ClubData;
         } else {
             logger.warn('[WebhookService fetchClubStats] Fetched data is not in the expected format (array or single ClubData object) or is malformed. Response:', responseData);
@@ -260,10 +297,10 @@ export class WebhookServiceController {
 
     if (apiResponse &&
         typeof apiResponse === 'object' &&
-        apiResponse.hasOwnProperty('leaderboards') && 
-        typeof apiResponse.leaderboards === 'object' && 
-        apiResponse.leaderboards !== null && 
-        !Array.isArray(apiResponse.leaderboards) 
+        apiResponse.hasOwnProperty('leaderboards') &&
+        typeof apiResponse.leaderboards === 'object' &&
+        apiResponse.leaderboards !== null &&
+        !Array.isArray(apiResponse.leaderboards)
         ) {
       const leaderboardsObject = apiResponse.leaderboards as { [key: string]: RawLeaderboardUserData };
       const dataArray: RawLeaderboardUserData[] = Object.values(leaderboardsObject);
@@ -286,7 +323,7 @@ export class WebhookServiceController {
             sessionData.follow_clubs = { clubs: [] };
         }
         return sessionData;
-    } else if (sessionData) { 
+    } else if (sessionData) {
         logger.warn('[WebhookService upsertUserSession] Fetched data is malformed, an array, or missing required fields. Response:', sessionData);
     }
     return null;
@@ -310,15 +347,14 @@ export class WebhookServiceController {
   }
 
   public async fetchUserCabinetData(payload: UserCabinetRequestPayload): Promise<UserCabinetDataFromWebhook | null> {
-    // Изменяем ожидаемый тип ответа на UserCabinetDataFromWebhook (объект), а не массив
     const userData = await this._postRequest<UserCabinetDataFromWebhook, UserCabinetRequestPayload>(payload, "fetchUserCabinetData");
 
-    if (userData && userData.lichess_id) { // Проверяем, что userData существует и имеет lichess_id
+    if (userData && userData.lichess_id) {
         const fieldsToNormalize: (keyof Pick<UserCabinetDataFromWebhook, 'follow_clubs' | 'club_leader' | 'club_founder'>)[] = ['follow_clubs', 'club_leader', 'club_founder'];
-        
+
         fieldsToNormalize.forEach(field => {
-            const clubAffiliation = userData[field] as FollowClubs | {} | undefined; 
-            if (clubAffiliation) { 
+            const clubAffiliation = userData[field] as FollowClubs | {} | undefined;
+            if (clubAffiliation) {
                 if (typeof clubAffiliation === 'object' && !Array.isArray((clubAffiliation as FollowClubs).clubs)) {
                     logger.debug(`[WebhookService fetchUserCabinetData] Normalizing field "${field}" from potentially empty object or missing .clubs array to { clubs: [] }. Original:`, clubAffiliation);
                     (userData[field] as FollowClubs) = { clubs: [] };
@@ -326,14 +362,13 @@ export class WebhookServiceController {
             }
         });
         return userData;
-    } else if (userData) { // Если userData есть, но не прошел проверку lichess_id
+    } else if (userData) {
         logger.warn('[WebhookService fetchUserCabinetData] Fetched data is missing lichess_id or is malformed. Response:', userData);
-    } else { // Если userData равен null (например, _postRequest вернул null)
+    } else {
         logger.warn('[WebhookService fetchUserCabinetData] _postRequest returned null.');
     }
     return null;
   }
-
 }
 
 export const WebhookService = new WebhookServiceController();
