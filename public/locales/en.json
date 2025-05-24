@@ -4,6 +4,7 @@
   },
   "nav": {
     "finishHim": "FinishHim",
+    "playFromFen": "Play from FEN",
     "myClubs": "My Clubs",
     "leaderboards": "Leaderboards",
     "logout": "Logout",
@@ -160,6 +161,38 @@
       "restarted": "Task {puzzleId} ({category}) restarted. You play as {color}.",
       "gameStoppedForAnalysis": "Game stopped. Analysis can be started.",
       "timeUp": "Time's up! Task failed."
+    }
+  },
+  "playFromFen": {
+    "pageTitle": {
+      "loading": "Loading Position...",
+      "loaded": "Play from FEN",
+      "error": "Error Loading Position"
+    },
+    "feedback": {
+      "loadingFen": "Loading FEN...",
+      "noFenProvided": "No FEN provided. Load one from URL or request from server.",
+      "settingUpPosition": "Setting up position...",
+      "yourTurn": "Your turn.",
+      "stockfishThinking": "Stockfish is thinking...",
+      "gameStoppedForAnalysis": "Game stopped. Analysis can be started.",
+      "requestingNewFen": "Requesting new FEN from server...",
+      "invalidMove": "Invalid move."
+    },
+    "error": {
+      "invalidFen": "Invalid FEN provided: {fen}",
+      "failedToFetchFen": "Failed to fetch new FEN from server.",
+      "requestFenError": "Error requesting new FEN from server.",
+      "internalError": "An internal error occurred.",
+      "noFenToRestart": "No FEN available to restart the game with."
+    },
+    "info": {
+      "title": "Position Info",
+      "fen": "FEN:",
+      "cp": "CP:",
+      "positionClass": "Class:",
+      "difficultyClass": "Difficulty:",
+      "puzzleId": "Puzzle ID:"
     }
   },
   "stats": {

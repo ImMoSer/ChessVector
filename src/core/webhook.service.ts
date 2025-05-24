@@ -5,16 +5,20 @@ import type {
   UserSessionUpsertPayload,
   FinishHimStats,
   BackendUserSessionData,
-  FollowClubs // FollowClubs теперь включает ClubIdNamePair
+  FollowClubs
 } from './auth.service';
 
-// --- Интерфейсы для Puzzle ---
+// --- Интерфейсы для Puzzle (режим FinishHim) ---
 export interface PuzzleRequestPayload {
   event?: string;
   lichess_id: string;
   pieceCount?: number;
   rating?: number;
   puzzleType?: string;
+  position_class?: string;
+  material_difference?: number;
+  num_pieces?: number;
+  difficulty_class?: number;
 }
 
 export interface PuzzleDataFromWebhook {
@@ -27,6 +31,36 @@ export interface PuzzleDataFromWebhook {
 }
 
 export interface AppPuzzle extends PuzzleDataFromWebhook {}
+
+// --- Интерфейсы для PlayFromFen ---
+export interface PlayFromFenRequestPayload {
+  event: "playFromFen";
+  lichess_id: string;
+  position_class: string;
+  material_difference: number;
+  num_pieces: number;
+  difficulty_class: number;
+}
+
+// Ожидаемый формат одного объекта из массива ответа бэкенда
+export interface PlayFromFenBackendEntry {
+  fen: string;
+  cp?: string | number; // cp может быть строкой или числом
+  position_class?: string;
+  difficulty_class?: string | number; // difficulty_class может быть строкой или числом
+  // PuzzleId опционально, если бэкенд его возвращает
+  PuzzleId?: string;
+}
+
+// Интерфейс для ответа, который будет использоваться в контроллере
+export interface ProcessedPlayFromFenResponseData {
+  FEN_0: string;
+  cp?: number;
+  position_class?: string;
+  difficulty_class?: number;
+  PuzzleId?: string;
+}
+
 
 // --- Интерфейсы для FinishHim Stats ---
 export interface FinishHimRatingUpdatePayload {
@@ -41,7 +75,6 @@ export interface ClubStatsRequestPayload {
   club_id: string;
 }
 
-// Этот интерфейс остается для структуры данных внутри ClubBattle
 export interface ClubPlayer {
   user: {
     id: string;
@@ -53,20 +86,19 @@ export interface ClubPlayer {
 }
 
 export interface ClubBattle {
-  // club_id: string; // Поле club_id здесь избыточно, если оно есть на верхнем уровне ClubData
   players: ClubPlayer[];
   arena_id: string;
-  duration: number; // В минутах
+  duration: number;
   fullName: string;
   arena_url: string;
   club_rank: number;
   club_score: number;
   startsAt_ms: number;
   clock_control: {
-    limit: number; // в секундах
-    increment: number; // в секундах
+    limit: number;
+    increment: number;
   };
-  startsAt_Date: string; // "YYYY/MM/DD"
+  startsAt_Date: string;
 }
 
 export interface ClubLeader {
@@ -76,7 +108,6 @@ export interface ClubLeader {
   title?: string;
 }
 
-// НОВЫЙ ИНТЕРФЕЙС для агрегированной статистики игроков
 export interface AggregatedPlayerData {
   user: {
     id: string;
@@ -91,22 +122,21 @@ export interface AggregatedPlayerData {
   maxScoreTournamentArenaUrl?: string;
 }
 
-// ОБНОВЛЕННЫЙ ИНТЕРФЕЙС ClubData
 export interface ClubData {
   club_id: string;
   club_name: string;
   grunder: string;
-  nb_members: number; // Изменено на number
-  club_bild?: string | null; // Может быть null
+  nb_members: number;
+  club_bild?: string | null;
   topMax?: number;
   jsonb_array_leader: ClubLeader[];
   jsonb_array_battle: ClubBattle[];
-  aggregated_player_stats: AggregatedPlayerData[]; // НОВОЕ ПОЛЕ
-  last_update?: string; // Опционально, если используется
-  last_arena?: string;  // Опционально, если используется
+  aggregated_player_stats: AggregatedPlayerData[];
+  last_update?: string;
+  last_arena?: string;
 }
 
-export type ClubStatsResponse = ClubData[] | ClubData; // Ответ может быть массивом или одним объектом
+export type ClubStatsResponse = ClubData[] | ClubData;
 
 // --- Интерфейсы для Leaderboards (Страница Рекордов) ---
 export interface RawLeaderboardUserData {
@@ -218,7 +248,6 @@ export class WebhookServiceController {
           `[WebhookService ${context}] Response was not JSON. Content-Type: ${contentType}. Response text:`,
           responseText,
         );
-        // Попытка распарсить как JSON, если это возможно, но с предупреждением
         try {
             return JSON.parse(responseText) as TResponse;
         } catch (e) {
@@ -235,10 +264,41 @@ export class WebhookServiceController {
   public async fetchPuzzle(payload: PuzzleRequestPayload): Promise<AppPuzzle | null> {
     const finalPayload = { ...payload, event: payload.event || "FinishHim" };
     const puzzleData = await this._postRequest<PuzzleDataFromWebhook, PuzzleRequestPayload>(finalPayload, "fetchPuzzle");
-    if (puzzleData && puzzleData.PuzzleId) {
+    if (puzzleData && puzzleData.PuzzleId && puzzleData.FEN_0 && puzzleData.Moves) {
         return puzzleData as AppPuzzle;
-    } else if (puzzleData) {
-        logger.warn('[WebhookService fetchPuzzle] Fetched data is missing PuzzleId or is malformed. Response:', puzzleData);
+    } else if (puzzleData && finalPayload.event === "FinishHim") {
+        logger.warn('[WebhookService fetchPuzzle] Fetched data for FinishHim is missing required fields or is malformed. Response:', puzzleData);
+    }
+    return null;
+  }
+
+  public async fetchFenForPlay(payload: PlayFromFenRequestPayload): Promise<ProcessedPlayFromFenResponseData | null> {
+    // Ожидаем ОДИН PlayFromFenBackendEntry объект от бэкенда, а не массив
+    const entry = await this._postRequest<PlayFromFenBackendEntry, PlayFromFenRequestPayload>(payload, "fetchFenForPlay");
+
+    if (entry && entry.fen) { // Проверяем, что entry существует и у него есть поле fen
+        // Преобразуем в ProcessedPlayFromFenResponseData
+        const processedData: ProcessedPlayFromFenResponseData = {
+            FEN_0: entry.fen, // Переименовываем fen в FEN_0
+            cp: entry.cp !== undefined ? (typeof entry.cp === 'string' ? parseInt(entry.cp, 10) : entry.cp) : undefined,
+            position_class: entry.position_class,
+            difficulty_class: entry.difficulty_class !== undefined ? (typeof entry.difficulty_class === 'string' ? parseInt(entry.difficulty_class, 10) : entry.difficulty_class) : undefined,
+            PuzzleId: entry.PuzzleId
+        };
+        // Проверяем, что cp и difficulty_class стали числами, если были строками
+        if (processedData.cp !== undefined && isNaN(processedData.cp)) {
+            logger.warn('[WebhookService fetchFenForPlay] "cp" could not be parsed to a number:', entry.cp);
+            processedData.cp = undefined;
+        }
+        if (processedData.difficulty_class !== undefined && isNaN(processedData.difficulty_class)) {
+            logger.warn('[WebhookService fetchFenForPlay] "difficulty_class" could not be parsed to a number:', entry.difficulty_class);
+            processedData.difficulty_class = undefined;
+        }
+        return processedData;
+    } else if (entry) { // Если entry есть, но нет поля fen
+        logger.warn('[WebhookService fetchFenForPlay] Response object is missing "fen" field or is malformed. Entry:', entry);
+    } else { // Если entry вообще null (например, ошибка сети или HTTP)
+         logger.warn('[WebhookService fetchFenForPlay] No data received from backend or request failed.');
     }
     return null;
   }
@@ -263,11 +323,8 @@ export class WebhookServiceController {
     if (responseData) {
         if (Array.isArray(responseData)) {
             if (responseData.length > 0 && responseData[0].club_id) {
-                 // Проверяем наличие нового обязательного поля
                 if (!responseData[0].aggregated_player_stats) {
-                    logger.warn('[WebhookService fetchClubStats] Fetched ClubData (array) is missing aggregated_player_stats. Response:', responseData[0]);
-                    // Можно вернуть null или попытаться заполнить значениями по умолчанию, если это допустимо
-                    // responseData[0].aggregated_player_stats = []; // Пример
+                    responseData[0].aggregated_player_stats = [];
                 }
                 return responseData[0];
             } else {
@@ -275,10 +332,8 @@ export class WebhookServiceController {
                 return null;
             }
         } else if (typeof responseData === 'object' && (responseData as ClubData).club_id) {
-            // Проверяем наличие нового обязательного поля
             if (!(responseData as ClubData).aggregated_player_stats) {
-                logger.warn('[WebhookService fetchClubStats] Fetched ClubData (object) is missing aggregated_player_stats. Response:', responseData);
-                // (responseData as ClubData).aggregated_player_stats = []; // Пример
+                (responseData as ClubData).aggregated_player_stats = [];
             }
             return responseData as ClubData;
         } else {
@@ -316,10 +371,8 @@ export class WebhookServiceController {
     const sessionData = await this._postRequest<BackendUserSessionData, UserSessionUpsertPayload>(payload, "upsertUserSession");
     if (sessionData && !Array.isArray(sessionData) && sessionData.lichess_id && sessionData.FinishHimStats && typeof sessionData.subscriptionTier !== 'undefined') {
         if (sessionData.follow_clubs && typeof sessionData.follow_clubs === 'object' && Object.keys(sessionData.follow_clubs).length === 0) {
-            logger.debug('[WebhookService upsertUserSession] Normalizing empty object for follow_clubs to { clubs: [] }');
             sessionData.follow_clubs = { clubs: [] };
         } else if (sessionData.follow_clubs && !Array.isArray((sessionData.follow_clubs as FollowClubs).clubs)) {
-            logger.warn('[WebhookService upsertUserSession] follow_clubs received but "clubs" property is not an array. Normalizing to { clubs: [] }.', sessionData.follow_clubs);
             sessionData.follow_clubs = { clubs: [] };
         }
         return sessionData;
@@ -333,10 +386,8 @@ export class WebhookServiceController {
     const sessionData = await this._postRequest<BackendUserSessionData, ClubFollowRequestPayload>(payload, "updateClubFollowStatus");
     if (sessionData && !Array.isArray(sessionData) && sessionData.lichess_id && sessionData.FinishHimStats && typeof sessionData.subscriptionTier !== 'undefined') {
         if (sessionData.follow_clubs && typeof sessionData.follow_clubs === 'object' && Object.keys(sessionData.follow_clubs).length === 0) {
-            logger.debug('[WebhookService updateClubFollowStatus] Normalizing empty object for follow_clubs to { clubs: [] }');
             sessionData.follow_clubs = { clubs: [] };
         } else if (sessionData.follow_clubs && !Array.isArray((sessionData.follow_clubs as FollowClubs).clubs)) {
-            logger.warn('[WebhookService updateClubFollowStatus] follow_clubs received but "clubs" property is not an array. Normalizing to { clubs: [] }.', sessionData.follow_clubs);
             sessionData.follow_clubs = { clubs: [] };
         }
         return sessionData;
@@ -356,7 +407,6 @@ export class WebhookServiceController {
             const clubAffiliation = userData[field] as FollowClubs | {} | undefined;
             if (clubAffiliation) {
                 if (typeof clubAffiliation === 'object' && !Array.isArray((clubAffiliation as FollowClubs).clubs)) {
-                    logger.debug(`[WebhookService fetchUserCabinetData] Normalizing field "${field}" from potentially empty object or missing .clubs array to { clubs: [] }. Original:`, clubAffiliation);
                     (userData[field] as FollowClubs) = { clubs: [] };
                 }
             }

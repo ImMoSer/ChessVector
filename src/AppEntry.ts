@@ -2,10 +2,11 @@
 import { init, propsModule, eventListenersModule, styleModule, classModule, attributesModule } from 'snabbdom';
 import type { VNode } from 'snabbdom';
 // Import main application styles
-import './assets/main.css'; // Main styles
-import './features/common/promotion/promotion.css'; // Promotion specific styles
+import './assets/main.css';
+import './features/common/promotion/promotion.css';
 import './features/analysis/analysisPanel.css';
 import './features/finishHim/finishHim.css';
+import './features/playFromFen/playFromFen.css'; // Новый CSS
 import './features/welcome/welcome.css';
 import './features/clubPage/clubPage.css';
 import './features/recordsPage/recordsPage.css';
@@ -14,7 +15,6 @@ import './features/userCabinet/userCabinet.css';
 // Import core services
 import { ChessboardService } from './core/chessboard.service';
 import { StockfishService } from './core/stockfish.service';
-// Изменено: импортируем инстанс WebhookService, а не класс
 import { WebhookService } from './core/webhook.service';
 import { initI18nService } from './core/i18n.service';
 import logger from './utils/logger';
@@ -41,7 +41,6 @@ const patch = init([
 
 const chessboardService = new ChessboardService();
 const stockfishService = new StockfishService();
-// Изменено: WebhookService уже является инстансом
 const webhookServiceInstance = WebhookService;
 
 let oldVNode: VNode | Element = document.getElementById('app')!;
@@ -60,13 +59,11 @@ if (!oldVNode) {
   throw new Error(errorMsg);
 }
 
-// let isCurrentlyPatching = false; // Заменено на isRedrawScheduled
 let appController: AppController;
-let isRedrawScheduled = false; // Флаг для отслеживания запланированной перерисовки
-let animationFrameId: number | null = null; // ID для requestAnimationFrame
+let isRedrawScheduled = false;
+let animationFrameId: number | null = null;
 
 function requestGlobalRedraw() {
-  // Если перерисовка уже запланирована, ничего не делаем
   if (isRedrawScheduled) {
     logger.debug("[AppEntry requestGlobalRedraw] Skipped as a redraw is already scheduled.");
     return;
@@ -80,7 +77,6 @@ function requestGlobalRedraw() {
   isRedrawScheduled = true;
   logger.debug("[AppEntry requestGlobalRedraw] Scheduling redraw via requestAnimationFrame.");
 
-  // Отменяем предыдущий запланированный кадр, если он есть (на всякий случай, хотя логика isRedrawScheduled должна это предотвращать)
   if (animationFrameId !== null) {
     cancelAnimationFrame(animationFrameId);
   }
@@ -93,25 +89,25 @@ function requestGlobalRedraw() {
     } catch (error) {
       logger.error("[AppEntry requestGlobalRedraw] Error during patch (via rAF):", error);
     } finally {
-      isRedrawScheduled = false; // Сбрасываем флаг после выполнения перерисовки
-      animationFrameId = null; // Сбрасываем ID кадра
+      isRedrawScheduled = false;
+      animationFrameId = null;
     }
   });
 }
 
 async function initializeApplication() {
   try {
-    await initI18nService('en');
+    await initI18nService('en'); // Или другой язык по умолчанию
     logger.info('[AppEntry] i18n service initialized.');
 
     appController = new AppController(
       {
         chessboardService,
         stockfishService,
-        webhookService: webhookServiceInstance, // Передаем инстанс
+        webhookService: webhookServiceInstance,
         logger
       },
-      requestGlobalRedraw // Передаем нашу обновленную функцию
+      requestGlobalRedraw
     );
 
     await appController.initializeApp();

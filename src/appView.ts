@@ -9,9 +9,11 @@ import { renderWelcomePage } from './features/welcome/welcomeView';
 import { ClubPageController } from './features/clubPage/ClubPageController';
 import { renderClubPage } from './features/clubPage/clubPageView';
 import { RecordsPageController } from './features/recordsPage/RecordsPageController';
-import { renderRecordsPage } from './features/recordsPage/RecordsPageView'; // Исправлен регистр
-import { UserCabinetController } from './features/userCabinet/UserCabinetController'; 
-import { renderUserCabinetPage } from './features/userCabinet/userCabinetView'; 
+import { renderRecordsPage } from './features/recordsPage/RecordsPageView';
+import { UserCabinetController } from './features/userCabinet/UserCabinetController';
+import { renderUserCabinetPage } from './features/userCabinet/userCabinetView';
+import { PlayFromFenController } from './features/playFromFen/PlayFromFenController';
+import { renderPlayFromFenUI, type PlayFromFenPageViewLayout } from './features/playFromFen/playFromFenView';
 import logger from './utils/logger';
 import { t } from './core/i18n.service';
 
@@ -72,10 +74,10 @@ function renderModal(controller: AppController): VNode | null {
   }
 
   return h('div.modal-overlay', {
-    on: { click: () => controller.hideModal() } 
+    on: { click: () => controller.hideModal() }
   }, [
     h('div.modal-content', {
-      on: { click: (e: Event) => e.stopPropagation() } 
+      on: { click: (e: Event) => e.stopPropagation() }
     }, [
       h('p.modal-message', appState.modalMessage),
       h('button.button.modal-ok-button', {
@@ -94,20 +96,20 @@ export function renderAppUI(controller: AppController): VNode {
 
   let navLinksConfig: Array<{
     page?: AppPage,
-    textKey?: string, 
-    text?: string,    
+    textKey?: string,
+    text?: string,
     requiresAuth?: boolean,
     hideWhenAuth?: boolean,
-    clubIdToMatch?: string | null, 
   }> = [
     { page: 'finishHim', textKey: 'nav.finishHim', requiresAuth: true },
+    { page: 'playFromFen', textKey: 'nav.playFromFen', requiresAuth: false },
     { page: 'recordsPage', textKey: 'nav.leaderboards' },
   ];
 
   if (isAuthenticated && username) {
-    navLinksConfig.unshift({ 
+    navLinksConfig.unshift({
         page: 'userCabinet',
-        text: username, 
+        text: username,
         requiresAuth: true,
     });
   }
@@ -124,7 +126,7 @@ export function renderAppUI(controller: AppController): VNode {
   if (appState.isLoadingAuth && appState.currentPage !== 'welcome') {
     pageSpecificContentVNode = h('div.global-loader-container', [
         h('h2', t('auth.processingLogin', {defaultValue: "Processing Login..."})),
-        h('div.loading-spinner') 
+        h('div.loading-spinner')
     ]);
   } else if (activePageController) {
     switch (appState.currentPage) {
@@ -137,8 +139,14 @@ export function renderAppUI(controller: AppController): VNode {
         break;
       case 'finishHim':
         if (activePageController instanceof FinishHimController) {
-          // Placeholder VNode; фактический рендеринг доски и панелей происходит ниже в mainContentStructure
-          pageSpecificContentVNode = h('div.finish-him-placeholder'); 
+          pageSpecificContentVNode = h('div.finish-him-placeholder');
+        } else {
+          pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
+        }
+        break;
+      case 'playFromFen':
+        if (activePageController instanceof PlayFromFenController) {
+          pageSpecificContentVNode = h('div.play-from-fen-placeholder');
         } else {
           pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
@@ -157,7 +165,7 @@ export function renderAppUI(controller: AppController): VNode {
           pageSpecificContentVNode = h('p', t('errorPage.invalidController', { pageName: appState.currentPage }));
         }
         break;
-      case 'userCabinet': 
+      case 'userCabinet':
         if (activePageController instanceof UserCabinetController) {
           pageSpecificContentVNode = renderUserCabinetPage(activePageController);
         } else {
@@ -165,19 +173,19 @@ export function renderAppUI(controller: AppController): VNode {
         }
         break;
       default:
-        const exhaustiveCheck: never = appState.currentPage; // Для проверки полноты switch
+        const exhaustiveCheck: never = appState.currentPage;
         pageSpecificContentVNode = h('p', t('errorPage.unknownPage', { pageName: exhaustiveCheck }));
         logger.error(`[appView] Reached default case in page switch with page: ${exhaustiveCheck}`);
     }
   } else {
-    pageSpecificContentVNode = h('p', t('common.loadingController')); 
+    pageSpecificContentVNode = h('p', t('common.loadingController'));
     logger.debug(`[appView] No active page controller for page: ${appState.currentPage}`);
   }
 
   const resizeHandleHook: Hooks = {
     insert: (vnode: VNode) => {
         const handleEl = vnode.elm as HTMLElement;
-        const wrapperEl = handleEl.parentElement; 
+        const wrapperEl = handleEl.parentElement;
         if (wrapperEl) {
             handleEl.addEventListener('mousedown', (e) => onCenterPanelResizeStart(e as MouseEvent, wrapperEl, controller), { passive: false });
             handleEl.addEventListener('touchstart', (e) => onCenterPanelResizeStart(e as TouchEvent, wrapperEl, controller), { passive: false });
@@ -185,7 +193,6 @@ export function renderAppUI(controller: AppController): VNode {
             logger.error('[appView resizeHandleHook.insert] Parent wrapper for resize handle not found!');
         }
     },
-    // destroy хук не нужен здесь, так как слушатели удаляются в onCenterPanelResizeEnd
   };
 
   let mainContentStructure: VNode;
@@ -195,21 +202,39 @@ export function renderAppUI(controller: AppController): VNode {
     mainContentStructure = h('div.three-column-layout', {
         class: {
             'portrait-mode-layout': appState.isPortraitMode,
-            'no-left-panel': !fhLayout.left && !appState.isPortraitMode, 
+            'no-left-panel': !fhLayout.left && !appState.isPortraitMode,
             'no-right-panel': !fhLayout.right && !appState.isPortraitMode,
         }
       },[
         fhLayout.left ? h('aside#left-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode } }, [fhLayout.left]) : null,
         h('div#center-panel-resizable-wrapper', {
-            key: 'center-wrapper-fh', 
+            key: 'center-wrapper-fh',
             class: { 'portrait-mode-layout': appState.isPortraitMode }
-            // Стиль для ширины/высоты этого wrapper'а теперь управляется через CSS переменную --calculated-board-size-vh
         }, [
-          h('section#center-panel', [fhLayout.center]), // fhLayout.center содержит #board-wrapper с хуком для BoardView
+          h('section#center-panel', [fhLayout.center]),
           appState.isPortraitMode ? null : h('div.resize-handle-center', { hook: resizeHandleHook, key: 'center-resize-handle-fh' })
         ]),
         fhLayout.right ? h('aside#right-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode } }, [fhLayout.right]) : null,
-      ].filter(Boolean) as VNode[]); // filter(Boolean) для удаления null элементов, если панели отсутствуют
+      ].filter(Boolean) as VNode[]);
+  } else if (appState.currentPage === 'playFromFen' && activePageController instanceof PlayFromFenController) {
+    const pffLayout: PlayFromFenPageViewLayout = renderPlayFromFenUI(activePageController);
+    mainContentStructure = h('div.three-column-layout', {
+        class: {
+            'portrait-mode-layout': appState.isPortraitMode,
+            'no-left-panel': !pffLayout.left && !appState.isPortraitMode,
+            'no-right-panel': !pffLayout.right && !appState.isPortraitMode,
+        }
+      },[
+        pffLayout.left ? h('aside#left-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode } }, [pffLayout.left]) : null,
+        h('div#center-panel-resizable-wrapper', {
+            key: 'center-wrapper-pff',
+            class: { 'portrait-mode-layout': appState.isPortraitMode }
+        }, [
+          h('section#center-panel', [pffLayout.center]),
+          appState.isPortraitMode ? null : h('div.resize-handle-center', { hook: resizeHandleHook, key: 'center-resize-handle-pff' })
+        ]),
+        pffLayout.right ? h('aside#right-panel', { class: { 'portrait-mode-layout': appState.isPortraitMode } }, [pffLayout.right]) : null,
+      ].filter(Boolean) as VNode[]);
   } else {
     mainContentStructure = pageSpecificContentVNode;
   }
@@ -219,46 +244,47 @@ export function renderAppUI(controller: AppController): VNode {
       h('div.nav-header-content', [
         h('img.app-logo', {
           props: {
-            src: '/svg/1920_Banner.svg', // Убедитесь, что изображение лежит в public/
-            alt: t('app.title') // Используем ключ для локализации alt текста
+            src: '/svg/1920_Banner.svg',
+            alt: t('app.title')
           },
-          on: {
-            // Навигация на главную страницу (finishHim если залогинен, welcome если нет)
+          on: { // fenArg удален из вызова navigateTo
             click: () => controller.navigateTo(isAuthenticated ? 'finishHim' : 'welcome', true, null)
           }
         }),
-        // Кнопка "гамбургер" для мобильной навигации
-        (visibleNavLinks.length > 0 || isAuthenticated) ? // Показываем кнопку, если есть ссылки или пользователь залогинен (для кнопки выхода)
+        (visibleNavLinks.length > 0 || isAuthenticated) ?
           h('button.nav-toggle-button', {
             on: { click: () => controller.toggleNav() }
           }, appState.isNavExpanded ? '✕' : '☰') : null,
-
-        // Навигационные ссылки
         h('ul.nav-links',
           [
             ...visibleNavLinks.map(link =>
               h('li', [
                 h('a', {
-                  class: {
-                    // Активная ссылка, если текущая страница совпадает и это не страница клуба с другим ID
-                    active: link.page ? (appState.currentPage === link.page && (link.page !== 'clubPage' || appState.currentClubId === null)) : false,
+                  class: { // Логика active для playFromFen больше не зависит от FEN в appState
+                    active: link.page ? (appState.currentPage === link.page && 
+                                         (link.page !== 'clubPage' || appState.currentClubId === null)
+                                         ) : false,
                   },
-                  props: { href: link.page ? (link.page === 'recordsPage' ? '#/records' : (link.page === 'userCabinet' ? '#' : `#${link.page}`)) : '#' }, // Для userCabinet можно не менять hash
+                  props: { href: link.page ? (
+                      link.page === 'recordsPage' ? '#/records' : 
+                      (link.page === 'userCabinet' ? '#' : 
+                      (link.page === 'playFromFen' ? '#/playFromFen' :
+                       `#${link.page}`))) : '#' 
+                  },
                   on: {
                     click: (e: Event) => {
                       e.preventDefault();
-                      if (link.page) {
-                        controller.navigateTo(link.page, link.page !== 'userCabinet', null); // Для userCabinet не обновляем hash
+                      if (link.page) { // fenArg удален из вызова navigateTo
+                        controller.navigateTo(link.page, link.page !== 'userCabinet', null);
                         if (appState.isPortraitMode && appState.isNavExpanded) {
-                            controller.toggleNav(); // Закрываем меню на мобильных после клика
+                            controller.toggleNav();
                         }
                       }
                     }
                   }
-                }, link.textKey ? t(link.textKey) : link.text) // Используем textKey для локализации или прямой текст
+                }, link.textKey ? t(link.textKey) : link.text)
               ])
             ),
-            // Кнопка выхода, если пользователь аутентифицирован
             isAuthenticated ? h('li', [
               h('a', {
                 class: { 'logout-link': true },
@@ -267,21 +293,19 @@ export function renderAppUI(controller: AppController): VNode {
                   click: async (e: Event) => {
                     e.preventDefault();
                     logger.info('[appView] Logout button clicked.');
-                    await controller.services.authService.logout(); // Вызываем метод logout из AuthService
-                    if (appState.isNavExpanded) controller.toggleNav(); // Закрываем меню, если открыто
+                    await controller.services.authService.logout();
+                    if (appState.isNavExpanded) controller.toggleNav();
                   }
                 }
               }, t('nav.logout'))
             ]) : null
-          ].filter(Boolean) as VNode[] // filter(Boolean) для удаления null элементов (например, кнопки выхода)
+          ].filter(Boolean) as VNode[]
         )
       ])
     ]),
-    // Основной контент страницы
     h('main#page-content-wrapper', [
         mainContentStructure
     ]),
-    // Модальное окно (если видимо)
-    renderModal(controller) 
+    renderModal(controller)
   ]);
 }

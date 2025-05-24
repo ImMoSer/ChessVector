@@ -7,15 +7,16 @@ import { BoardHandler } from './core/boardHandler';
 import { PgnService } from './core/pgn.service';
 import { AnalysisService } from './core/analysis.service';
 import { AnalysisController } from './features/analysis/analysisController';
-import { subscribeToLangChange, getCurrentLang } from './core/i18n.service'; // Убрал t
+import { subscribeToLangChange, getCurrentLang } from './core/i18n.service';
 import { FinishHimController } from './features/finishHim/finishHimController';
 import { WelcomeController } from './features/welcome/welcomeController';
 import { AuthService, type UserSessionProfile, type SubscriptionTier } from './core/auth.service';
 import { ClubPageController } from './features/clubPage/ClubPageController';
 import { RecordsPageController } from './features/recordsPage/RecordsPageController';
 import { UserCabinetController } from './features/userCabinet/UserCabinetController';
+import { PlayFromFenController } from './features/playFromFen/PlayFromFenController';
 
-export type AppPage = 'welcome' | 'finishHim' | 'clubPage' | 'recordsPage' | 'userCabinet';
+export type AppPage = 'welcome' | 'finishHim' | 'clubPage' | 'recordsPage' | 'userCabinet' | 'playFromFen';
 
 export interface AppServices {
   authService: typeof AuthService;
@@ -29,16 +30,17 @@ export interface AppServices {
 
 interface AppControllerState {
   currentPage: AppPage;
-  currentClubId: string | null; 
+  currentClubId: string | null;
+  // currentFenForPlay: string | null; // Удалено, так как PlayFromFenController управляет своим FEN
   isNavExpanded: boolean;
   isPortraitMode: boolean;
   currentUser: UserSessionProfile | null;
   isLoadingAuth: boolean;
-  isModalVisible: boolean; 
-  modalMessage: string | null; 
+  isModalVisible: boolean;
+  modalMessage: string | null;
 }
 
-type ActivePageController = WelcomeController | FinishHimController | ClubPageController | RecordsPageController | UserCabinetController | null;
+type ActivePageController = WelcomeController | FinishHimController | ClubPageController | RecordsPageController | UserCabinetController | PlayFromFenController | null;
 
 const BOARD_MAX_VH = 94;
 const BOARD_MIN_VH = 10;
@@ -55,6 +57,8 @@ export class AppController {
   private analysisServiceInstance: AnalysisService;
   private authServiceInstance: typeof AuthService;
   private webhookServiceInstance: WebhookServiceController;
+  private pgnServiceInstance: typeof PgnService;
+
 
   private unsubscribeFromLangChange: (() => void) | null = null;
   private unsubscribeFromAuthChange: (() => void) | null = null;
@@ -71,6 +75,8 @@ export class AppController {
     this.authServiceInstance = AuthService;
     this.webhookServiceInstance = globalServices.webhookService;
     this.analysisServiceInstance = new AnalysisService(globalServices.stockfishService);
+    this.pgnServiceInstance = PgnService;
+
 
     this.services = {
       chessboardService: globalServices.chessboardService,
@@ -88,8 +94,9 @@ export class AppController {
     this.userPreferredBoardSizeVh = Math.max(BOARD_MIN_VH, Math.min(BOARD_MAX_VH, this.userPreferredBoardSizeVh));
 
     this.state = {
-      currentPage: 'welcome', 
+      currentPage: 'welcome',
       currentClubId: null,
+      // currentFenForPlay: null, // Удалено
       isNavExpanded: false,
       isPortraitMode: window.matchMedia('(orientation: portrait)').matches,
       currentUser: null,
@@ -174,6 +181,7 @@ export class AppController {
 
     let newPageFromHash: AppPage = 'welcome';
     let clubIdFromHash: string | null = null;
+    // let fenFromHash: string | null = null; // Удалено, FEN из URL больше не обрабатывается здесь
 
     if (cleanHash.startsWith('clubs/')) {
         const parts = cleanHash.split('/');
@@ -185,6 +193,9 @@ export class AppController {
             logger.warn(`[AppController] Invalid club page hash format: "${cleanHash}". Defaulting.`);
             newPageFromHash = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
         }
+    } else if (cleanHash === 'playFromFen') { // Просто проверяем маршрут, без FEN
+        newPageFromHash = 'playFromFen';
+        logger.info(`[AppController] Parsed playFromFen page from hash.`);
     } else if (cleanHash === 'records') {
         newPageFromHash = 'recordsPage';
         logger.info(`[AppController] Parsed records page from hash: ${newPageFromHash}`);
@@ -199,8 +210,10 @@ export class AppController {
         newPageFromHash = this.authServiceInstance.getIsAuthenticated() ? 'finishHim' : 'welcome';
     }
 
-    if (newPageFromHash !== this.state.currentPage || (newPageFromHash === 'clubPage' && clubIdFromHash !== this.state.currentClubId)) {
-        logger.info(`[AppController handleHashChange] Navigating due to hash change or clubId mismatch. New page: ${newPageFromHash}, Club ID: ${clubIdFromHash}`);
+    if (newPageFromHash !== this.state.currentPage || 
+        (newPageFromHash === 'clubPage' && clubIdFromHash !== this.state.currentClubId)) {
+        // FEN больше не сравнивается здесь
+        logger.info(`[AppController handleHashChange] Navigating due to hash/state mismatch. New page: ${newPageFromHash}, Club ID: ${clubIdFromHash}`);
         this.navigateTo(newPageFromHash, false, clubIdFromHash); 
     } else {
         logger.info(`[AppController handleHashChange] Hash matches current state or no navigation needed. Page: ${this.state.currentPage}, Club ID: ${this.state.currentClubId}`);
@@ -246,7 +259,7 @@ export class AppController {
 
     let availableWidthForCenterPx: number;
 
-    if (this.state.isPortraitMode || this.state.currentPage === 'recordsPage' || this.state.currentPage === 'clubPage' || this.state.currentPage === 'welcome' || this.state.currentPage === 'userCabinet') {
+    if (this.state.isPortraitMode || !['finishHim', 'playFromFen'].includes(this.state.currentPage)) {
       availableWidthForCenterPx = viewportWidthPx - (2 * panelGapPx);
     } else { 
       const actualLeftPanelWidth = document.getElementById('left-panel')?.offsetParent !== null ? leftPanelWidthPx : 0;
@@ -285,12 +298,12 @@ export class AppController {
     window.dispatchEvent(resizeEvent);
   }
 
-
-  public navigateTo(page: AppPage, updateHash: boolean = true, clubId: string | null = null): void {
+  // fenArg удален из параметров navigateTo и _updateBrowserHash
+  public navigateTo(page: AppPage, updateHash: boolean = true, clubIdArg: string | null = null): void {
     const isAuthenticated = this.authServiceInstance.getIsAuthenticated();
     const userTier = this.authServiceInstance.getUserSubscriptionTier();
 
-    logger.info(`[AppController navigateTo] Attempting navigation. Requested: ${page}${clubId ? ` (Club ID: ${clubId})` : ''}. Current: ${this.state.currentPage} (Club ID: ${this.state.currentClubId}). Auth: ${isAuthenticated}, Tier: ${userTier}`);
+    logger.info(`[AppController navigateTo] Attempting navigation. Requested: ${page}${clubIdArg ? ` (Club ID: ${clubIdArg})` : ''}. Current: ${this.state.currentPage} (Club ID: ${this.state.currentClubId}). Auth: ${isAuthenticated}, Tier: ${userTier}`);
     
     if (this.state.isLoadingAuth && !this._isInitializing && page !== this.state.currentPage) {
         logger.warn(`[AppController navigateTo] Navigation to ${page} blocked: authentication is processing, and not initial load.`);
@@ -298,14 +311,17 @@ export class AppController {
     }
 
     let targetPage = page;
-    let targetClubId = clubId; 
+    let targetClubId = clubIdArg;
 
     if (page === 'clubPage') {
-        if (!clubId) { 
+        if (!clubIdArg) { 
             logger.warn('[AppController navigateTo] Club page navigation attempted without clubId. Redirecting to welcome.');
             targetPage = 'welcome';
             targetClubId = null; 
         }
+    } else if (page === 'playFromFen') {
+        // FEN больше не передается здесь
+        targetClubId = null;
     } else if (page === 'userCabinet') {
         if (!isAuthenticated) {
             logger.warn('[AppController navigateTo] Access to userCabinet denied: not authenticated. Redirecting to welcome.');
@@ -332,22 +348,16 @@ export class AppController {
         targetClubId = null;
     }
 
-    if (this.state.currentPage === targetPage && this.state.currentClubId === targetClubId && this.activePageController) {
-      logger.info(`[AppController navigateTo] Already on page: ${targetPage}${targetClubId ? ` (Club ID: ${targetClubId})` : ''}. Controller exists.`);
+    if (this.state.currentPage === targetPage && 
+        this.state.currentClubId === targetClubId &&
+        this.activePageController) {
+      logger.info(`[AppController navigateTo] Already on target page/state: ${targetPage}. No navigation needed.`);
       if (this.state.isPortraitMode && this.state.isNavExpanded) {
         this.toggleNav(); 
       } else {
         this.requestGlobalRedraw(); 
       }
-      if (updateHash) {
-          const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : (targetPage === 'recordsPage' ? 'records' : (targetPage !== 'userCabinet' ? targetPage : ''));
-          const currentCleanHash = window.location.hash.slice(1).startsWith('/') ? window.location.hash.slice(2) : window.location.hash.slice(1);
-          if (currentCleanHash !== newHashTarget && targetPage !== 'userCabinet') { 
-              window.location.hash = newHashTarget;
-          } else if (targetPage === 'userCabinet' && currentCleanHash !== '') {
-              // window.location.hash = ''; 
-          }
-      }
+      if (updateHash) this._updateBrowserHash(targetPage, targetClubId);
       return;
     }
 
@@ -361,17 +371,10 @@ export class AppController {
     }
 
     this.state.currentPage = targetPage;
-    this.state.currentClubId = targetClubId; 
+    this.state.currentClubId = targetClubId;
+    // this.state.currentFenForPlay = null; // FEN больше не хранится здесь
 
-    if (updateHash && targetPage !== 'userCabinet') {
-        const newHashTarget = targetPage === 'clubPage' && targetClubId ? `clubs/${targetClubId}` : (targetPage === 'recordsPage' ? 'records' : targetPage);
-        const currentCleanHash = window.location.hash.slice(1).startsWith('/') ? window.location.hash.slice(2) : window.location.hash.slice(1);
-        if (currentCleanHash !== newHashTarget) {
-            window.location.hash = newHashTarget;
-        }
-    } else if (updateHash && targetPage === 'userCabinet') {
-        // No hash update for userCabinet
-    }
+    if (updateHash) this._updateBrowserHash(targetPage, targetClubId);
 
     this.loadPageController(targetPage, targetClubId);
 
@@ -380,6 +383,27 @@ export class AppController {
     }
   }
 
+  // fen: string | null удален из параметров _updateBrowserHash
+  private _updateBrowserHash(page: AppPage, clubId: string | null): void {
+    let newHashTarget = '';
+    if (page === 'clubPage' && clubId) {
+        newHashTarget = `clubs/${clubId}`;
+    } else if (page === 'playFromFen') { // FEN больше не добавляется в хеш
+        newHashTarget = `playFromFen`;
+    } else if (page === 'recordsPage') {
+        newHashTarget = 'records';
+    } else if (page !== 'userCabinet' && page !== 'welcome') {
+        newHashTarget = page;
+    }
+
+    const currentCleanHash = window.location.hash.slice(1).startsWith('/') ? window.location.hash.slice(2) : window.location.hash.slice(1);
+    if (currentCleanHash !== newHashTarget) {
+        window.location.hash = newHashTarget;
+        logger.info(`[AppController _updateBrowserHash] Hash updated to: #${newHashTarget}`);
+    }
+  }
+
+  // fenForPlay: string | null удален из параметров loadPageController
   private loadPageController(page: AppPage, clubId: string | null = null): void {
     if (this.activePageController && typeof this.activePageController.destroy === 'function') {
         this.activePageController.destroy();
@@ -395,7 +419,7 @@ export class AppController {
 
     let boardHandlerForPage: BoardHandler | undefined;
     
-    if (page === 'finishHim') {
+    if (page === 'finishHim' || page === 'playFromFen') {
         boardHandlerForPage = new BoardHandler(
             this.services.chessboardService,
             this.requestGlobalRedraw
@@ -403,7 +427,7 @@ export class AppController {
         this.analysisControllerInstance = new AnalysisController(
             this.services.analysisService,
             boardHandlerForPage,
-            PgnService, 
+            this.pgnServiceInstance, 
             this.requestGlobalRedraw
         );
     }
@@ -431,6 +455,26 @@ export class AppController {
         if (typeof (this.activePageController as FinishHimController).initializeGame === 'function') {
             (this.activePageController as FinishHimController).initializeGame();
         }
+        break;
+      case 'playFromFen':
+        if (!boardHandlerForPage || !this.analysisControllerInstance) {
+            logger.error("[AppController] Critical error: BoardHandler or AnalysisController not initialized for PlayFromFen page.");
+            if (this.state.currentPage !== 'welcome') this.navigateTo('welcome');
+            else logger.error("[AppController] Already on welcome, cannot fallback further from PlayFromFen init error.");
+            return;
+        }
+        this.activePageController = new PlayFromFenController(
+            this.services.chessboardService,
+            boardHandlerForPage,
+            this.authServiceInstance,
+            this.webhookServiceInstance,
+            this.services.stockfishService,
+            this.analysisControllerInstance,
+            this.pgnServiceInstance,
+            this.requestGlobalRedraw
+            // initialFenFromUrl удален
+        );
+        // initializeGameWithFen вызовется из конструктора PlayFromFenController через handleRequestNewFenFromServer
         break;
       case 'clubPage':
         if (clubId) {
@@ -535,4 +579,4 @@ export class AppController {
   }
 }
 
-const validAppPages: AppPage[] = ['welcome', 'finishHim', 'clubPage', 'recordsPage', 'userCabinet'];
+const validAppPages: AppPage[] = ['welcome', 'finishHim', 'clubPage', 'recordsPage', 'userCabinet', 'playFromFen'];

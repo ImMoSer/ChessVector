@@ -2,8 +2,9 @@
 import logger from '../utils/logger';
 import { scalachessCharPair } from 'chessops/compat';
 import { parseUci } from 'chessops/util';
-import { parseFen } from 'chessops/fen';
+import { parseFen, makeFen } from 'chessops/fen'; // Импортируем makeFen
 import { Chess } from 'chessops/chess';
+import type { Setup as ChessopsSetup } from 'chessops'; // Для типизации
 
 /**
  * Interface for a single node in the PGN history tree.
@@ -23,8 +24,6 @@ export interface PgnNode {
   // Optional fields
   comment?: string; // A single primary comment for the move
   eval?: number; // Stockfish evaluation (in centipawns or mate score)
-  // glyphs?: number[]; // NAGs (Numeric Annotation Glyphs) could be added later
-  // clock?: number; // Time spent on this move (in seconds or ms)
 }
 
 /**
@@ -35,7 +34,6 @@ export interface NewNodeData {
   uci: string;
   fenBefore: string;
   fenAfter: string;
-  // Optional data can be added here if needed upon creation
   comment?: string;
   eval?: number;
 }
@@ -45,9 +43,7 @@ export interface NewNodeData {
  */
 export interface PgnStringOptions {
   showResult?: boolean;
-  showVariations?: boolean; // New option to control variation printing
-  // fromPly?: number; // For future partial PGN generation
-  // toPly?: number;
+  showVariations?: boolean;
 }
 
 const ROOT_NODE_ID = "__ROOT__";
@@ -55,7 +51,7 @@ const ROOT_NODE_ID = "__ROOT__";
 class PgnServiceController {
   private rootNode!: PgnNode;
   private currentNode!: PgnNode;
-  private currentPath!: string; // Concatenated string of node IDs, e.g., "e2e4g8f6b1c3"
+  private currentPath!: string;
 
   private gameResult: string = '*';
 
@@ -65,11 +61,21 @@ class PgnServiceController {
   }
 
   public reset(fen: string): void {
+    let normalizedFen = fen;
+    try {
+      // Нормализуем FEN, чтобы он всегда содержал все 6 частей
+      const setup: ChessopsSetup = parseFen(fen).unwrap();
+      normalizedFen = makeFen(setup); // chessops.makeFen вернет полный FEN
+    } catch (e: any) {
+      logger.error(`[PgnService] Error normalizing FEN "${fen}" in reset: ${e.message}. Using original FEN.`);
+      // Если нормализация не удалась, используем исходный FEN, но это может привести к проблемам позже
+    }
+
     this.rootNode = {
       id: ROOT_NODE_ID,
       ply: 0,
       fenBefore: '', 
-      fenAfter: fen,
+      fenAfter: normalizedFen, // Используем нормализованный FEN
       san: '',
       uci: '',
       parent: undefined,
@@ -78,11 +84,14 @@ class PgnServiceController {
     this.currentNode = this.rootNode;
     this.currentPath = '';
     this.gameResult = '*';
-    logger.info(`[PgnService] Reset with FEN: ${fen}. Current node is root. Path: "${this.currentPath}"`);
+    logger.info(`[PgnService] Reset with FEN: ${normalizedFen}. Current node is root. Path: "${this.currentPath}"`);
   }
 
   public addNode(data: NewNodeData): PgnNode | null {
     const parentNode = this.currentNode;
+
+    // Для отладки выведем оба FEN перед сравнением
+    // logger.debug(`[PgnService addNode] Comparing FENs: parent.fenAfter="${parentNode.fenAfter}", newNode.fenBefore="${data.fenBefore}"`);
 
     if (parentNode.fenAfter !== data.fenBefore) {
         logger.error(`[PgnService] FEN mismatch: parent.fenAfter (${parentNode.fenAfter}) !== newNode.fenBefore (${data.fenBefore}). Cannot add node.`);
@@ -157,8 +166,6 @@ class PgnServiceController {
     if (pathNodes.length === 0) {
       return options?.showResult ? this.gameResult : '';
     }
-
-    const firstActualMoveNode = pathNodes[0];
     
     let currentFullMoveNumber = 1;
     let isWhiteToMoveInitially = true;
@@ -170,18 +177,21 @@ class PgnServiceController {
         isWhiteToMoveInitially = rootChessPos.turn === 'white';
     } catch (e: any) {
         logger.warn(`[PgnService] Could not parse root FEN or create Chess pos for PGN string: ${(e as Error).message}`);
+        // Используем дефолтные значения, если FEN корня невалиден
     }
+    
+    // Эта проверка больше не нужна, так как rootNode.fenAfter всегда будет полным
+    // if (pathNodes[0] && pathNodes[0].ply === 1) {
+    //     try {
+    //         const firstMoveFenBeforeSetup = parseFen(pathNodes[0].fenBefore).unwrap();
+    //         const firstMoveChessPos = Chess.fromSetup(firstMoveFenBeforeSetup).unwrap();
+    //         isWhiteToMoveInitially = firstMoveChessPos.turn === 'white';
+    //         currentFullMoveNumber = firstMoveChessPos.fullmoves;
+    //     } catch (e: any) {
+    //         logger.warn(`[PgnService] Could not parse firstMove.fenBefore or create Chess pos for PGN string: ${(e as Error).message}`);
+    //     }
+    // }
 
-    if (firstActualMoveNode && firstActualMoveNode.ply === 1) {
-        try {
-            const firstMoveFenBeforeSetup = parseFen(firstActualMoveNode.fenBefore).unwrap();
-            const firstMoveChessPos = Chess.fromSetup(firstMoveFenBeforeSetup).unwrap();
-            isWhiteToMoveInitially = firstMoveChessPos.turn === 'white';
-            currentFullMoveNumber = firstMoveChessPos.fullmoves;
-        } catch (e: any) {
-            logger.warn(`[PgnService] Could not parse firstMove.fenBefore or create Chess pos for PGN string: ${(e as Error).message}`);
-        }
-    }
 
     for (let i = 0; i < pathNodes.length; i++) {
       const node = pathNodes[i];
@@ -191,7 +201,7 @@ class PgnServiceController {
         if (pgn.length > 0) pgn += (options?.showVariations ? ' ' : '\n');
         pgn += `${currentFullMoveNumber}. `;
       } else {
-        if (i === 0 && !isWhiteToMoveInitially) { // Check if it's Black's first move in the PGN string
+        if (i === 0 && !isWhiteToMoveInitially) {
             pgn += `${currentFullMoveNumber}... `;
         } else {
             pgn += ` `;
@@ -207,9 +217,6 @@ class PgnServiceController {
         currentFullMoveNumber++;
       }
     }
-
-    // TODO: Implement variation printing if options.showVariations is true
-    // This would involve recursively calling a helper for node.children if not the main child.
 
     if (options?.showResult && this.gameResult !== '*') {
       pgn += (pgn.length > 0 ? ' ' : '') + this.gameResult;
@@ -238,7 +245,7 @@ class PgnServiceController {
   }
 
   public getFenHistoryForRepetition(): string[] {
-    const history: string[] = [this.rootNode.fenAfter.split(' ')[0]];
+    const history: string[] = [this.rootNode.fenAfter.split(' ')[0]]; // Только часть с расстановкой
     let N: PgnNode | undefined = this.currentNode;
     const pathNodes: PgnNode[] = [];
 
@@ -247,7 +254,7 @@ class PgnServiceController {
         N = N.parent;
     }
     pathNodes.forEach(node => {
-        history.push(node.fenAfter.split(' ')[0]);
+        history.push(node.fenAfter.split(' ')[0]); // Только часть с расстановкой
     });
     return history;
   }
@@ -329,10 +336,10 @@ class PgnServiceController {
     let constructedPath = "";
     while(targetNode && targetNode.ply < ply) {
         if (targetNode.children.length > 0) {
-            targetNode = targetNode.children[0]; // Follow main line
+            targetNode = targetNode.children[0];
             constructedPath += targetNode.id;
         } else {
-            targetNode = undefined; // Reached end of line before target ply
+            targetNode = undefined;
             break;
         }
     }
@@ -361,7 +368,7 @@ class PgnServiceController {
     if (this.currentNode.children && this.currentNode.children.length > variationIndex) {
       const childNode = this.currentNode.children[variationIndex];
       this.currentNode = childNode;
-      this.currentPath += childNode.id; // Append ID
+      this.currentPath += childNode.id;
       logger.debug(`[PgnService] Navigated forward to ply: ${this.currentNode.ply} (Variation ${variationIndex}). Path: "${this.currentPath}"`);
       return true;
     }
@@ -378,7 +385,7 @@ class PgnServiceController {
     let N = this.currentNode;
     let pathSuffix = "";
     while (N.children.length > 0) {
-      N = N.children[0]; // Follow main variation
+      N = N.children[0];
       pathSuffix += N.id;
     }
     if (this.currentNode !== N) { 
@@ -434,12 +441,8 @@ class PgnServiceController {
     return false;
   }
 
-  /**
-   * Sets a comment on the currently active PGN node.
-   * @param comment The comment string.
-   */
   public setCommentOnCurrentNode(comment: string): void {
-    if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) { // Comments are usually for moves, not root
+    if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) {
       this.currentNode.comment = comment;
       logger.debug(`[PgnService] Comment set on current node (Ply ${this.currentNode.ply}): "${comment}"`);
     } else {
@@ -447,9 +450,6 @@ class PgnServiceController {
     }
   }
 
-  /**
-   * Clears the comment from the currently active PGN node.
-   */
   public clearCommentOnCurrentNode(): void {
     if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) {
       this.currentNode.comment = undefined;
@@ -459,12 +459,8 @@ class PgnServiceController {
     }
   }
 
-  /**
-   * Sets an evaluation score on the currently active PGN node.
-   * @param evalValue The evaluation value (e.g., centipawns or mate score).
-   */
   public setEvaluationOnCurrentNode(evalValue: number): void {
-    if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) { // Evaluations are for moves
+    if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) {
       this.currentNode.eval = evalValue;
       logger.debug(`[PgnService] Evaluation set on current node (Ply ${this.currentNode.ply}): ${evalValue}`);
     } else {
@@ -472,9 +468,6 @@ class PgnServiceController {
     }
   }
 
-  /**
-   * Clears the evaluation score from the currently active PGN node.
-   */
   public clearEvaluationOnCurrentNode(): void {
     if (this.currentNode && this.currentNode.id !== ROOT_NODE_ID) {
       this.currentNode.eval = undefined;
