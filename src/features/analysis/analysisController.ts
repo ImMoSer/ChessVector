@@ -35,7 +35,7 @@ export interface AnalysisPanelState {
   canNavigatePgnForward: boolean;
   canRestartTask: boolean;
   canLoadNextTask: boolean;
-  canSetFen: boolean;
+  // canSetFen: boolean; // <--- REMOVED
   currentFenAnalyzed: string | null;
   isGameCurrentlyActive: boolean;
   currentTurnForAnalysis: ChessopsColor | null; 
@@ -44,7 +44,7 @@ export interface AnalysisPanelState {
 export interface GameControlCallbacks {
   onNextTaskRequested: () => void;
   onRestartTaskRequested: () => void;
-  onSetFenRequested: () => void;
+  // onSetFenRequested: () => void; // <--- REMOVED
   onStopGameRequested: () => void;
 }
 
@@ -86,10 +86,10 @@ export class AnalysisController {
       canNavigatePgnForward: this.pgnServiceInstance.canNavigateForward(0),
       canRestartTask: false,
       canLoadNextTask: true,
-      canSetFen: true,
+      // canSetFen: true, // <--- REMOVED
       currentFenAnalyzed: null,
       isGameCurrentlyActive: false,
-      currentTurnForAnalysis: null, 
+      currentTurnForAnalysis: null,
     };
 
     this.boardHandler.onMoveMade(this._handleBoardOrPgnChange.bind(this));
@@ -110,7 +110,7 @@ export class AnalysisController {
     
     if (this.currentFenForAnalysis) {
         try {
-            const setup = parseFen(this.currentFenForAnalysis).unwrap();
+            const setup = parseFen(this.currentFenForAnalysis).unwrap(); // chessops/fen
             this.panelState.currentTurnForAnalysis = setup.turn;
         } catch (e) {
             logger.warn(`[AnalysisController getPanelState] Could not parse FEN ${this.currentFenForAnalysis} to determine turn.`);
@@ -119,8 +119,11 @@ export class AnalysisController {
     } else {
         this.panelState.currentTurnForAnalysis = null;
     }
-
-    return { ...this.panelState };
+    
+    // Explicitly create a new object without canSetFen if it was part of panelState type before removal
+    // This ensures the returned type matches the updated AnalysisPanelState interface.
+    const { /* canSetFen, // This property is now removed from the interface and thus from panelState */ ...restOfState } = this.panelState;
+    return { ...restOfState } as AnalysisPanelState; // Cast to ensure type correctness
   }
 
   public setGameControlCallbacks(callbacks: GameControlCallbacks): void {
@@ -130,7 +133,6 @@ export class AnalysisController {
 
   public updateGameControlState(state: GameControlState): void {
     logger.debug('[AnalysisController] Updating game control state:', state);
-    // const oldIsGameActive = this.panelState.isGameCurrentlyActive; // Removed as it was unused
     let changed = false;
 
     if (this.panelState.canRestartTask !== state.canRestartTask) {
@@ -149,8 +151,8 @@ export class AnalysisController {
 
     if (state.isGameActive && this.panelState.isAnalysisActive) {
         logger.info('[AnalysisController] Game became active, stopping ongoing analysis.');
-        this._internalStopAnalysis(false); // This will set changed to true if isAnalysisActive changes
-        changed = true; // Ensure redraw if game becomes active and analysis was running
+        this._internalStopAnalysis(false); 
+        changed = true; 
     }
     
     if (changed) {
@@ -167,7 +169,7 @@ export class AnalysisController {
     if (this.panelState.isGameCurrentlyActive) {
       if (this.gameControlCallbacks?.onStopGameRequested) {
         logger.info('[AnalysisController] "Resign" clicked (via toggleAnalysisEngine). Requesting game stop.');
-        this.gameControlCallbacks.onStopGameRequested(); // This should lead to state changes and redraw
+        this.gameControlCallbacks.onStopGameRequested(); 
       } else {
         logger.warn('[AnalysisController] "Resign" clicked, but onStopGameRequested callback is not set.');
       }
@@ -192,7 +194,7 @@ export class AnalysisController {
 
     logger.info(`[AnalysisController] Starting analysis internally. Requested nodePath: ${nodePath}`);
     this.panelState.isAnalysisActive = true;
-    this.boardHandler.configureBoardForAnalysis(true); // This might trigger its own redraw/state update
+    this.boardHandler.configureBoardForAnalysis(true); 
 
     const pathToAnalyze = nodePath || this.pgnServiceInstance.getCurrentPath();
     this.currentAnalysisNodePath = pathToAnalyze;
@@ -221,14 +223,13 @@ export class AnalysisController {
 
     if (this.currentFenForAnalysis) {
       logger.info(`[AnalysisController] Analysis target: PGN Path: ${this.currentAnalysisNodePath}, FEN: ${this.currentFenForAnalysis}, Turn: ${this.panelState.currentTurnForAnalysis}`);
-      this._requestAndProcessAnalysis(); // Async, will handle its own redraws for loading/results
+      this._requestAndProcessAnalysis(); 
     } else {
       logger.error('[AnalysisController] Cannot start analysis, no valid FEN found.');
       this.panelState.isAnalysisActive = false;
       this.boardHandler.configureBoardForAnalysis(false);
-      this.requestGlobalRedraw(); // Redraw to reflect that analysis couldn't start
+      this.requestGlobalRedraw(); 
     }
-    // No final redraw here, _requestAndProcessAnalysis or error path handles it
   }
 
   private _internalStopAnalysis(configureBoard: boolean): void {
@@ -251,9 +252,9 @@ export class AnalysisController {
     }
 
     if (configureBoard) {
-        this.boardHandler.configureBoardForAnalysis(false); // Might trigger its own redraw
+        this.boardHandler.configureBoardForAnalysis(false); 
     }
-    this.boardHandler.clearAllDrawings(); // Might trigger its own redraw if shapes change
+    this.boardHandler.clearAllDrawings(); 
 
     if (this.panelState.analysisLines !== null) {
         this.panelState.analysisLines = null;
@@ -272,7 +273,6 @@ export class AnalysisController {
   private _handleBoardOrPgnChange(data: { currentNodePath?: string; currentFen?: string; newNodePath?: string; newFen?: string }): void {
     let needsRedraw = false;
     if (!this.panelState.isAnalysisActive) {
-        // Even if analysis is not active, PGN navigation might change button states
         const prevCanBack = this.panelState.canNavigatePgnBackward;
         const prevCanFwd = this.panelState.canNavigatePgnForward;
         this.panelState.canNavigatePgnBackward = this.boardHandler.canPgnNavigateBackward();
@@ -289,7 +289,7 @@ export class AnalysisController {
 
     if (path === undefined || fen === undefined) { 
         logger.warn('[AnalysisController _handleBoardOrPgnChange] Path or FEN missing in event data.');
-        this.requestGlobalRedraw(); // Redraw to ensure UI consistency
+        this.requestGlobalRedraw(); 
         return;
     }
 
@@ -310,9 +310,9 @@ export class AnalysisController {
             this.panelState.currentTurnForAnalysis = null;
         }
       logger.info(`[AnalysisController] Board/PGN change detected. Requesting new analysis for PGN Path: "${this.currentAnalysisNodePath}", FEN: ${this.currentFenForAnalysis}, Turn: ${this.panelState.currentTurnForAnalysis}`);
-      this._requestAndProcessAnalysis(); // Async, handles its own redraws
+      this._requestAndProcessAnalysis(); 
     } else {
-      this.requestGlobalRedraw(); // Redraw if path/FEN are same but other panelState might need update
+      this.requestGlobalRedraw(); 
     }
   }
 
@@ -351,10 +351,10 @@ export class AnalysisController {
     } else {
         this.panelState.currentTurnForAnalysis = null;
     }
-    this.requestGlobalRedraw(); // Show loading state
+    this.requestGlobalRedraw(); 
     logger.info(`[AnalysisController promiseId: ${promiseId}] Requesting analysis from Stockfish for FEN: ${this.currentFenForAnalysis}, Turn: ${this.panelState.currentTurnForAnalysis}`);
 
-    this.boardHandler.clearAllDrawings(); // Might trigger its own redraw
+    this.boardHandler.clearAllDrawings(); 
 
     this.analysisTimeoutId = window.setTimeout(() => {
       this.analysisTimeoutId = null; 
@@ -367,7 +367,7 @@ export class AnalysisController {
               startingFen: this.currentFenForAnalysis || '', 
               initialFullMoveNumber: 1, initialTurn: this.panelState.currentTurnForAnalysis || 'white' 
           }];
-          this.requestGlobalRedraw(); // Show timeout message
+          this.requestGlobalRedraw(); 
       }
     }, ANALYSIS_REQUEST_TIMEOUT);
 
@@ -384,7 +384,7 @@ export class AnalysisController {
         if(this.analysisTimeoutId && this.currentAnalysisPromiseId === promiseId) clearTimeout(this.analysisTimeoutId);
         if (this.panelState.isAnalysisLoading && this.currentAnalysisPromiseId === promiseId) {
             this.panelState.isAnalysisLoading = false; 
-            this.requestGlobalRedraw(); // Reflect that loading stopped
+            this.requestGlobalRedraw(); 
         }
         return; 
       }
@@ -414,11 +414,11 @@ export class AnalysisController {
         });
         this.panelState.analysisLines = linesWithSan;
         logger.info(`[AnalysisController promiseId: ${promiseId}] Analysis received. Lines (with SAN and corrected score):`, this.panelState.analysisLines);
-        this._drawAnalysisResultOnBoard(); // Might trigger its own redraw
+        this._drawAnalysisResultOnBoard(); 
       } else {
         logger.warn(`[AnalysisController promiseId: ${promiseId}] Stockfish returned no lines or an empty result.`);
         this.panelState.analysisLines = null;
-        this.boardHandler.clearAllDrawings(); // Might trigger its own redraw
+        this.boardHandler.clearAllDrawings(); 
       }
     } catch (error: any) {
       logger.error(`[AnalysisController promiseId: ${promiseId}] Error getting analysis from Stockfish:`, error.message);
@@ -426,13 +426,13 @@ export class AnalysisController {
         this.panelState.analysisLines = null;
         if(this.analysisTimeoutId) clearTimeout(this.analysisTimeoutId); 
         this.analysisTimeoutId = null;
-        this.boardHandler.clearAllDrawings(); // Might trigger its own redraw
+        this.boardHandler.clearAllDrawings(); 
       }
     } finally {
       if (this.currentAnalysisPromiseId === promiseId) {
         this.panelState.isAnalysisLoading = false;
       }
-      this.requestGlobalRedraw(); // Redraw to reflect final state of analysis (results, error, or loading stopped)
+      this.requestGlobalRedraw(); 
     }
   }
 
@@ -468,7 +468,7 @@ export class AnalysisController {
 
   private _drawAnalysisResultOnBoard(): void {
     if (!this.panelState.isAnalysisActive || !this.panelState.analysisLines || this.panelState.analysisLines.length === 0) {
-      this.boardHandler.clearAllDrawings(); // Might trigger its own redraw
+      this.boardHandler.clearAllDrawings(); 
       return;
     }
 
@@ -488,7 +488,7 @@ export class AnalysisController {
 
     this.boardHandler.clearAllDrawings(); 
     if (shapesToDraw.length > 0) {
-      this.boardHandler.setDrawableShapes(shapesToDraw); // Might trigger its own redraw
+      this.boardHandler.setDrawableShapes(shapesToDraw); 
     }
   }
 
@@ -506,11 +506,9 @@ export class AnalysisController {
         logger.warn(`[AnalysisController] _getNodeByPath: Failed to navigate to path ${path} in PgnService.`);
     }
 
-    // Navigate back to the original path to avoid side effects on PGN state
     if (this.pgnServiceInstance.getCurrentPath() !== originalPath) {
         if (!this.pgnServiceInstance.navigateToPath(originalPath)) {
             logger.error(`[AnalysisController] _getNodeByPath: Critical error! Failed to navigate back to original path ${originalPath}.`);
-            // Potentially reset PGN or handle this critical state
         }
     }
     return node;
@@ -525,7 +523,7 @@ export class AnalysisController {
         logger.warn("[AnalysisController] pgnNavigateToStart: Analysis not active.");
         return;
     }
-    this.boardHandler.handleNavigatePgnToStart(); // This will trigger onPgnNavigated -> _handleBoardOrPgnChange
+    this.boardHandler.handleNavigatePgnToStart(); 
   }
 
   public pgnNavigateBackward(): void {
@@ -537,7 +535,7 @@ export class AnalysisController {
         logger.warn("[AnalysisController] pgnNavigateBackward: Analysis not active.");
         return;
     }
-    this.boardHandler.handleNavigatePgnBackward(); // This will trigger onPgnNavigated
+    this.boardHandler.handleNavigatePgnBackward(); 
   }
 
   public pgnNavigateForward(variationIndex: number = 0): void {
@@ -549,7 +547,7 @@ export class AnalysisController {
         logger.warn("[AnalysisController] pgnNavigateForward: Analysis not active.");
         return;
     }
-    this.boardHandler.handleNavigatePgnForward(variationIndex); // This will trigger onPgnNavigated
+    this.boardHandler.handleNavigatePgnForward(variationIndex); 
   }
 
   public pgnNavigateToEnd(): void {
@@ -561,16 +559,16 @@ export class AnalysisController {
         logger.warn("[AnalysisController] pgnNavigateToEnd: Analysis not active.");
         return;
     }
-    this.boardHandler.handleNavigatePgnToEnd(); // This will trigger onPgnNavigated
+    this.boardHandler.handleNavigatePgnToEnd(); 
   }
 
   public requestNextTask(): void {
     if (this.gameControlCallbacks?.onNextTaskRequested) {
       logger.info('[AnalysisController] Requesting next task from GameController (via FinishHim).');
       if (this.panelState.isAnalysisActive) { 
-        this._internalStopAnalysis(true); // This will request redraw
+        this._internalStopAnalysis(true); 
       }
-      this.gameControlCallbacks.onNextTaskRequested(); // This will likely change game state and cause redraw
+      this.gameControlCallbacks.onNextTaskRequested(); 
     } else {
       logger.warn('[AnalysisController] onNextTaskRequested callback is not set.');
     }
@@ -580,23 +578,11 @@ export class AnalysisController {
     if (this.gameControlCallbacks?.onRestartTaskRequested) {
       logger.info('[AnalysisController] Requesting restart task from GameController (via FinishHim).');
       if (this.panelState.isAnalysisActive) { 
-        this._internalStopAnalysis(true); // This will request redraw
+        this._internalStopAnalysis(true); 
       }
-      this.gameControlCallbacks.onRestartTaskRequested(); // This will likely change game state and cause redraw
+      this.gameControlCallbacks.onRestartTaskRequested(); 
     } else {
       logger.warn('[AnalysisController] onRestartTaskRequested callback is not set.');
-    }
-  }
-
-  public requestSetFen(): void {
-    if (this.gameControlCallbacks?.onSetFenRequested) {
-      logger.info('[AnalysisController] Requesting set FEN from GameController (via FinishHim).');
-      if (this.panelState.isAnalysisActive) { 
-        this._internalStopAnalysis(true); // This will request redraw
-      }
-      this.gameControlCallbacks.onSetFenRequested(); // This will likely change game state and cause redraw
-    } else {
-      logger.warn('[AnalysisController] onSetFenRequested callback is not set.');
     }
   }
   
@@ -618,19 +604,13 @@ export class AnalysisController {
 
     if (this.pgnServiceInstance.getCurrentPath() !== this.currentAnalysisNodePath) {
         this.boardHandler.handleNavigatePgnToPath(this.currentAnalysisNodePath); 
-        // This navigation will trigger _handleBoardOrPgnChange, which will then call _requestAndProcessAnalysis.
-        // However, we want to apply the move *after* navigating to the correct node.
-        // So, we might need to ensure the move application happens after the navigation is "settled".
-        // For now, let's assume handleNavigatePgnToPath is synchronous enough or the subsequent
-        // applySystemMove will operate on the correct state.
     }
     
-    this.boardHandler.applySystemMove(uciMove); // This will trigger onMoveMade -> _handleBoardOrPgnChange
+    this.boardHandler.applySystemMove(uciMove); 
   }
 
   public destroy(): void {
     logger.info('[AnalysisController] Destroying AnalysisController instance.');
     this._internalStopAnalysis(false); 
-    // No final redraw needed on destroy
   }
 }

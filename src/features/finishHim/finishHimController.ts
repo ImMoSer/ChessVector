@@ -119,7 +119,7 @@ export class FinishHimController {
     const gameCallbacks: GameControlCallbacks = {
       onNextTaskRequested: () => this.loadAndStartFinishHimPuzzle(),
       onRestartTaskRequested: () => this.handleRestartTask(),
-      onSetFenRequested: () => this.handleSetFen(),
+      // onSetFenRequested: () => this.handleSetFen(), // <--- REMOVED
       onStopGameRequested: () => this._stopCurrentGameActivity(),
     };
     this.analysisController.setGameControlCallbacks(gameCallbacks);
@@ -776,45 +776,6 @@ export class FinishHimController {
       logger.warn("[FinishHimController] Restart task called, but no active task to restart. Loading new one.");
       this.state.feedbackMessage = t('finishHim.feedback.noTaskToRestart');
       this.loadAndStartFinishHimPuzzle();
-    }
-  }
-
-  public handleSetFen(): void {
-    if (this.boardHandler.promotionCtrl.isActive()) this.boardHandler.promotionCtrl.cancel();
-
-    if (this.analysisController.getPanelState().isAnalysisActive) {
-        this.analysisController.toggleAnalysisEngine(); // Handles its own redraws
-    }
-    this._clearOutplayTimer();
-    this.state.outplayTimeRemainingMs = null;
-    this.state.tacticalRatingDelta = null;
-    this.state.finishHimRatingDelta = null;
-    this.state.pieceCountDelta = null;
-    this.state.isCategoriesDropdownOpen = false;
-    // No direct redraw here yet
-
-    const fen = prompt(t('puzzle.feedback.enterFenPrompt'), this.boardHandler.getFen());
-    if (fen) {
-      this.state.activePuzzle = null;
-      this.state.interactiveSetupMoves = [];
-      this.state.currentInteractiveSetupMoveIndex = 0;
-      this.state.currentTaskPieceCount = this.countPiecesFromFen(fen);
-      this.state.isStockfishThinking = false;
-      this.state.gameOverMessage = null;
-      this.state.isInPlayoutMode = false;
-      this.state.isGameEffectivelyActive = true;
-
-      const humanPlayerColorBasedOnTurn = fen.includes(' w ') ? 'white' : 'black';
-      this.boardHandler.setupPosition(fen, humanPlayerColorBasedOnTurn, true);
-      // setupPosition triggers events for PGN and AnalysisController updates -> batched redraw
-      this._updatePgnDisplay(); // Update PGN string in state
-
-      if (this.checkAndSetGameOver()) return; // This will request redraw if game over
-
-      logger.info("[FinishHimController handleSetFen] FEN set manually. Entering playout mode directly.");
-      this._enterPlayoutMode(); // This will request redraw
-    } else {
-        this.requestRedraw(); // Redraw if prompt was cancelled to reflect any cleared state
     }
   }
 

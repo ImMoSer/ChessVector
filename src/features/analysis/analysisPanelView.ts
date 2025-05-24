@@ -166,12 +166,13 @@ function renderMainControls(controller: AnalysisController, panelState: Analysis
       },
       on: { click: () => controller.toggleAnalysisEngine() } 
     }, analysisResignButtonText),
-    h('button.button.game-control-button.set-fen-button', { 
-      attrs: { 
-        disabled: gameControlButtonDisabled || !panelState.canSetFen 
-      },
-      on: { click: () => controller.requestSetFen() }
-    }, t('puzzle.button.setFen')),
+    // REMOVED Set FEN button
+    // h('button.button.game-control-button.set-fen-button', { 
+    //   attrs: { 
+    //     disabled: gameControlButtonDisabled || !panelState.canSetFen // canSetFen would be removed
+    //   },
+    //   on: { click: () => controller.requestSetFen() }
+    // }, t('puzzle.button.setFen')),
   ]);
 }
 

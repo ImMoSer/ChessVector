@@ -177,14 +177,14 @@
 
 /* Кнопка "Set FEN" */
 #main-controls .button.game-control-button.set-fen-button {
-  background-color: var(--color-accent-special);
-  border-color: var(--color-accent-special);
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-bg-tertiary);
   color: var(--color-text-on-accent);
   /* font-family, font-size, font-weight унаследованы */
 }
 #main-controls .button.game-control-button.set-fen-button:hover:not(:disabled) {
-  background-color: #D6037E;
-  border-color: #D6037E;
+  background-color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
 }
 #main-controls .button.game-control-button.set-fen-button:disabled,
 #main-controls .button.game-control-button.set-fen-button[disabled] {
